@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* minimal tokens */
+:root {
+  color-scheme: light;
+}
+html, body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: #f8f8f8;
+  color: #111;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+.testbox { background: lime; padding: 16px; border-radius: 8px; }

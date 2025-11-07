@@ -1,0 +1,37 @@
+{
+  "notes": "Deckers / Footwear baseline (v1). L1 domains with sample L2/L3 to validate flow.",
+  "templateSource": "static:deckers_v1",
+  "capabilities": [
+    { "level": "L1", "name": "Product & Merchandising" },
+    { "level": "L2", "name": "Merchandise Planning", "parentId": "pm" },
+    { "level": "L2", "name": "Assortment & Line Planning", "parentId": "pm" },
+    { "level": "L3", "name": "SKU Lifecycle Management", "parentId": "alp" },
+
+    { "level": "L1", "name": "Digital Commerce" },
+    { "level": "L2", "name": "Product Discovery", "parentId": "dc" },
+    { "level": "L3", "name": "Search & Browse", "parentId": "pd" },
+    { "level": "L3", "name": "Content & Imagery", "parentId": "pd" },
+    { "level": "L2", "name": "Checkout & Payments", "parentId": "dc" },
+
+    { "level": "L1", "name": "Omnichannel & Retail" },
+    { "level": "L2", "name": "Store Operations", "parentId": "omni" },
+    { "level": "L2", "name": "BOPIS/BORIS", "parentId": "omni" },
+
+    { "level": "L1", "name": "Supply Chain & Operations" },
+    { "level": "L2", "name": "Inventory Management", "parentId": "sc" },
+    { "level": "L3", "name": "Replenishment", "parentId": "inv" },
+    { "level": "L2", "name": "Fulfillment & Logistics", "parentId": "sc" },
+
+    { "level": "L1", "name": "Marketing & Loyalty" },
+    { "level": "L2", "name": "Campaign Orchestration", "parentId": "mkt" },
+    { "level": "L2", "name": "Loyalty & Rewards", "parentId": "mkt" },
+
+    { "level": "L1", "name": "Data & Analytics" },
+    { "level": "L2", "name": "Customer Insights", "parentId": "da" },
+    { "level": "L2", "name": "Merchandising Analytics", "parentId": "da" },
+
+    { "level": "L1", "name": "Technology & Platforms" },
+    { "level": "L2", "name": "Commerce Platform", "parentId": "tech" },
+    { "level": "L2", "name": "Integration & APIs", "parentId": "tech" }
+  ]
+}

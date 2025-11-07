@@ -1,0 +1,258 @@
+[
+  {
+    "id": "product-innovation-research-and-development",
+    "domain": "Product Innovation",
+    "level": "L2",
+    "l1": "Product Innovation",
+    "l2": "Research and Development",
+    "name": "Research and Development"
+  },
+  {
+    "id": "product-innovation-portfolio-strategy-and-planning",
+    "domain": "Product Innovation",
+    "level": "L2",
+    "l1": "Product Innovation",
+    "l2": "Portfolio Strategy and Planning",
+    "name": "Portfolio Strategy and Planning"
+  },
+  {
+    "id": "product-innovation-product-planning",
+    "domain": "Product Innovation",
+    "level": "L2",
+    "l1": "Product Innovation",
+    "l2": "Product Planning",
+    "name": "Product Planning"
+  },
+  {
+    "id": "product-innovation-product-design",
+    "domain": "Product Innovation",
+    "level": "L2",
+    "l1": "Product Innovation",
+    "l2": "Product Design",
+    "name": "Product Design"
+  },
+  {
+    "id": "product-innovation-packaging-design",
+    "domain": "Product Innovation",
+    "level": "L2",
+    "l1": "Product Innovation",
+    "l2": "Packaging Design",
+    "name": "Packaging Design"
+  },
+  {
+    "id": "product-development-product-lifecycle-management",
+    "domain": "Product Development",
+    "level": "L2",
+    "l1": "Product Development",
+    "l2": "Product Lifecycle Management",
+    "name": "Product Lifecycle Management"
+  },
+  {
+    "id": "product-development-product-engineering-and-development",
+    "domain": "Product Development",
+    "level": "L2",
+    "l1": "Product Development",
+    "l2": "Product Engineering and Development",
+    "name": "Product Engineering and Development"
+  },
+  {
+    "id": "product-development-component-management",
+    "domain": "Product Development",
+    "level": "L2",
+    "l1": "Product Development",
+    "l2": "Component Management",
+    "name": "Component Management"
+  },
+  {
+    "id": "product-development-direct-product-integration",
+    "domain": "Product Development",
+    "level": "L2",
+    "l1": "Product Development",
+    "l2": "Direct Product Integration",
+    "name": "Direct Product Integration"
+  },
+  {
+    "id": "product-development-content-management",
+    "domain": "Product Development",
+    "level": "L2",
+    "l1": "Product Development",
+    "l2": "Content Management",
+    "name": "Content Management"
+  },
+  {
+    "id": "product-development-quality-integration",
+    "domain": "Product Development",
+    "level": "L2",
+    "l1": "Product Development",
+    "l2": "Quality Integration",
+    "name": "Quality Integration"
+  },
+  {
+    "id": "product-development-change-management",
+    "domain": "Product Development",
+    "level": "L2",
+    "l1": "Product Development",
+    "l2": "Change Management",
+    "name": "Change Management"
+  },
+  {
+    "id": "product-development-process-design",
+    "domain": "Product Development",
+    "level": "L2",
+    "l1": "Product Development",
+    "l2": "Process Design",
+    "name": "Process Design"
+  },
+  {
+    "id": "product-manufacturing-production-strategy",
+    "domain": "Product Manufacturing",
+    "level": "L2",
+    "l1": "Product Manufacturing",
+    "l2": "Production Strategy",
+    "name": "Production Strategy"
+  },
+  {
+    "id": "product-manufacturing-master-production-planning",
+    "domain": "Product Manufacturing",
+    "level": "L2",
+    "l1": "Product Manufacturing",
+    "l2": "Master Production Planning",
+    "name": "Master Production Planning"
+  },
+  {
+    "id": "product-manufacturing-production-rules-and-policies",
+    "domain": "Product Manufacturing",
+    "level": "L2",
+    "l1": "Product Manufacturing",
+    "l2": "Production Rules and Policies",
+    "name": "Production Rules and Policies"
+  },
+  {
+    "id": "product-manufacturing-product-monitoring",
+    "domain": "Product Manufacturing",
+    "level": "L2",
+    "l1": "Product Manufacturing",
+    "l2": "Product Monitoring",
+    "name": "Product Monitoring"
+  },
+  {
+    "id": "product-manufacturing-operations-management",
+    "domain": "Product Manufacturing",
+    "level": "L2",
+    "l1": "Product Manufacturing",
+    "l2": "Operations Management",
+    "name": "Operations Management"
+  },
+  {
+    "id": "sales-and-marketing-marketing-and-brand-management",
+    "domain": "Sales and Marketing",
+    "level": "L2",
+    "l1": "Sales and Marketing",
+    "l2": "Marketing and Brand Management",
+    "name": "Marketing and Brand Management"
+  },
+  {
+    "id": "sales-and-marketing-licensing-management",
+    "domain": "Sales and Marketing",
+    "level": "L2",
+    "l1": "Sales and Marketing",
+    "l2": "Licensing Management",
+    "name": "Licensing Management"
+  },
+  {
+    "id": "sales-and-marketing-sales-strategy",
+    "domain": "Sales and Marketing",
+    "level": "L2",
+    "l1": "Sales and Marketing",
+    "l2": "Sales Strategy",
+    "name": "Sales Strategy"
+  },
+  {
+    "id": "supply-chain-manage-supply-chain-strategy",
+    "domain": "Supply Chain",
+    "level": "L2",
+    "l1": "Supply Chain",
+    "l2": "Manage Supply Chain Strategy",
+    "name": "Manage Supply Chain Strategy"
+  },
+  {
+    "id": "supply-chain-plan-supply-and-demand-forecasting",
+    "domain": "Supply Chain",
+    "level": "L2",
+    "l1": "Supply Chain",
+    "l2": "Plan Supply and Demand Forecasting",
+    "name": "Plan Supply and Demand Forecasting"
+  },
+  {
+    "id": "procurement-develop-sourcing-strategy",
+    "domain": "Procurement",
+    "level": "L2",
+    "l1": "Procurement",
+    "l2": "Develop Sourcing Strategy",
+    "name": "Develop Sourcing Strategy"
+  },
+  {
+    "id": "procurement-optimize-supplier-relationships",
+    "domain": "Procurement",
+    "level": "L2",
+    "l1": "Procurement",
+    "l2": "Optimize Supplier Relationships",
+    "name": "Optimize Supplier Relationships"
+  },
+  {
+    "id": "logistics-logistics-strategy",
+    "domain": "Logistics",
+    "level": "L2",
+    "l1": "Logistics",
+    "l2": "Logistics Strategy",
+    "name": "Logistics Strategy"
+  },
+  {
+    "id": "logistics-inbound-and-outbound-logistics",
+    "domain": "Logistics",
+    "level": "L2",
+    "l1": "Logistics",
+    "l2": "Inbound and Outbound Logistics",
+    "name": "Inbound and Outbound Logistics"
+  },
+  {
+    "id": "store-and-deliver-products-warehouse-management",
+    "domain": "Store and Deliver Products",
+    "level": "L2",
+    "l1": "Store and Deliver Products",
+    "l2": "Warehouse Management",
+    "name": "Warehouse Management"
+  },
+  {
+    "id": "finance-corporate-finance-and-accounting",
+    "domain": "Finance",
+    "level": "L2",
+    "l1": "Finance",
+    "l2": "Corporate Finance and Accounting",
+    "name": "Corporate Finance and Accounting"
+  },
+  {
+    "id": "finance-financial-planning-and-analysis",
+    "domain": "Finance",
+    "level": "L2",
+    "l1": "Finance",
+    "l2": "Financial Planning and Analysis",
+    "name": "Financial Planning and Analysis"
+  },
+  {
+    "id": "legal-and-compliance-regulatory-compliance",
+    "domain": "Legal & Compliance",
+    "level": "L2",
+    "l1": "Legal & Compliance",
+    "l2": "Regulatory Compliance",
+    "name": "Regulatory Compliance"
+  },
+  {
+    "id": "corporate-functions-vision-and-strategy-development",
+    "domain": "Corporate Functions",
+    "level": "L2",
+    "l1": "Corporate Functions",
+    "l2": "Vision and Strategy Development",
+    "name": "Vision and Strategy Development"
+  }
+]
