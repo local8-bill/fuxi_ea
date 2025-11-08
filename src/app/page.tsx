@@ -1,29 +1,18 @@
-'use client';
-import React from 'react';
-import { useRouter } from 'next/navigation';
+"use client";
+import React from "react";
+import Link from "next/link";
+import { useStartPage } from "@/controllers/useStartPage";
+import { localRecentProjects } from "@/adapters/projects/localRecent";
 
 export default function ProjectStart() {
-  const r = useRouter();
-  const [pid, setPid] = React.useState<string>('demo');
-  const [recent, setRecent] = React.useState<string[]>([]);
+  const { pid, setPid, recent, open } = useStartPage(localRecentProjects);
 
-  React.useEffect(() => {
-    try {
-      const raw = localStorage.getItem('fuxi:recent_projects');
-      if (raw) setRecent(JSON.parse(raw));
-    } catch {}
-  }, []);
-
-  function open(id: string) {
-    const norm = id.trim() || 'demo';
-    try {
-      const raw = localStorage.getItem('fuxi:recent_projects');
-      const list: string[] = raw ? JSON.parse(raw) : [];
-      const next = [norm, ...list.filter(x => x !== norm)].slice(0, 6);
-      localStorage.setItem('fuxi:recent_projects', JSON.stringify(next));
-    } catch {}
-    r.push(`/project/${encodeURIComponent(norm)}/scoring`);
+  // Call our controller to record “recent”, then let Link do the navigation.
+  async function record(id: string) {
+    await open(id);
   }
+
+  const target = `/project/${encodeURIComponent(pid || "demo")}/scoring`;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
@@ -38,21 +27,43 @@ export default function ProjectStart() {
               className="input w-full"
               placeholder="e.g., demo, retail, finance, deckers"
               value={pid}
-              onChange={(e)=>setPid(e.target.value)}
-              onKeyDown={(e)=>{ if(e.key==='Enter') open(pid); }}
+              onChange={(e) => setPid(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === "Enter") {
+                  const id = (pid || "demo").trim();
+                  await record(id);
+                  // hard fallback in case JS routing is blocked
+                  window.location.href = `/project/${encodeURIComponent(id)}/scoring`;
+                }
+              }}
             />
-            <button className="btn btn-primary" onClick={()=>open(pid)}>Open</button>
+            <Link
+              href={target}
+              className="btn btn-primary"
+              onClick={async (e) => {
+                // make sure we record even if user Cmd+Clicks etc.
+                const id = (pid || "demo").trim();
+                await record(id);
+              }}
+            >
+              Open
+            </Link>
           </div>
-          <div className="text-xs text-slate-500 mt-2">
-            This just namespaces your data for now. We’ll wire persistence later.
-          </div>
+          <div className="text-xs text-slate-500 mt-2">This just namespaces your data for now.</div>
         </div>
 
         <div className="card">
           <div className="font-medium mb-3">Quick start</div>
           <div className="flex flex-wrap gap-2">
-            {['demo','retail','finance'].map(id => (
-              <button key={id} className="btn" onClick={()=>open(id)}>{id}</button>
+            {["demo", "retail", "finance"].map((id) => (
+              <Link
+                key={id}
+                href={`/project/${id}/scoring`}
+                className="btn"
+                onClick={() => record(id)}
+              >
+                {id}
+              </Link>
             ))}
           </div>
 
@@ -60,22 +71,20 @@ export default function ProjectStart() {
             <div className="mt-4">
               <div className="font-medium mb-2">Recent</div>
               <div className="flex flex-wrap gap-2">
-                {recent.map(id => (
-                  <button key={id} className="btn" onClick={()=>open(id)}>{id}</button>
+                {recent.map((id) => (
+                  <Link
+                    key={id}
+                    href={`/project/${encodeURIComponent(id)}/scoring`}
+                    className="btn"
+                    onClick={() => record(id)}
+                  >
+                    {id}
+                  </Link>
                 ))}
               </div>
             </div>
           )}
         </div>
-      </div>
-
-      <div className="card mt-6">
-        <div className="font-medium mb-2">Tips</div>
-        <ul className="list-disc ml-5 text-sm text-slate-600 space-y-1">
-          <li>Use <span className="font-mono">Sort: Score</span> to prioritize by composite score.</li>
-          <li>Toggle <span className="font-mono">Weights</span> to change priorities on the fly.</li>
-          <li>Open any card to edit scores; enable <span className="font-mono">Override</span> for explicit control.</li>
-        </ul>
       </div>
     </div>
   );

@@ -1,16 +1,14 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Fuxi EA",
-  description: "Capability scoring and heatmap",
+  title: "Fuxi • Capability Scoring",
+  description: "Project start + scoring",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 text-gray-900">
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
