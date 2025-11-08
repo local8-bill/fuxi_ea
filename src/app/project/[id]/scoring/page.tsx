@@ -1,53 +1,37 @@
-// src/app/project/[id]/scoring/page.tsx
 "use client";
-
-"use client";
-
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
+import { CapabilityProvider, useCapabilities } from "@/features/capabilities/CapabilityProvider";
+import { TopBar } from "@/components/header/TopBar";
+import { GridView } from "@/components/views/GridView";
+import { HeatmapView } from "@/components/views/HeatmapView";
+import { ScoringPanel } from "@/components/scoring/ScoringPanel";
 
-import AdhocProjectScoringProvider from "@/features/capabilities/AdhocProjectScoringProvider";
+function Body() {
+  const { view, setView, query, setQuery, domain, setDomain, domains, weights, setWeights, openId } = useCapabilities();
+  const [panelOpen, setPanelOpen] = useState(false);
+  useEffect(()=> setPanelOpen(!!openId), [openId]);
 
-// ✅ use ONLY the project-scoped UI that reads from Adhoc provider
-import { TopBar } from "@/components/project/TopBar";
-import { GridView } from "@/components/project/GridView";
-import { HeatmapView } from "@/components/project/HeatmapView"; // (add file below)
-import { ScoringSheet } from "@/components/project/ScoringSheet";
-
-import type { Project } from "@/types/project";
+  return (
+    <div className="space-y-3">
+      <TopBar
+        view={view} setView={setView}
+        query={query} setQuery={setQuery}
+        domain={domain} setDomain={setDomain}
+        domains={domains}
+        weights={weights} setWeights={setWeights}
+      />
+      {view === "grid" ? <GridView /> : <HeatmapView />}
+      {panelOpen && <ScoringPanel onClose={()=>setPanelOpen(false)} />}
+    </div>
+  );
+}
 
 export default function ProjectScoringPage() {
   const { id } = useParams() as { id: string };
-  const [project, setProject] = useState<Project | null>(null);
-  const [view, setView] = useState<"grid" | "heat">("grid");
-
-  useEffect(() => {
-    const raw = localStorage.getItem(`fuxi:projects:${id}`);
-    if (raw) {
-      try { setProject(JSON.parse(raw)); } catch {}
-    }
-  }, [id]);
-
-  const ready = useMemo(() => !!project, [project]);
-
-  if (!ready) {
-    return (
-      <div className="p-8 text-center text-gray-500">
-        <p>Loading project…</p>
-        <p className="mt-2 text-xs">If this persists, make sure you created the project from AI Suggest or Import.</p>
-      </div>
-    );
-  }
-
   return (
-    <AdhocProjectScoringProvider projectId={id} initialProject={project!}>
-      <div className="min-h-screen bg-white">
-        <TopBar view={view} setView={setView} />
-        <main className="mx-auto max-w-[1100px] p-4">
-          {view === "grid" ? <GridView /> : <HeatmapView />}
-        </main>
-        <ScoringSheet />
-      </div>
-    </AdhocProjectScoringProvider>
+    <CapabilityProvider projectId={id}>
+      <Body />
+    </CapabilityProvider>
   );
 }

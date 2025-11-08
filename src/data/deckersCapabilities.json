@@ -1,258 +1,258 @@
 [
   {
     "id": "product-innovation-research-and-development",
-    "domain": "Product Innovation",
+    "name": "Research and Development",
     "level": "L2",
-    "l1": "Product Innovation",
-    "l2": "Research and Development",
-    "name": "Research and Development"
+    "parentId": null,
+    "domain": "Product Innovation",
+    "scores": null
   },
   {
     "id": "product-innovation-portfolio-strategy-and-planning",
-    "domain": "Product Innovation",
+    "name": "Portfolio Strategy and Planning",
     "level": "L2",
-    "l1": "Product Innovation",
-    "l2": "Portfolio Strategy and Planning",
-    "name": "Portfolio Strategy and Planning"
+    "parentId": null,
+    "domain": "Product Innovation",
+    "scores": null
   },
   {
     "id": "product-innovation-product-planning",
-    "domain": "Product Innovation",
+    "name": "Product Planning",
     "level": "L2",
-    "l1": "Product Innovation",
-    "l2": "Product Planning",
-    "name": "Product Planning"
+    "parentId": null,
+    "domain": "Product Innovation",
+    "scores": null
   },
   {
     "id": "product-innovation-product-design",
-    "domain": "Product Innovation",
+    "name": "Product Design",
     "level": "L2",
-    "l1": "Product Innovation",
-    "l2": "Product Design",
-    "name": "Product Design"
+    "parentId": null,
+    "domain": "Product Innovation",
+    "scores": null
   },
   {
     "id": "product-innovation-packaging-design",
-    "domain": "Product Innovation",
+    "name": "Packaging Design",
     "level": "L2",
-    "l1": "Product Innovation",
-    "l2": "Packaging Design",
-    "name": "Packaging Design"
+    "parentId": null,
+    "domain": "Product Innovation",
+    "scores": null
   },
   {
     "id": "product-development-product-lifecycle-management",
-    "domain": "Product Development",
+    "name": "Product Lifecycle Management",
     "level": "L2",
-    "l1": "Product Development",
-    "l2": "Product Lifecycle Management",
-    "name": "Product Lifecycle Management"
+    "parentId": null,
+    "domain": "Product Development",
+    "scores": null
   },
   {
     "id": "product-development-product-engineering-and-development",
-    "domain": "Product Development",
+    "name": "Product Engineering and Development",
     "level": "L2",
-    "l1": "Product Development",
-    "l2": "Product Engineering and Development",
-    "name": "Product Engineering and Development"
+    "parentId": null,
+    "domain": "Product Development",
+    "scores": null
   },
   {
     "id": "product-development-component-management",
-    "domain": "Product Development",
+    "name": "Component Management",
     "level": "L2",
-    "l1": "Product Development",
-    "l2": "Component Management",
-    "name": "Component Management"
+    "parentId": null,
+    "domain": "Product Development",
+    "scores": null
   },
   {
     "id": "product-development-direct-product-integration",
-    "domain": "Product Development",
+    "name": "Direct Product Integration",
     "level": "L2",
-    "l1": "Product Development",
-    "l2": "Direct Product Integration",
-    "name": "Direct Product Integration"
+    "parentId": null,
+    "domain": "Product Development",
+    "scores": null
   },
   {
     "id": "product-development-content-management",
-    "domain": "Product Development",
+    "name": "Content Management",
     "level": "L2",
-    "l1": "Product Development",
-    "l2": "Content Management",
-    "name": "Content Management"
+    "parentId": null,
+    "domain": "Product Development",
+    "scores": null
   },
   {
     "id": "product-development-quality-integration",
-    "domain": "Product Development",
+    "name": "Quality Integration",
     "level": "L2",
-    "l1": "Product Development",
-    "l2": "Quality Integration",
-    "name": "Quality Integration"
+    "parentId": null,
+    "domain": "Product Development",
+    "scores": null
   },
   {
     "id": "product-development-change-management",
-    "domain": "Product Development",
+    "name": "Change Management",
     "level": "L2",
-    "l1": "Product Development",
-    "l2": "Change Management",
-    "name": "Change Management"
+    "parentId": null,
+    "domain": "Product Development",
+    "scores": null
   },
   {
     "id": "product-development-process-design",
-    "domain": "Product Development",
+    "name": "Process Design",
     "level": "L2",
-    "l1": "Product Development",
-    "l2": "Process Design",
-    "name": "Process Design"
+    "parentId": null,
+    "domain": "Product Development",
+    "scores": null
   },
   {
     "id": "product-manufacturing-production-strategy",
-    "domain": "Product Manufacturing",
+    "name": "Production Strategy",
     "level": "L2",
-    "l1": "Product Manufacturing",
-    "l2": "Production Strategy",
-    "name": "Production Strategy"
+    "parentId": null,
+    "domain": "Product Manufacturing",
+    "scores": null
   },
   {
     "id": "product-manufacturing-master-production-planning",
-    "domain": "Product Manufacturing",
+    "name": "Master Production Planning",
     "level": "L2",
-    "l1": "Product Manufacturing",
-    "l2": "Master Production Planning",
-    "name": "Master Production Planning"
+    "parentId": null,
+    "domain": "Product Manufacturing",
+    "scores": null
   },
   {
     "id": "product-manufacturing-production-rules-and-policies",
-    "domain": "Product Manufacturing",
+    "name": "Production Rules and Policies",
     "level": "L2",
-    "l1": "Product Manufacturing",
-    "l2": "Production Rules and Policies",
-    "name": "Production Rules and Policies"
+    "parentId": null,
+    "domain": "Product Manufacturing",
+    "scores": null
   },
   {
     "id": "product-manufacturing-product-monitoring",
-    "domain": "Product Manufacturing",
+    "name": "Product Monitoring",
     "level": "L2",
-    "l1": "Product Manufacturing",
-    "l2": "Product Monitoring",
-    "name": "Product Monitoring"
+    "parentId": null,
+    "domain": "Product Manufacturing",
+    "scores": null
   },
   {
     "id": "product-manufacturing-operations-management",
-    "domain": "Product Manufacturing",
+    "name": "Operations Management",
     "level": "L2",
-    "l1": "Product Manufacturing",
-    "l2": "Operations Management",
-    "name": "Operations Management"
+    "parentId": null,
+    "domain": "Product Manufacturing",
+    "scores": null
   },
   {
     "id": "sales-and-marketing-marketing-and-brand-management",
-    "domain": "Sales and Marketing",
+    "name": "Marketing and Brand Management",
     "level": "L2",
-    "l1": "Sales and Marketing",
-    "l2": "Marketing and Brand Management",
-    "name": "Marketing and Brand Management"
+    "parentId": null,
+    "domain": "Sales and Marketing",
+    "scores": null
   },
   {
     "id": "sales-and-marketing-licensing-management",
-    "domain": "Sales and Marketing",
+    "name": "Licensing Management",
     "level": "L2",
-    "l1": "Sales and Marketing",
-    "l2": "Licensing Management",
-    "name": "Licensing Management"
+    "parentId": null,
+    "domain": "Sales and Marketing",
+    "scores": null
   },
   {
     "id": "sales-and-marketing-sales-strategy",
-    "domain": "Sales and Marketing",
+    "name": "Sales Strategy",
     "level": "L2",
-    "l1": "Sales and Marketing",
-    "l2": "Sales Strategy",
-    "name": "Sales Strategy"
+    "parentId": null,
+    "domain": "Sales and Marketing",
+    "scores": null
   },
   {
     "id": "supply-chain-manage-supply-chain-strategy",
-    "domain": "Supply Chain",
+    "name": "Manage Supply Chain Strategy",
     "level": "L2",
-    "l1": "Supply Chain",
-    "l2": "Manage Supply Chain Strategy",
-    "name": "Manage Supply Chain Strategy"
+    "parentId": null,
+    "domain": "Supply Chain",
+    "scores": null
   },
   {
     "id": "supply-chain-plan-supply-and-demand-forecasting",
-    "domain": "Supply Chain",
+    "name": "Plan Supply and Demand Forecasting",
     "level": "L2",
-    "l1": "Supply Chain",
-    "l2": "Plan Supply and Demand Forecasting",
-    "name": "Plan Supply and Demand Forecasting"
+    "parentId": null,
+    "domain": "Supply Chain",
+    "scores": null
   },
   {
     "id": "procurement-develop-sourcing-strategy",
-    "domain": "Procurement",
+    "name": "Develop Sourcing Strategy",
     "level": "L2",
-    "l1": "Procurement",
-    "l2": "Develop Sourcing Strategy",
-    "name": "Develop Sourcing Strategy"
+    "parentId": null,
+    "domain": "Procurement",
+    "scores": null
   },
   {
     "id": "procurement-optimize-supplier-relationships",
-    "domain": "Procurement",
+    "name": "Optimize Supplier Relationships",
     "level": "L2",
-    "l1": "Procurement",
-    "l2": "Optimize Supplier Relationships",
-    "name": "Optimize Supplier Relationships"
+    "parentId": null,
+    "domain": "Procurement",
+    "scores": null
   },
   {
     "id": "logistics-logistics-strategy",
-    "domain": "Logistics",
+    "name": "Logistics Strategy",
     "level": "L2",
-    "l1": "Logistics",
-    "l2": "Logistics Strategy",
-    "name": "Logistics Strategy"
+    "parentId": null,
+    "domain": "Logistics",
+    "scores": null
   },
   {
     "id": "logistics-inbound-and-outbound-logistics",
-    "domain": "Logistics",
+    "name": "Inbound and Outbound Logistics",
     "level": "L2",
-    "l1": "Logistics",
-    "l2": "Inbound and Outbound Logistics",
-    "name": "Inbound and Outbound Logistics"
+    "parentId": null,
+    "domain": "Logistics",
+    "scores": null
   },
   {
     "id": "store-and-deliver-products-warehouse-management",
-    "domain": "Store and Deliver Products",
+    "name": "Warehouse Management",
     "level": "L2",
-    "l1": "Store and Deliver Products",
-    "l2": "Warehouse Management",
-    "name": "Warehouse Management"
+    "parentId": null,
+    "domain": "Store and Deliver Products",
+    "scores": null
   },
   {
     "id": "finance-corporate-finance-and-accounting",
-    "domain": "Finance",
+    "name": "Corporate Finance and Accounting",
     "level": "L2",
-    "l1": "Finance",
-    "l2": "Corporate Finance and Accounting",
-    "name": "Corporate Finance and Accounting"
+    "parentId": null,
+    "domain": "Finance",
+    "scores": null
   },
   {
     "id": "finance-financial-planning-and-analysis",
-    "domain": "Finance",
+    "name": "Financial Planning and Analysis",
     "level": "L2",
-    "l1": "Finance",
-    "l2": "Financial Planning and Analysis",
-    "name": "Financial Planning and Analysis"
+    "parentId": null,
+    "domain": "Finance",
+    "scores": null
   },
   {
     "id": "legal-and-compliance-regulatory-compliance",
-    "domain": "Legal & Compliance",
+    "name": "Regulatory Compliance",
     "level": "L2",
-    "l1": "Legal & Compliance",
-    "l2": "Regulatory Compliance",
-    "name": "Regulatory Compliance"
+    "parentId": null,
+    "domain": "Legal & Compliance",
+    "scores": null
   },
   {
     "id": "corporate-functions-vision-and-strategy-development",
-    "domain": "Corporate Functions",
+    "name": "Vision and Strategy Development",
     "level": "L2",
-    "l1": "Corporate Functions",
-    "l2": "Vision and Strategy Development",
-    "name": "Vision and Strategy Development"
+    "parentId": null,
+    "domain": "Corporate Functions",
+    "scores": null
   }
 ]

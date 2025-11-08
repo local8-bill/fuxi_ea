@@ -1,68 +1,40 @@
 "use client";
-
-import React, { useMemo } from "react";
+import React from "react";
 import { useCapabilities } from "@/features/capabilities/CapabilityProvider";
+import { DEFAULT_SCORES, compositeScore } from "@/features/capabilities/utils";
 
 export function HeatmapView() {
-  const { data, compositeFor, setOpenId, query, domain } = useCapabilities();
-
-  // L2s filtered by query/domain
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return data
-      .filter((c) => (c.level ?? "L2") === "L2")
-      .filter((c) => (domain === "All Domains" ? true : c.domain === domain))
-      .filter((c) =>
-        !q ? true : [c.name, c.domain].filter(Boolean).join(" ").toLowerCase().includes(q)
-      );
-  }, [data, query, domain]);
-
-  // group by domain
-  const byDomain = useMemo(() => {
-    const m = new Map<string, typeof rows>();
-    for (const c of rows) {
-      const d = c.domain || "—";
-      if (!m.has(d)) m.set(d, []);
-      m.get(d)!.push(c);
-    }
-    return m;
-  }, [rows]);
-
-  const heat = (v: number) => {
-    const pct = Math.round(v * 100);
-    if (pct >= 80) return "border-green-400 bg-green-50";
-    if (pct >= 60) return "border-lime-400 bg-lime-50";
-    if (pct >= 40) return "border-yellow-400 bg-yellow-50";
-    if (pct >= 20) return "border-orange-400 bg-orange-50";
-    return "border-red-400 bg-red-50";
-  };
+  const { roots, byId, children, setOpenId, weights } = useCapabilities();
 
   return (
-    <div className="space-y-6">
-      {[...byDomain.entries()].map(([dom, caps]) => (
-        <div key={dom}>
-          <div className="mb-2 text-sm font-semibold">{dom}</div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {caps.map((c) => {
-              const comp = compositeFor(c);
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setOpenId(c.id)}
-                  className={`rounded-xl border-2 px-3 py-2 text-left text-xs hover:opacity-90 bg-white ${heat(comp)}`}
-                >
-                  <div className="line-clamp-2 font-medium">{c.name}</div>
-                  <div className="mt-1 text-[10px] text-gray-600">
-                    {Math.round(comp * 100)}/100
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {roots.map(l1 => (
+        <div key={l1} className="card">
+          <div className="font-semibold mb-2">{byId[l1].name}</div>
+          <div className="grid grid-cols-1 gap-2">
+            {(children[l1] ?? []).map(l2 => (
+              <button key={l2} className="text-left rounded-md border p-3 hover:bg-slate-50"
+                onClick={()=>setOpenId(l2)}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm">{byId[l2].name}</div>
+                  <span className="badge">
+                    {Math.round(compositeScore(byId[l2].scores ?? DEFAULT_SCORES, weights)*100)} / 100
+                  </span>
+                </div>
+                {(children[l2] ?? []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(children[l2] ?? []).map(l3 => (
+                      <span key={l3} className="badge cursor-pointer" onClick={(e)=>{e.stopPropagation(); setOpenId(l3);}}>
+                        {byId[l3].name}
+                      </span>
+                    ))}
                   </div>
-                </button>
-              );
-            })}
+                )}
+              </button>
+            ))}
           </div>
         </div>
       ))}
     </div>
   );
 }
-
-export default HeatmapView;

@@ -1,54 +1,52 @@
 "use client";
-
 import React, { useMemo } from "react";
 import { useCapabilities } from "@/features/capabilities/CapabilityProvider";
+import { DEFAULT_SCORES, compositeScore } from "@/features/capabilities/utils";
 
 export function GridView() {
-  const { data, compositeFor, setOpenId, query, domain } = useCapabilities();
+  const { byId, children, roots, setOpenId, query, domain, weights } = useCapabilities();
 
-  // L2 rows filtered by TopBar state (query + domain)
-  const rows = useMemo(() => {
+  const filteredRoots = useMemo(()=> {
     const q = query.trim().toLowerCase();
-    return data
-      .filter((c) => (c.level ?? "L2") === "L2")
-      .filter((c) => (domain === "All Domains" ? true : c.domain === domain))
-      .filter((c) =>
-        !q ? true : [c.name, c.domain].filter(Boolean).join(" ").toLowerCase().includes(q)
-      );
-  }, [data, query, domain]);
-
-  const heat = (v: number) => {
-    const pct = Math.round(v * 100);
-    if (pct >= 80) return "border-green-400 bg-green-50";
-    if (pct >= 60) return "border-lime-400 bg-lime-50";
-    if (pct >= 40) return "border-yellow-400 bg-yellow-50";
-    if (pct >= 20) return "border-orange-400 bg-orange-50";
-    return "border-red-400 bg-red-50";
-  };
+    return roots
+      .map(id=>byId[id])
+      .filter(c => (domain==="All Domains"? true : c.domain===domain))
+      .filter(c => (q? c.name.toLowerCase().includes(q) : true));
+  }, [roots, byId, query, domain]);
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {rows.map((c) => {
-        const comp = compositeFor(c); // 0..1
+    <div className="grid-auto">
+      {filteredRoots.map(l1 => {
+        const childIds = children[l1.id] ?? [];
+        const score = compositeScore(
+          childIds.length? averageChild(childIds, byId, children) : (l1.scores ?? DEFAULT_SCORES),
+          weights
+        );
         return (
-          <button
-            key={c.id}
-            onClick={() => setOpenId(c.id)}
-            className={`rounded-xl border p-4 text-left transition hover:shadow-md bg-white ${heat(comp)}`}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="font-medium leading-snug">{c.name}</div>
-              <div className="shrink-0 text-xs text-gray-600">{Math.round(comp * 100)}/100</div>
+          <div key={l1.id} className="card hover:bg-slate-50 cursor-pointer" onClick={()=>setOpenId(l1.id)}>
+            <div className="flex items-center justify-between">
+              <div className="font-medium">{l1.name}</div>
+              <span className="badge">{Math.round(score*100)} / 100</span>
             </div>
-            {c.domain && (
-              <div className="mt-1 text-[11px] text-gray-500">{c.domain}</div>
-            )}
-            <p className="mt-2 text-xs text-gray-500">Tap to open scoring</p>
-          </button>
+            <div className="text-xs text-slate-600 mt-1">{childIds.length} sub-capabilities</div>
+          </div>
         );
       })}
     </div>
   );
 }
 
-export default GridView;
+function averageChild(ids:string[], byId:any, children:any) {
+  const gather = (id:string): number[] => {
+    const kids = children[id] ?? [];
+    if (!kids.length) {
+      const s = byId[id].scores ?? { ...DEFAULT_SCORES };
+      const raw = (s.opportunity+s.maturity+s.techFit+s.strategicAlignment+s.peopleReadiness)/5;
+      return [raw];
+    }
+    return kids.flatMap(gather);
+  };
+  const vals = ids.flatMap(gather);
+  const avg = vals.length ? vals.reduce((a:number,b:number)=>a+b,0)/vals.length : 0;
+  return { opportunity: avg, maturity: avg, techFit: avg, strategicAlignment: avg, peopleReadiness: avg };
+}
