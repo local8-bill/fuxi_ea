@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/domain/*": ["src/domain/*"],
+      "@/adapters/*": ["src/adapters/*"],
+      "@/controllers/*": ["src/controllers/*"],
+      "@/ui/*": ["src/ui/*"],
+      "@/shared/*": ["src/shared/*"],
+      "@/content/*": ["content/*"],
+      "@/config/*": ["config/*"]
+    }
+  }
+}
