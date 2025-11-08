@@ -33,6 +33,9 @@ type Ctx = {
   view: "grid" | "heat";
   setView: (v: "grid" | "heat") => void;
 
+  sortBy: "name" | "score" | "domain";
+  setSortBy: (v: "name" | "score" | "domain") => void;
+
   weights: Weights;
   setWeights: (w: Weights) => void;
 
@@ -47,24 +50,14 @@ type Ctx = {
 const CapabilityCtx = createContext<Ctx | null>(null);
 
 export function CapabilityProvider({ children }: { children: React.ReactNode }) {
-  const initial = useMemo(() => {
-    const arr = (seed as any[]) ?? [];
-    return arr.map((c: any, i: number) => ({
-      id: c.id ?? `cap_${i}`,
-      name: c.name ?? `Capability ${i + 1}`,
-      level: (c.level ?? "L1") as Level,
-      parentId: c.parentId,
-      domain: c.domain,
-      scores: c.scores ?? { ...DEFAULT_SCORES },
-    }));
-  }, []);
-
-  const [data, setData] = useState<Capability[]>(initial);
+  const [data, setData] = useState<Capability[]>(() => (seed as any) as Capability[]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
   const [query, setQuery] = useState("");
   const [domain, setDomain] = useState<string>("All Domains");
   const [view, setView] = useState<"grid" | "heat">("grid");
+  const [sortBy, setSortBy] = useState<"name" | "score" | "domain">("name");
   const [weights, setWeights] = useState<Weights>(defaultWeights);
 
   const byId = useMemo(() => {
@@ -120,19 +113,7 @@ export function CapabilityProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const setOverrideEnabled = useCallback((id: string, enabled: boolean) => {
-    setData((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              overrideEnabled: enabled,
-              overrideScores: enabled
-                ? c.overrideScores ?? { ...DEFAULT_SCORES }
-                : c.overrideScores,
-            }
-          : c
-      )
-    );
+    setData((prev) => prev.map((c) => (c.id === id ? { ...c, overrideEnabled: enabled } : c)));
   }, []);
 
   const updateOverride = useCallback((id: string, key: keyof Scores, value: number) => {
@@ -154,12 +135,14 @@ export function CapabilityProvider({ children }: { children: React.ReactNode }) 
   const value: Ctx = {
     data,
     byId,
-    children: childrenMap, // ✅ single clean definition
+    children: childrenMap,
     roots,
+
     openId,
     setOpenId,
     selectedId,
     setSelectedId,
+
     query,
     setQuery,
     domain,
@@ -167,8 +150,13 @@ export function CapabilityProvider({ children }: { children: React.ReactNode }) 
     domains,
     view,
     setView,
+
+    sortBy,
+    setSortBy,
+
     weights,
     setWeights,
+
     effectiveScores,
     compositeFor,
     updateScore,

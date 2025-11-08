@@ -1,15 +1,14 @@
 import "./globals.css";
-import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "Fuxi",
-  description: "Capability modeling workspace",
+export const metadata = {
+  title: "Fuxi EA",
+  description: "Capability scoring and heatmap",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+      <body className="bg-gray-50 text-gray-900">
         {children}
       </body>
     </html>

@@ -1,28 +1,293 @@
-{
-  "notes": "Retail baseline (v1). L1 domains with sample L2/L3.",
-  "capabilities": [
-    { "level": "L1", "name": "Customer Experience" },
-    { "level": "L2", "name": "Digital Commerce", "parentId": "cx" },
-    { "level": "L3", "name": "Checkout & Payments", "parentId": "dc" },
-    { "level": "L3", "name": "Product Discovery", "parentId": "dc" },
-    { "level": "L2", "name": "Omnichannel Engagement", "parentId": "cx" },
-    { "level": "L3", "name": "Loyalty & Rewards", "parentId": "omni" },
-
-    { "level": "L1", "name": "Merchandising" },
-    { "level": "L2", "name": "Assortment Planning", "parentId": "md" },
-    { "level": "L2", "name": "Pricing & Promotions", "parentId": "md" },
-
-    { "level": "L1", "name": "Supply Chain" },
-    { "level": "L2", "name": "Inventory Management", "parentId": "sc" },
-    { "level": "L3", "name": "Replenishment", "parentId": "inv" },
-    { "level": "L2", "name": "Fulfillment & Last Mile", "parentId": "sc" },
-
-    { "level": "L1", "name": "Data & Analytics" },
-    { "level": "L2", "name": "Customer Insights", "parentId": "da" },
-    { "level": "L2", "name": "Merchandising Analytics", "parentId": "da" },
-
-    { "level": "L1", "name": "Technology & Platforms" },
-    { "level": "L2", "name": "Commerce Platform", "parentId": "tech" },
-    { "level": "L2", "name": "Integration & APIs", "parentId": "tech" }
-  ]
-}
+[
+  {
+    "id": "l1-commerce",
+    "name": "Digital Commerce",
+    "level": "L1",
+    "domain": "Commerce",
+    "scores": {
+      "opportunity": 0.64,
+      "maturity": 0.62,
+      "techFit": 0.6,
+      "strategicAlignment": 0.68,
+      "peopleReadiness": 0.58
+    }
+  },
+  {
+    "id": "l1-supply",
+    "name": "Supply Chain",
+    "level": "L1",
+    "domain": "Supply Chain",
+    "scores": {
+      "opportunity": 0.55,
+      "maturity": 0.5,
+      "techFit": 0.52,
+      "strategicAlignment": 0.56,
+      "peopleReadiness": 0.5
+    }
+  },
+  {
+    "id": "l1-data",
+    "name": "Data & Analytics",
+    "level": "L1",
+    "domain": "Data & Analytics",
+    "scores": {
+      "opportunity": 0.56,
+      "maturity": 0.48,
+      "techFit": 0.58,
+      "strategicAlignment": 0.54,
+      "peopleReadiness": 0.5
+    }
+  },
+  {
+    "id": "l2-commerce-catalog",
+    "name": "Catalog Management",
+    "level": "L2",
+    "parentId": "l1-commerce",
+    "domain": "Commerce",
+    "scores": {
+      "opportunity": 0.7,
+      "maturity": 0.55,
+      "techFit": 0.62,
+      "strategicAlignment": 0.65,
+      "peopleReadiness": 0.55
+    }
+  },
+  {
+    "id": "l2-commerce-order",
+    "name": "Order Management",
+    "level": "L2",
+    "parentId": "l1-commerce",
+    "domain": "Commerce",
+    "scores": {
+      "opportunity": 0.6,
+      "maturity": 0.5,
+      "techFit": 0.58,
+      "strategicAlignment": 0.6,
+      "peopleReadiness": 0.52
+    }
+  },
+  {
+    "id": "l3-commerce-sku",
+    "name": "SKU Enrichment",
+    "level": "L3",
+    "parentId": "l2-commerce-catalog",
+    "domain": "Commerce",
+    "scores": {
+      "opportunity": 0.72,
+      "maturity": 0.5,
+      "techFit": 0.6,
+      "strategicAlignment": 0.66,
+      "peopleReadiness": 0.5
+    }
+  },
+  {
+    "id": "l3-commerce-pim",
+    "name": "PIM Integration",
+    "level": "L3",
+    "parentId": "l2-commerce-catalog",
+    "domain": "Commerce",
+    "scores": {
+      "opportunity": 0.68,
+      "maturity": 0.56,
+      "techFit": 0.62,
+      "strategicAlignment": 0.64,
+      "peopleReadiness": 0.55
+    }
+  },
+  {
+    "id": "l3-commerce-returns",
+    "name": "Returns & RMA",
+    "level": "L3",
+    "parentId": "l2-commerce-order",
+    "domain": "Commerce",
+    "scores": {
+      "opportunity": 0.6,
+      "maturity": 0.52,
+      "techFit": 0.55,
+      "strategicAlignment": 0.58,
+      "peopleReadiness": 0.5
+    }
+  },
+  {
+    "id": "l3-commerce-oms",
+    "name": "OMS Orchestration",
+    "level": "L3",
+    "parentId": "l2-commerce-order",
+    "domain": "Commerce",
+    "scores": {
+      "opportunity": 0.62,
+      "maturity": 0.5,
+      "techFit": 0.6,
+      "strategicAlignment": 0.6,
+      "peopleReadiness": 0.52
+    }
+  },
+  {
+    "id": "l2-supply-inventory",
+    "name": "Inventory Visibility",
+    "level": "L2",
+    "parentId": "l1-supply",
+    "domain": "Supply Chain",
+    "scores": {
+      "opportunity": 0.58,
+      "maturity": 0.5,
+      "techFit": 0.5,
+      "strategicAlignment": 0.56,
+      "peopleReadiness": 0.5
+    }
+  },
+  {
+    "id": "l2-supply-fulfillment",
+    "name": "Fulfillment Planning",
+    "level": "L2",
+    "parentId": "l1-supply",
+    "domain": "Supply Chain",
+    "scores": {
+      "opportunity": 0.54,
+      "maturity": 0.48,
+      "techFit": 0.5,
+      "strategicAlignment": 0.54,
+      "peopleReadiness": 0.48
+    }
+  },
+  {
+    "id": "l3-supply-safety",
+    "name": "Safety Stock Modeling",
+    "level": "L3",
+    "parentId": "l2-supply-inventory",
+    "domain": "Supply Chain",
+    "scores": {
+      "opportunity": 0.55,
+      "maturity": 0.48,
+      "techFit": 0.5,
+      "strategicAlignment": 0.52,
+      "peopleReadiness": 0.48
+    }
+  },
+  {
+    "id": "l3-supply-alloc",
+    "name": "Allocation Rules",
+    "level": "L3",
+    "parentId": "l2-supply-inventory",
+    "domain": "Supply Chain",
+    "scores": {
+      "opportunity": 0.56,
+      "maturity": 0.5,
+      "techFit": 0.5,
+      "strategicAlignment": 0.54,
+      "peopleReadiness": 0.5
+    }
+  },
+  {
+    "id": "l3-supply-wave",
+    "name": "Wave Planning",
+    "level": "L3",
+    "parentId": "l2-supply-fulfillment",
+    "domain": "Supply Chain",
+    "scores": {
+      "opportunity": 0.54,
+      "maturity": 0.46,
+      "techFit": 0.5,
+      "strategicAlignment": 0.52,
+      "peopleReadiness": 0.46
+    }
+  },
+  {
+    "id": "l3-supply-slot",
+    "name": "Slotting Optimization",
+    "level": "L3",
+    "parentId": "l2-supply-fulfillment",
+    "domain": "Supply Chain",
+    "scores": {
+      "opportunity": 0.53,
+      "maturity": 0.48,
+      "techFit": 0.5,
+      "strategicAlignment": 0.5,
+      "peopleReadiness": 0.48
+    }
+  },
+  {
+    "id": "l2-data-gov",
+    "name": "Data Governance",
+    "level": "L2",
+    "parentId": "l1-data",
+    "domain": "Data & Analytics",
+    "scores": {
+      "opportunity": 0.58,
+      "maturity": 0.4,
+      "techFit": 0.55,
+      "strategicAlignment": 0.54,
+      "peopleReadiness": 0.48
+    }
+  },
+  {
+    "id": "l2-data-bi",
+    "name": "Business Intelligence",
+    "level": "L2",
+    "parentId": "l1-data",
+    "domain": "Data & Analytics",
+    "scores": {
+      "opportunity": 0.6,
+      "maturity": 0.46,
+      "techFit": 0.58,
+      "strategicAlignment": 0.56,
+      "peopleReadiness": 0.5
+    }
+  },
+  {
+    "id": "l3-data-catalog",
+    "name": "Data Catalog",
+    "level": "L3",
+    "parentId": "l2-data-gov",
+    "domain": "Data & Analytics",
+    "scores": {
+      "opportunity": 0.58,
+      "maturity": 0.38,
+      "techFit": 0.52,
+      "strategicAlignment": 0.54,
+      "peopleReadiness": 0.46
+    }
+  },
+  {
+    "id": "l3-data-quality",
+    "name": "Data Quality Monitoring",
+    "level": "L3",
+    "parentId": "l2-data-gov",
+    "domain": "Data & Analytics",
+    "scores": {
+      "opportunity": 0.6,
+      "maturity": 0.4,
+      "techFit": 0.55,
+      "strategicAlignment": 0.55,
+      "peopleReadiness": 0.48
+    }
+  },
+  {
+    "id": "l3-data-dash",
+    "name": "Executive Dashboards",
+    "level": "L3",
+    "parentId": "l2-data-bi",
+    "domain": "Data & Analytics",
+    "scores": {
+      "opportunity": 0.62,
+      "maturity": 0.46,
+      "techFit": 0.58,
+      "strategicAlignment": 0.58,
+      "peopleReadiness": 0.5
+    }
+  },
+  {
+    "id": "l3-data-selfserve",
+    "name": "Self-Serve Analytics",
+    "level": "L3",
+    "parentId": "l2-data-bi",
+    "domain": "Data & Analytics",
+    "scores": {
+      "opportunity": 0.6,
+      "maturity": 0.45,
+      "techFit": 0.56,
+      "strategicAlignment": 0.56,
+      "peopleReadiness": 0.5
+    }
+  }
+]

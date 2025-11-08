@@ -1,53 +1,37 @@
-// src/app/project/[id]/scoring/page.tsx
 "use client";
-
-"use client";
-
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useParams } from "next/navigation";
+import { CapabilityProvider, useCapabilities } from "@/features/capabilities/Provider";
+import { HeaderBar } from "@/components/scoring/HeaderBar";
+import { L1Grid } from "@/components/scoring/L1Grid";
+import { L1Heatmap } from "@/components/scoring/L1Heatmap";
+import { ScoringDrawer } from "@/components/scoring/ScoringDrawer";
 
-import AdhocProjectScoringProvider from "@/features/capabilities/AdhocProjectScoringProvider";
-
-// ✅ use ONLY the project-scoped UI that reads from Adhoc provider
-import { TopBar } from "@/components/project/TopBar";
-import { GridView } from "@/components/project/GridView";
-import { HeatmapView } from "@/components/project/HeatmapView"; // (add file below)
-import { ScoringSheet } from "@/components/project/ScoringSheet";
-
-import type { Project } from "@/types/project";
-
-export default function ProjectScoringPage() {
-  const { id } = useParams() as { id: string };
-  const [project, setProject] = useState<Project | null>(null);
-  const [view, setView] = useState<"grid" | "heat">("grid");
-
-  useEffect(() => {
-    const raw = localStorage.getItem(`fuxi:projects:${id}`);
-    if (raw) {
-      try { setProject(JSON.parse(raw)); } catch {}
-    }
-  }, [id]);
-
-  const ready = useMemo(() => !!project, [project]);
-
-  if (!ready) {
-    return (
-      <div className="p-8 text-center text-gray-500">
-        <p>Loading project…</p>
-        <p className="mt-2 text-xs">If this persists, make sure you created the project from AI Suggest or Import.</p>
-      </div>
-    );
-  }
+function Body() {
+  const { query, setQuery, domain, setDomain, domains, view, setView, weights, setWeights, openId, sortBy, setSortBy } = useCapabilities();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  React.useEffect(()=> setDrawerOpen(!!openId), [openId]);
 
   return (
-    <AdhocProjectScoringProvider projectId={id} initialProject={project!}>
-      <div className="min-h-screen bg-white">
-        <TopBar view={view} setView={setView} />
-        <main className="mx-auto max-w-[1100px] p-4">
-          {view === "grid" ? <GridView /> : <HeatmapView />}
-        </main>
-        <ScoringSheet />
-      </div>
-    </AdhocProjectScoringProvider>
+    <div className="space-y-3">
+      <HeaderBar
+        query={query} setQuery={setQuery}
+        domain={domain} setDomain={setDomain} domains={domains}
+        view={view} setView={setView}
+        weights={weights} setWeights={setWeights}
+        sortBy={sortBy} setSortBy={setSortBy}
+      />
+      {view === "grid" ? <L1Grid /> : <L1Heatmap />}
+      {drawerOpen && <ScoringDrawer onClose={()=>setDrawerOpen(false)} />}
+    </div>
+  );
+}
+
+export default function ScoringPage() {
+  const { id } = useParams() as { id: string };
+  return (
+    <CapabilityProvider>
+      <Body />
+    </CapabilityProvider>
   );
 }
