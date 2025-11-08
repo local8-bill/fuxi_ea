@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { useCapabilities } from "@/features/capabilities/CapabilityProvider";
+import { useCapabilities } from "@/features/capabilities/AdhocProjectScoringProvider";
 
 export function HeatmapView() {
   const { data, compositeFor, setOpenId, query, domain } = useCapabilities();
 
-  // L2s filtered by query/domain
+  // L2 filtered by query/domain
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return data

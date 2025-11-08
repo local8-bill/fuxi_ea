@@ -2,16 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-white text-slate-900; }
-.container { @apply max-w-6xl mx-auto px-4; }
-.card { @apply rounded-xl border border-slate-200 p-4; }
-.btn { @apply inline-flex items-center justify-center rounded-md border px-3 py-1.5 text-sm; }
-.btn-ghost { @apply border-slate-200 bg-white hover:bg-slate-50; }
-.btn-primary { @apply border-slate-900 bg-slate-900 text-white hover:opacity-90; }
-.input { @apply border rounded-md px-3 py-2 w-full border-slate-200; }
-.select { @apply border rounded-md px-3 py-2 border-slate-200 bg-white; }
-.badge { @apply inline-block rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600; }
-.grid-auto { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: 12px; }
-.sheet { @apply fixed right-0 top-0 h-full w-[92vw] max-w-[520px] bg-white shadow-xl border-l border-slate-200; }
-.sheet-header { @apply border-b p-4; }
-.sheet-body { @apply p-4 overflow-y-auto h-[calc(100%-64px)]; }
+/* minimal tokens */
+:root {
+  color-scheme: light;
+}
+html, body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: #f8f8f8;
+  color: #111;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+.testbox { background: lime; padding: 16px; border-radius: 8px; }

@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { useCapabilities } from "@/features/capabilities/CapabilityProvider";
+// IMPORTANT: project-scoped import
+import { useCapabilities } from "@/features/capabilities/AdhocProjectScoringProvider";
 
 export function GridView() {
   const { data, compositeFor, setOpenId, query, domain } = useCapabilities();
 
-  // L2 rows filtered by TopBar state (query + domain)
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return data
@@ -29,7 +29,7 @@ export function GridView() {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {rows.map((c) => {
-        const comp = compositeFor(c); // 0..1
+        const comp = compositeFor(c);
         return (
           <button
             key={c.id}
@@ -40,9 +40,7 @@ export function GridView() {
               <div className="font-medium leading-snug">{c.name}</div>
               <div className="shrink-0 text-xs text-gray-600">{Math.round(comp * 100)}/100</div>
             </div>
-            {c.domain && (
-              <div className="mt-1 text-[11px] text-gray-500">{c.domain}</div>
-            )}
+            {c.domain && <div className="mt-1 text-[11px] text-gray-500">{c.domain}</div>}
             <p className="mt-2 text-xs text-gray-500">Tap to open scoring</p>
           </button>
         );

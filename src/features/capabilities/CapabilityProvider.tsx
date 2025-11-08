@@ -1,123 +1,207 @@
+// src/features/capabilities/CapabilityProvider.tsx
 "use client";
-import React, { createContext, useContext, useMemo, useState, useCallback } from "react";
+
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+
 import seed from "@/data/deckersCapabilities.json";
 import {
   DEFAULT_SCORES,
-  defaultWeights,
   compositeScore,
   type Scores,
   type Weights,
+  defaultWeights,
 } from "@/features/capabilities/utils";
 
-export type Level = "L1" | "L2" | "L3";
-export type Capability = {
-  id: string; name: string; level: Level;
-  parentId?: string; domain?: string;
+/** ---------- Types ---------- */
+export interface Capability {
+  id: string;
+  name: string;
+  domain?: string;
+  level: "L1" | "L2" | "L3" | "L4";
+  parentId?: string;
   scores?: Scores;
-};
+}
 
-type Ctx = {
+interface CapabilityContext {
+  // data & indexes
   data: Capability[];
   byId: Record<string, Capability>;
   children: Record<string, string[]>;
-  roots: string[];
-  openId: string|null;
-  setOpenId: (id:string|null)=>void;
 
-  query: string; setQuery:(v:string)=>void;
-  domain: string; setDomain:(v:string)=>void;
+  // filters (TopBar needs these)
+  query: string;
+  setQuery: (v: string) => void;
   domains: string[];
-  weights: Weights; setWeights:(w:Weights)=>void;
-  view: "grid"|"heat"; setView:(v:"grid"|"heat")=>void;
+  domain: string;
+  setDomain: (d: string) => void;
 
-  effectiveScores: (id:string)=>Scores;
-  compositeFor: (id:string, w?:Weights)=>number;
-  updateScore: (id:string, key:keyof Scores, value:number)=>void;
-};
+  // UI (optional, used by drawers/views if you wire them)
+  openId: string | null;
+  setOpenId: (id: string | null) => void;
 
-const CapabilityCtx = createContext<Ctx|null>(null);
-const avg = (xs:number[]) => xs.length ? xs.reduce((a,b)=>a+b,0)/xs.length : 0;
+  // scoring
+  updateScore: (id: string, key: keyof Scores, value: number) => void;
+  weights: Weights;
+  setWeights: (w: Weights) => void;
+  compositeFor: (cap: Capability) => number;
 
-export function CapabilityProvider({ projectId, children }:{ projectId:string, children:React.ReactNode }) {
-  const initial = useMemo(()=> {
-    const arr = (seed as any[]) ?? [];
-    return arr.map((c:any, i:number)=> ({
-      id: c.id ?? `cap_${i}`,
-      name: c.name ?? `Capability ${i+1}`,
-      level: (c.level ?? "L1") as Level,
-      parentId: c.parentId,
-      domain: c.domain,
-      scores: c.scores ?? { ...DEFAULT_SCORES },
-    }));
-  }, []);
+  // utils for TopBar
+  exportJson: () => void;
+  resetAllScores: () => void;
+}
 
-  const [data, setData] = useState(initial);
-  const [openId, setOpenId] = useState<string|null>(null);
+/** ---------- Context ---------- */
+const CapabilityCtx = createContext<CapabilityContext | null>(null);
+
+/** ---------- Provider ---------- */
+export function CapabilityProvider({ children }: { children: ReactNode }) {
+  /** load dataset (localStorage first, else seed) */
+  const [data, setData] = useState<Capability[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("fuxi:dataset:v1");
+        if (raw) return JSON.parse(raw) as Capability[];
+      } catch {}
+    }
+    return seed as Capability[];
+  });
+
+  // filters (used by TopBar and any list views)
   const [query, setQuery] = useState("");
+  const domains = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of data) if (c.domain) s.add(c.domain);
+    return ["All Domains", ...Array.from(s).sort()];
+  }, [data]);
   const [domain, setDomain] = useState<string>("All Domains");
+
+  // optional UI state
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  // weights
   const [weights, setWeights] = useState<Weights>(defaultWeights);
-  const [view, setView] = useState<"grid"|"heat">("grid");
 
-  const byId = useMemo(()=> {
-    const m:Record<string, any> = {};
-    data.forEach(c=> m[c.id]=c);
-    return m;
+  /** build lookup maps */
+  const byId = useMemo(() => {
+    const map: Record<string, Capability> = {};
+    for (const c of data) map[c.id] = c;
+    return map;
   }, [data]);
 
-  const children = useMemo(()=> {
-    const m:Record<string, string[]> = {};
-    data.forEach(c => { if (c.parentId) (m[c.parentId] ||= []).push(c.id); });
-    return m;
+  const childrenMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const c of data) {
+      if (c.parentId) {
+        (map[c.parentId] ||= []).push(c.id);
+      }
+    }
+    return map;
   }, [data]);
 
-  const roots = useMemo(()=> data.filter(d=>d.level==="L1").map(d=>d.id), [data]);
+  /** ---------- scoring updates ---------- */
+  const updateScore = (id: string, key: keyof Scores, value: number) => {
+    setData((prev) =>
+      prev.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              scores: { ...(c.scores ?? { ...DEFAULT_SCORES }), [key]: value },
+            }
+          : c
+      )
+    );
+  };
 
-  const effectiveScores = useCallback((id:string):Scores => {
-    const node = byId[id];
-    if (!node) return { ...DEFAULT_SCORES };
-    const kids = children[id] ?? [];
-    if (!kids.length) return node.scores ?? { ...DEFAULT_SCORES };
-    const sc = kids.map(k => effectiveScores(k));
-    return {
-      opportunity: avg(sc.map(s=>s.opportunity)),
-      maturity: avg(sc.map(s=>s.maturity)),
-      techFit: avg(sc.map(s=>s.techFit)),
-      strategicAlignment: avg(sc.map(s=>s.strategicAlignment)),
-      peopleReadiness: avg(sc.map(s=>s.peopleReadiness)),
-    };
-  }, [byId, children]);
+  /** ---------- roll-up logic ---------- */
+  const compositeFor = (cap: Capability): number => {
+    const kids = childrenMap[cap.id];
+    if (kids && kids.length > 0) {
+      const vals = kids.map((id) => compositeFor(byId[id]));
+      return vals.reduce((a, b) => a + b, 0) / vals.length;
+    }
+    return compositeScore(cap.scores ?? DEFAULT_SCORES, weights);
+  };
 
-  const compositeFor = useCallback((id:string, w?:Weights)=> {
-    return compositeScore(effectiveScores(id), w ?? weights);
-  }, [effectiveScores, weights]);
-
-  const updateScore = useCallback((id:string, key:keyof Scores, value:number)=> {
-    setData(prev => prev.map(c => c.id===id
-      ? { ...c, scores: { ...(c.scores ?? DEFAULT_SCORES), [key]: value } }
-      : c
-    ));
-  }, []);
-
-  const domains = useMemo(()=> {
-    const s = new Set<string>(); data.forEach(d=> d.domain && s.add(d.domain));
-    return Array.from(s).sort();
+  /** persist dataset on change */
+  useEffect(() => {
+    try {
+      localStorage.setItem("fuxi:dataset:v1", JSON.stringify(data));
+    } catch {}
   }, [data]);
+
+  /** ---------- utilities for TopBar ---------- */
+  const exportJson = () => {
+    try {
+      const payload = JSON.stringify(
+        {
+          data,
+          weights,
+          meta: { exportedAt: new Date().toISOString(), domainFilter: domain, query },
+        },
+        null,
+        2
+      );
+      const blob = new Blob([payload], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "capabilities-export.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {}
+  };
+
+  const resetAllScores = () => {
+    setData((prev) =>
+      prev.map((c) => ({
+        ...c,
+        // reset scores everywhere; feel free to scope to leaves only if preferred
+        scores: { ...DEFAULT_SCORES },
+      }))
+    );
+    try {
+      // keep dataset but clear any separate score caches if you add them later
+      // localStorage.removeItem("fuxi:scores:v1");
+    } catch {}
+  };
+
+  /** ---------- provide context ---------- */
+  const value: CapabilityContext = {
+    data,
+    byId,
+    children: childrenMap,
+    query,
+    setQuery,
+    domains,
+    domain,
+    setDomain,
+    openId,
+    setOpenId,
+    updateScore,
+    weights,
+    setWeights,
+    compositeFor,
+    exportJson,
+    resetAllScores,
+  };
 
   return (
-    <CapabilityCtx.Provider value={{
-      data, byId, children, roots,
-      openId, setOpenId,
-      query, setQuery, domain, setDomain, domains,
-      weights, setWeights, view, setView,
-      effectiveScores, compositeFor, updateScore
-    }}>
-      {children}
-    </CapabilityCtx.Provider>
+    <CapabilityCtx.Provider value={value}>{children}</CapabilityCtx.Provider>
   );
 }
 
-export function useCapabilities(): Ctx {
-  const ctx = React.useContext(CapabilityCtx);
+/** ---------- Hook ---------- */
+export function useCapabilities(): CapabilityContext {
+  const ctx = useContext(CapabilityCtx);
   if (!ctx) throw new Error("useCapabilities must be used within CapabilityProvider");
   return ctx;
 }
+
+export default CapabilityProvider;
