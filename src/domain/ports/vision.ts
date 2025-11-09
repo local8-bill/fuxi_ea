@@ -1,19 +1,15 @@
-export type VisionExtractOptions = {
-  /** "table" | "bullets" | "mixed" — hints the layout, default "mixed" */
-  layoutHint?: "table" | "bullets" | "mixed";
-  /** optional organization vocab like ["Commerce","Core Ops"] */
-  domainVocabulary?: string[];
+export type VisionAnalyzeInput = {
+  // Either a data URL (data:image/png;base64,...) or raw bytes (when using multipart)
+  imageDataUrl?: string;
+  note?: string;
 };
 
-export type ExtractedRow = {
-  id?: string;           // if present in source
-  name: string;          // "Order Management"
-  level?: "L1" | "L2" | "L3";
-  parent?: string;       // parent name (if known)
-  domain?: string;       // guessed
+export type VisionSuggestion = {
+  name: string;          // suggested L1 title
+  domain: string;        // guessed domain
+  confidence: number;    // 0..1 simple heuristic
 };
 
 export interface VisionPort {
-  /** Accepts raw bytes (image/pdf). Returns normalized rows. */
-  extract(bytes: ArrayBuffer, opts?: VisionExtractOptions): Promise<ExtractedRow[]>;
+  analyze(input: VisionAnalyzeInput): Promise<VisionSuggestion>;
 }

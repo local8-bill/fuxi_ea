@@ -3,36 +3,34 @@ import React from "react";
 import { useParams } from "next/navigation";
 import { useScoringPage } from "@/controllers/useScoringPage";
 import { localStorageAdapter } from "@/adapters/storage/local";
+import { CapabilityAccordionCard } from "@/ui/components/CapabilityAccordionCard";
 import { ScoringDrawer } from "@/ui/components/ScoringDrawer";
 import { WeightsDrawer } from "@/ui/components/WeightsDrawer";
-import { CapabilityAccordionCard } from "@/ui/components/CapabilityAccordionCard";
 import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
-import { defaultWeights } from "@/domain/services/scoring";
 import { VisionPanel } from "@/ui/components/VisionPanel";
+import { defaultWeights } from "@/domain/services/scoring";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
   const {
-    items,
-    weights,
-    setWeights,
-    openId,
-    setOpenId,
-    selected,
-    updateScores,
-    expandedL1,
-    toggleExpanded,
+    loading,
+    items, weights, setWeights,
+    openId, setOpenId, selected, updateScores,
+    expandedL1, toggleExpanded,
     compositeFor,
     addL1, reload,
   } = useScoringPage(id, localStorageAdapter);
 
-  const [sortKey, setSortKey] = React.useState("name");
+  // Feature flags (flip to false for prod if you want)
+  const LABS_IMPORT = true; // or: process.env.NODE_ENV !== "production"
+  const LABS_VISION = true; // or: process.env.NODE_ENV !== "production"
+
+  const [sortKey, setSortKey] = React.useState<"name" | "score">("name");
   const [domainFilter, setDomainFilter] = React.useState("All Domains");
   const [weightsOpen, setWeightsOpen] = React.useState(false);
   const [showAddL1, setShowAddL1] = React.useState(false);
   const [showVision, setShowVision] = React.useState(false);
-  const LABS_VISION = true; // or process.env.NODE_ENV !== "production"
 
   const domains = React.useMemo(
     () => Array.from(new Set(items.map((x) => x.domain ?? "Unassigned"))).sort(),
@@ -49,25 +47,37 @@ export default function ScoringPage() {
 
   const sorted = React.useMemo(
     () =>
-      [...filtered].sort((a, b) =>
-        sortKey === "score" ? b.score - a.score : a.name.localeCompare(b.name)
-      ),
+      [...filtered].sort((a, b) => {
+        if (sortKey === "score") {
+          const d = b.score - a.score;
+          return d !== 0 ? d : a.name.localeCompare(b.name);
+        }
+        return a.name.localeCompare(b.name);
+      }),
     [filtered, sortKey]
   );
 
-  // --- Group by domain when viewing All Domains ---
-  const grouped = React.useMemo<Record<string, typeof items> | null>(() => {
+  // Group when All Domains selected; force "Unassigned" last
+  const grouped = React.useMemo(() => {
     if (domainFilter !== "All Domains") return null;
-    const buckets: Record<string, typeof items> = {};
-    for (const it of sorted) {
-      const d = it.domain ?? "Unassigned";
-      (buckets[d] ??= []).push(it);
-    }
-    return buckets;
+    const b: Record<string, typeof items> = {};
+    for (const it of sorted) (b[it.domain ?? "Unassigned"] ??= []).push(it);
+    const keys = Object.keys(b).sort((x, y) =>
+      x === "Unassigned" ? 1 : y === "Unassigned" ? -1 : x.localeCompare(y)
+    );
+    return keys.map((k) => [k, b[k]] as const); // ordered entries
   }, [sorted, domainFilter]);
 
   const existingL1 = React.useMemo(() => items.map((i) => i.name), [items]);
-  const LABS_IMPORT = true;
+
+  // Show a super-light loading placeholder (avoids “twerkiness” flicker)
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="card">Loading project…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -87,26 +97,28 @@ export default function ScoringPage() {
         <select
           className="select"
           value={sortKey}
-          onChange={(e) => setSortKey(e.target.value)}
+          onChange={(e) => setSortKey(e.target.value as "name" | "score")}
         >
           <option value="name">Sort: Name</option>
           <option value="score">Sort: Score</option>
         </select>
-        
+
         <button className="btn" onClick={() => setShowAddL1(true)}>
           Add L1
         </button>
-        
-        <button className="btn" onClick={() => setShowVision(v => !v)}>
-        {showVision ? "Hide Vision" : "Vision (Labs)"}
-        </button>
+
+        {LABS_VISION && (
+          <button className="btn" onClick={() => setShowVision((v) => !v)}>
+            {showVision ? "Hide Vision" : "Vision (Labs)"}
+          </button>
+        )}
 
         <button className="btn ml-auto" onClick={() => setWeightsOpen(true)}>
           Weights
         </button>
       </div>
 
-      {/* --- Optional: Intelligence Import Panel --- */}
+      {/* --- Labs panels (optional) --- */}
       {LABS_IMPORT && (
         <ImportPanel
           projectId={id}
@@ -115,16 +127,16 @@ export default function ScoringPage() {
           defaultOpen={false}
           onApplied={() => reload()}
         />
-        
       )}
+
       {LABS_VISION && showVision && (
-  <VisionPanel
-    projectId={id}
-    storage={localStorageAdapter}
-    defaultOpen={true}
-    onApplied={() => reload()}
-  />
-)}
+        <VisionPanel
+          projectId={id}
+          storage={localStorageAdapter}
+          defaultOpen={true}
+          onApplied={() => reload()}
+        />
+      )}
 
       {/* --- Main Content --- */}
       {sorted.length === 0 ? (
@@ -141,7 +153,7 @@ export default function ScoringPage() {
         </div>
       ) : domainFilter === "All Domains" && grouped ? (
         // --- Grouped by Domain ---
-        Object.entries(grouped).map(([domain, caps]) => (
+        grouped.map(([domain, caps]) => (
           <section key={domain} className="mb-6">
             <h2 className="text-base font-semibold mb-3">{domain}</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
