@@ -1,39 +1,23 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StoragePort } from "@/domain/ports/storage";
 import type { Capability, Scores } from "@/domain/model/capability";
 import {
-  compositeScore,
+  compositeNode,
   defaultWeights,
+  normalizeWeights,
   type Weights,
 } from "@/domain/services/scoring";
 
 const WKEY = (p: string) => `fuxi:weights:${p}`;
 
-function normalize(w: Weights): Weights {
-  const sum =
-    w.opportunity +
-      w.maturity +
-      w.techFit +
-      w.strategicAlignment +
-      w.peopleReadiness || 1;
-  return {
-    opportunity: w.opportunity / sum,
-    maturity: w.maturity / sum,
-    techFit: w.techFit / sum,
-    strategicAlignment: w.strategicAlignment / sum,
-    peopleReadiness: w.peopleReadiness / sum,
-  };
+// ---------- small utils ----------
+function jclone<T>(x: T): T {
+  return JSON.parse(JSON.stringify(x));
 }
 
-function compositeFor(cap: Capability, weights: Weights): number {
-  const kids = cap.children ?? [];
-  if (kids.length > 0) {
-    const vals = kids.map((c) => compositeFor(c, weights));
-    const sum = vals.reduce((a, b) => a + b, 0);
-    return vals.length ? sum / vals.length : 0;
-  }
-  return compositeScore(cap.scores ?? {}, weights);
+function normalize(w: Weights): Weights {
+  return normalizeWeights(w);
 }
 
 function findById(rootList: Capability[], id: string): Capability | null {
@@ -46,97 +30,124 @@ function findById(rootList: Capability[], id: string): Capability | null {
   return null;
 }
 
+// ---------- main hook ----------
 export function useScoringPage(projectId: string, storage: StoragePort) {
-  const [roots, setRoots] = useState<Capability[]>([]);
+  const [roots, setRoots] = useState<Capability[] | null>(null); // null = loading
   const [weights, setWeights] = useState<Weights>(defaultWeights);
   const [openId, setOpenId] = useState<string | null>(null);
   const [expandedL1, setExpandedL1] = useState<Record<string, boolean>>({});
 
-  // central reload function (so ImportPanel can refresh the page after import)
-  const reload = useCallback(async () => {
-    const rows = await storage.load(projectId);
-    setRoots(rows);
+  // Debounced save to avoid spamming storage on rapid changes
+  const saveDebounced = useRef<((data: Capability[]) => void) | null>(null);
+  useEffect(() => {
+    let timer: any = null;
+    saveDebounced.current = (data: Capability[]) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        storage.save(projectId, data).catch(() => {
+          /* best-effort */
+        });
+      }, 200);
+    };
+    return () => clearTimeout(timer);
   }, [projectId, storage]);
 
-  // initial load
-  useEffect(() => {
+  // Load capabilities safely
+  const reload = useCallback(() => {
     let mounted = true;
-    storage.load(projectId).then((rows) => {
-      if (!mounted) return;
-      setRoots(rows);
-    });
+    (async () => {
+      try {
+        const rows = await storage.load(projectId);
+        if (!mounted) return;
+        setRoots(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (mounted) setRoots([]);
+      }
+    })();
     return () => {
       mounted = false;
     };
   }, [projectId, storage]);
 
-  // weights load/save
+  useEffect(() => reload(), [reload]);
+
+  // Load weights (once per project)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(WKEY(projectId));
       if (raw) setWeights(normalize(JSON.parse(raw) as Weights));
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, [projectId]);
 
+  // Persist weights
   useEffect(() => {
     try {
       localStorage.setItem(WKEY(projectId), JSON.stringify(weights));
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, [projectId, weights]);
 
-  // items (L1)
-  const items = useMemo(
-    () =>
-      roots.map((c) => ({
-        id: c.id,
-        name: c.name,
-        domain: c.domain ?? "Unassigned",
-        score: compositeFor(c, weights),
-        raw: c,
-      })),
-    [roots, weights]
-  );
+  // Derived items (L1 only)
+  const items = useMemo(() => {
+    if (!roots) return [];
+    return roots.map((c) => ({
+      id: c.id,
+      name: c.name,
+      domain: c.domain ?? "Unassigned",
+      // —— HERE: use blended multi-level composite ——
+      score: compositeNode(c, weights, { blend: 0.5 }),
+      raw: c,
+    }));
+  }, [roots, weights]);
 
   const selected = useMemo(
-    () => (openId ? findById(roots, openId) : null),
+    () => (openId && roots ? findById(roots, openId) : null),
     [openId, roots]
   );
 
+  // ➕ Add a new L1 capability (with optional Domain)
   const addL1 = useCallback(
     (name: string, domain?: string) => {
       const n = name.trim();
       if (!n) return;
       const d = (domain ?? "").trim() || "Unassigned";
-
       setRoots((prev) => {
-        const clone = structuredClone(prev) as Capability[];
+        const base = prev ?? [];
+        const clone = jclone(base) as Capability[];
         clone.push({
-          id: `cap-${Math.random().toString(36).slice(2, 8)}`,
+          id: `cap-${Math.random().toString(36).slice(2, 10)}`,
           name: n,
           level: "L1" as any,
           domain: d,
           children: [],
         });
-        storage.save(projectId, clone);
+        saveDebounced.current?.(clone);
         return clone;
       });
     },
-    [projectId, storage]
+    []
   );
 
+  // Update scores on any node, persist full tree (debounced)
   const updateScores = useCallback(
     async (id: string, patch: Partial<Scores>) => {
       setRoots((prev) => {
-        const clone = structuredClone(prev) as Capability[];
+        const base = prev ?? [];
+        const clone = jclone(base) as Capability[];
+
         const target = findById(clone, id);
         if (target) {
           target.scores = { ...(target.scores ?? {}), ...patch };
         }
-        storage.save(projectId, clone);
+
+        saveDebounced.current?.(clone);
         return clone;
       });
     },
-    [projectId, storage]
+    []
   );
 
   const toggleExpanded = useCallback((id: string) => {
@@ -144,17 +155,24 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
   }, []);
 
   return {
+    // ready state
+    loading: roots === null,
+    // data for page
     items,
     weights,
     setWeights: (w: Weights) => setWeights(normalize(w)),
+    // drawer selection
     openId,
     setOpenId,
     selected,
     updateScores,
+    // accordion state
     expandedL1,
     toggleExpanded,
-    compositeFor: (cap: Capability) => compositeFor(cap, weights),
+    // helpers the card may use
+    compositeFor: (cap: Capability) => compositeNode(cap, weights, { blend: 0.5 }),
+    // actions
     addL1,
-    reload, // ← expose for ImportPanel
+    reload: () => void reload(),
   };
 }
