@@ -8,7 +8,7 @@ type Props = {
   storage: StoragePort;
   existingL1: string[];
   defaultOpen?: boolean;
-  onApplied?: () => void; // ← callback to refresh the page
+  onApplied?: () => void; // refresh callback (e.g., reload grid)
 };
 
 export function ImportPanel({
@@ -21,6 +21,7 @@ export function ImportPanel({
   const [open, setOpen] = React.useState(defaultOpen);
   const [kind, setKind] = React.useState<"csv" | "json">("csv");
   const [text, setText] = React.useState("");
+
   const {
     busy,
     error,
@@ -31,27 +32,38 @@ export function ImportPanel({
     reset,
   } = useMapIntelligence();
 
-const onChooseFile = async (f: File | null) => {
-  if (!f) return;
-  const ext = f.name.toLowerCase().endsWith(".json") ? "json" : "csv";
-  setKind(ext as any);
-  const t = await f.text();
-  setText(t);
-  await parseFile(f, existingL1);  // already guards inside
-  setOpen(true);
-};
+  const onChooseFile = async (f: File | null) => {
+    if (!f) return;
+    try {
+      const ext = f.name.toLowerCase().endsWith(".json") ? "json" : "csv";
+      setKind(ext as any);
+      const t = await f.text();
+      setText(t);
+      await parseFile(f, existingL1);
+      setOpen(true);
+    } catch {
+      // leave error handling to the hook's `error`
+    }
+  };
 
   const onParseText = async () => {
-    const src = text.trim(); 
+    const src = text.trim();
     if (!src) return;
-    await parseString(text, kind, existingL1);
-    setOpen(true);
+    try {
+      await parseString(src, kind, existingL1);
+      setOpen(true);
+    } catch {
+      // hook exposes `error` already
+    }
   };
 
   const onApply = async () => {
-    await applyToProject(projectId, storage);
-    onApplied?.();   // ← trigger page reload
-    reset();         // ← clear preview state
+    try {
+      await applyToProject(projectId, storage);
+      onApplied?.();
+    } finally {
+      reset(); // always clear preview state
+    }
   };
 
   const onClear = () => {
@@ -90,7 +102,8 @@ const onChooseFile = async (f: File | null) => {
               <option value="json">JSON</option>
             </select>
 
-            <button className="btn" onClick={onParseText} disabled={!text.trim() || busy}>
+            {/* Don’t block Parse Text while busy; user can fix/replace input */}
+            <button className="btn" onClick={onParseText} disabled={!text.trim()}>
               Parse Text
             </button>
 
@@ -117,15 +130,15 @@ const onChooseFile = async (f: File | null) => {
 
           {error && (
             <div className="text-sm" style={{ color: "#b91c1c", marginTop: 8 }}>
-              {error}
+              {String(error)}
             </div>
           )}
 
           {preview && (
             <div className="text-sm" style={{ marginTop: 8 }}>
               <div className="mb-1">
-                <strong>Preview:</strong> {preview.flatCount} rows →{" "}
-                {preview.roots.length} nodes, {preview.issues.length} issues
+                <strong>Preview:</strong> {preview.flatCount} rows → {preview.roots.length} nodes,{" "}
+                {preview.issues.length} issues
               </div>
 
               {Object.keys(preview.suggestions).length > 0 && (
@@ -133,7 +146,9 @@ const onChooseFile = async (f: File | null) => {
                   <strong>Suggestions (incoming L1 → candidates):</strong>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {Object.keys(preview.suggestions).map((k) => (
-                      <span key={k} className="badge">{k}</span>
+                      <span key={k} className="badge">
+                        {k}
+                      </span>
                     ))}
                   </div>
                 </div>

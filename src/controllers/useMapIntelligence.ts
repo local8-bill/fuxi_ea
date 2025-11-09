@@ -128,7 +128,23 @@ function parseJson(input: string): Row[] {
 
   throw new Error("Unsupported JSON shape. Provide an array of rows or a tree object.");
 }
-
+/* ---------------- VISION API ---------------- */
+export async function extractFromVision(file: File): Promise<Row[]> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/api/vision", { method: "POST", body: fd });
+  if (!res.ok) throw new Error(`vision: ${res.status}`);
+  const data = await res.json();
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  // Convert ExtractedRow -> Row (your internal shape)
+  return rows.map((r: any, i: number) => ({
+    id: r.id ?? `tmp-${i}`,
+    name: r.name,
+    level: r.level ?? undefined,
+    parent: r.parent ?? undefined,
+    domain: r.domain ?? undefined,
+  }));
+}
 /* -------------- Tree build -------------- */
 
 function buildTree(rows: Row[]): { roots: Capability[]; issues: string[] } {
