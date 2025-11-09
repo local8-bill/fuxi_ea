@@ -29,3 +29,27 @@ html, body {
   transform: translateY(-1px);
   background-image: linear-gradient(to bottom right, rgba(255,255,255,0.4), rgba(255,255,255,0.2));
 }
+/* --- Domain Group Section Styling --- */
+section + section {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1.25rem;
+}
+
+h2.text-base {
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Improve domain badge legibility */
+.badge {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+/* Subtle hover on domain section header (for future collapse) */
+h2.text-base:hover {
+  color: #0f172a;
+  cursor: default;
+}
