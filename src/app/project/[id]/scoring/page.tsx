@@ -9,6 +9,7 @@ import { CapabilityAccordionCard } from "@/ui/components/CapabilityAccordionCard
 import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
 import { defaultWeights } from "@/domain/services/scoring";
+import { VisionPanel } from "@/ui/components/VisionPanel";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +31,8 @@ export default function ScoringPage() {
   const [domainFilter, setDomainFilter] = React.useState("All Domains");
   const [weightsOpen, setWeightsOpen] = React.useState(false);
   const [showAddL1, setShowAddL1] = React.useState(false);
+  const [showVision, setShowVision] = React.useState(false);
+  const LABS_VISION = true; // or process.env.NODE_ENV !== "production"
 
   const domains = React.useMemo(
     () => Array.from(new Set(items.map((x) => x.domain ?? "Unassigned"))).sort(),
@@ -89,9 +92,13 @@ export default function ScoringPage() {
           <option value="name">Sort: Name</option>
           <option value="score">Sort: Score</option>
         </select>
-
+        
         <button className="btn" onClick={() => setShowAddL1(true)}>
           Add L1
+        </button>
+        
+        <button className="btn" onClick={() => setShowVision(v => !v)}>
+        {showVision ? "Hide Vision" : "Vision (Labs)"}
         </button>
 
         <button className="btn ml-auto" onClick={() => setWeightsOpen(true)}>
@@ -108,7 +115,16 @@ export default function ScoringPage() {
           defaultOpen={false}
           onApplied={() => reload()}
         />
+        
       )}
+      {LABS_VISION && showVision && (
+  <VisionPanel
+    projectId={id}
+    storage={localStorageAdapter}
+    defaultOpen={true}
+    onApplied={() => reload()}
+  />
+)}
 
       {/* --- Main Content --- */}
       {sorted.length === 0 ? (
