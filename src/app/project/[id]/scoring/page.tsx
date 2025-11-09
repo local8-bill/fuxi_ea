@@ -64,7 +64,7 @@ export default function ScoringPage() {
   }, [sorted, domainFilter]);
 
   const existingL1 = React.useMemo(() => items.map((i) => i.name), [items]);
-  const LABS_IMPORT = process.env.NODE_ENV !== "production";
+  const LABS_IMPORT = true;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
