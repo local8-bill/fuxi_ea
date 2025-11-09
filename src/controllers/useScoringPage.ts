@@ -61,7 +61,9 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
       // tolerate old flat shape (no children) — just accept as L1 roots
       setRoots(rows);
     });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [projectId, storage]);
 
   // Load weights (once per project)
@@ -74,7 +76,9 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
 
   // Persist weights
   useEffect(() => {
-    try { localStorage.setItem(WKEY(projectId), JSON.stringify(weights)); } catch {}
+    try {
+      localStorage.setItem(WKEY(projectId), JSON.stringify(weights));
+    } catch {}
   }, [projectId, weights]);
 
   // Grid items are L1 roots only
@@ -93,6 +97,29 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
   const selected = useMemo(
     () => (openId ? findById(roots, openId) : null),
     [openId, roots]
+  );
+
+  // ➕ Add a new L1 capability (with optional Domain) — prepend so it shows first
+  const addL1 = useCallback(
+    (name: string, domain?: string) => {
+      const n = name.trim();
+      if (!n) return;
+      const d = (domain ?? "").trim() || "Unassigned";
+
+      setRoots((prev) => {
+        const clone = structuredClone(prev) as Capability[];
+        clone.unshift({
+          id: `cap-${Math.random().toString(36).slice(2, 8)}`,
+          name: n,
+          level: "L1" as any,
+          domain: d,
+          children: [],
+        });
+        storage.save(projectId, clone);
+        return clone;
+      });
+    },
+    [projectId, storage]
   );
 
   // Update scores on any node, persist full tree
@@ -132,5 +159,8 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     toggleExpanded,
     // helpers the card may use
     compositeFor: (cap: Capability) => compositeFor(cap, weights),
+
+    // new action
+    addL1,
   };
 }
