@@ -1,4 +1,5 @@
 "use client";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { StoragePort } from "@/domain/ports/storage";
 import type { Capability, Scores } from "@/domain/model/capability";
@@ -8,15 +9,25 @@ import {
   type Weights,
 } from "@/domain/services/scoring";
 
+// ✅ Use your existing template seed that shipped with the original build
+// (No new files / no new aliases)
+import retail from "@/data/templates/retail.json";
+
 const WKEY = (p: string) => `fuxi:weights:${p}`;
+
+// Safe deep clone (avoid structuredClone quirks in some prod envs)
+function deepClone<T>(x: T): T {
+  return JSON.parse(JSON.stringify(x));
+}
 
 function normalize(w: Weights): Weights {
   const sum =
     w.opportunity +
-    w.maturity +
-    w.techFit +
-    w.strategicAlignment +
-    w.peopleReadiness || 1;
+      w.maturity +
+      w.techFit +
+      w.strategicAlignment +
+      w.peopleReadiness || 1;
+
   return {
     opportunity: w.opportunity / sum,
     maturity: w.maturity / sum,
@@ -26,7 +37,7 @@ function normalize(w: Weights): Weights {
   };
 }
 
-// compute composite recursively: if children exist, take avg of child composites
+// Composite: if children exist, average child composites; else leaf score
 function compositeFor(cap: Capability, weights: Weights): number {
   const kids = cap.children ?? [];
   if (kids.length > 0) {
@@ -53,18 +64,30 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [expandedL1, setExpandedL1] = useState<Record<string, boolean>>({});
 
-  // Load capabilities
+  // Load capabilities — if empty and this is the demo workspace, seed from retail.json
   useEffect(() => {
     let mounted = true;
     storage.load(projectId).then((rows) => {
       if (!mounted) return;
-      // tolerate old flat shape (no children) — just accept as L1 roots
-      setRoots(rows);
+
+      if (!rows || rows.length === 0) {
+        if (projectId === "demo") {
+          const seed = (retail as unknown) as Capability[];
+          setRoots(seed);
+          storage.save(projectId, seed);
+        } else {
+          setRoots([]); // real workspaces start empty
+        }
+      } else {
+        setRoots(rows);
+      }
     });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [projectId, storage]);
 
-  // Load weights (once per project)
+  // Load weights
   useEffect(() => {
     try {
       const raw = localStorage.getItem(WKEY(projectId));
@@ -74,10 +97,12 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
 
   // Persist weights
   useEffect(() => {
-    try { localStorage.setItem(WKEY(projectId), JSON.stringify(weights)); } catch {}
+    try {
+      localStorage.setItem(WKEY(projectId), JSON.stringify(weights));
+    } catch {}
   }, [projectId, weights]);
 
-  // Grid items are L1 roots only
+  // L1 cards
   const items = useMemo(
     () =>
       roots.map((c) => ({
@@ -95,17 +120,15 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     [openId, roots]
   );
 
-  // Update scores on any node, persist full tree
+  // Update scores anywhere; persist full tree
   const updateScores = useCallback(
     async (id: string, patch: Partial<Scores>) => {
       setRoots((prev) => {
-        const clone = structuredClone(prev) as Capability[];
-
+        const clone = deepClone(prev);
         const target = findById(clone, id);
         if (target) {
           target.scores = { ...(target.scores ?? {}), ...patch };
         }
-
         storage.save(projectId, clone);
         return clone;
       });
@@ -118,19 +141,15 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
   }, []);
 
   return {
-    // data for page
     items,
     weights,
     setWeights: (w: Weights) => setWeights(normalize(w)),
-    // drawer selection
     openId,
     setOpenId,
     selected,
     updateScores,
-    // accordion state
     expandedL1,
     toggleExpanded,
-    // helpers the card may use
     compositeFor: (cap: Capability) => compositeFor(cap, weights),
   };
 }
