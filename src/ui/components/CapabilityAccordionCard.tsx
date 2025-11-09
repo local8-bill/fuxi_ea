@@ -1,44 +1,38 @@
+// src/ui/components/CapabilityAccordionCard.tsx
 "use client";
-import React from "react";
-import type { Capability } from "@/domain/model/capability";
-import { colorBand } from "@/domain/services/colorBand"; // from earlier step
-import { compositeScore, type Weights } from "@/domain/services/scoring";
 
-function MiniBar({ value01 }: { value01: number }) {
-  const pct = Math.round(Math.max(0, Math.min(1, value01)) * 100);
-  return (
-    <div className="h-1.5 w-full rounded-full bg-[rgba(229,231,235,.7)] overflow-hidden">
-      <div className="h-full" style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
+import * as React from "react";
+import type { Capability } from "@/domain/model/capability";
+import type { Weights } from "@/domain/services/scoring";
+
+type Props = {
+  cap: Capability;                // L1 node (with optional children)
+  l1Score: number;                // precomputed composite for L1
+  weights: Weights;
+  expanded: boolean;              // whether L1 accordion is open
+  onToggle: () => void;           // toggle L1 open/closed
+  onOpen: (id: string) => void;   // open scoring drawer for any node (L1/2/3)
+  compositeFor: (cap: Capability) => number; // compute composite for any node
+};
 
 export function CapabilityAccordionCard({
   cap,
   l1Score,
-  weights,
+  weights,           // eslint: unused but future-proof
   expanded,
   onToggle,
   onOpen,
   compositeFor,
-}: {
-  cap: Capability;         // L1 node
-  l1Score: number;         // precomputed for band
-  weights: Weights;
-  expanded: boolean;
-  onToggle: () => void;
-  onOpen: (id: string) => void;
-  compositeFor: (cap: Capability) => number;
-}) {
-  const band = colorBand(l1Score);
-  const l2s = cap.children ?? [];
+}: Props) {
+  // map 0..1 to our soft “band” classes
+  const band = (s: number) =>
+    s >= 0.75 ? "band-high"
+    : s >= 0.5 ? "band-med"
+    : "band-low";
 
   return (
-    <div
-      className={`card transition hover:shadow-md ${band.band}`}
-      style={{ borderWidth: 1 }}
-    >
-      {/* L1 header */}
+    <div className={`card ${band(l1Score)}`} style={{ borderWidth: 1 }}>
+      {/* L1 header row */}
       <div className="flex items-start gap-3">
         <button
           className="btn"
@@ -46,102 +40,124 @@ export function CapabilityAccordionCard({
           aria-label={expanded ? "Collapse" : "Expand"}
           title={expanded ? "Collapse" : "Expand"}
         >
-          {expanded ? "▾" : "▸"}
+          {expanded ? "−" : "+"}
         </button>
 
-        <div className="min-w-0 flex-1">
-          <div className="font-semibold truncate">{cap.name}</div>
-          {cap.domain && (
-            <div className="text-xs opacity-70 mt-1">{cap.domain}</div>
-          )}
-          {/* L1 progress */}
-          <div className="mt-3">
-            <MiniBar value01={l1Score} />
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <div className="font-semibold">{cap.name}</div>
+            <div className="badge" title={`Composite: ${(l1Score * 100).toFixed(0)}%`}>
+              {(l1Score * 100).toFixed(0)}%
+            </div>
           </div>
+
+          {cap.domain && (
+            <div className="text-sm" style={{ opacity: 0.7, marginTop: 2 }}>
+              {cap.domain}
+            </div>
+          )}
         </div>
 
-        <button
-          className="badge"
-          title="Open details"
-          onClick={() => onOpen(cap.id)}
-        >
-          {Math.round(l1Score * 100)}/100
-        </button>
+        <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
       </div>
 
-      {/* L2 list */}
-      {expanded && l2s.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {l2s.map((l2) => {
-            const l2Score = l2.children?.length
-              ? // derive from children if present
-                (l2.children
-                  .map((c) =>
-                    c.children?.length
-                      ? // compute for deeper nodes via compositeFor
-                        compositeFor(c)
-                      : compositeScore(c.scores ?? {}, weights)
-                  )
-                  .reduce((a, b) => a + b, 0) /
-                  (l2.children.length || 1))
-              : compositeScore(l2.scores ?? {}, weights);
-
-            const [showL3, setShowL3] = React.useState(false);
-            const hasL3 = (l2.children?.length ?? 0) > 0;
-
-            return (
-              <div key={l2.id} className="border border-slate-200 rounded-lg p-2 bg-white">
-                <div className="flex items-center gap-2">
-                  {hasL3 ? (
-                    <button className="btn" onClick={() => setShowL3((v) => !v)} title={showL3 ? "Hide L3" : "Show L3"}>
-                      {showL3 ? "▾" : "▸"}
-                    </button>
-                  ) : (
-                    <span className="btn" aria-hidden>•</span>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{l2.name}</div>
-                    <div className="mt-2">
-                      <MiniBar value01={l2Score} />
-                    </div>
-                  </div>
-
-                  <button className="badge" onClick={() => onOpen(l2.id)}>
-                    {Math.round(l2Score * 100)}/100
-                  </button>
-                </div>
-
-                {/* L3 inline */}
-                {showL3 && hasL3 && (
-                  <div className="mt-2 pl-8 space-y-2">
-                    {l2.children!.map((l3) => {
-                      const s =
-                        l3.children?.length
-                          ? compositeFor(l3)
-                          : compositeScore(l3.scores ?? {}, weights);
-                      return (
-                        <div key={l3.id} className="flex items-center gap-2">
-                          <span className="opacity-40">↳</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm truncate">{l3.name}</div>
-                            <div className="mt-2">
-                              <MiniBar value01={s} />
-                            </div>
-                          </div>
-                          <button className="badge" onClick={() => onOpen(l3.id)}>
-                            {Math.round(s * 100)}/100
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      {/* L2 / L3 body */}
+      {expanded && (
+        <div style={{ marginTop: 12 }}>
+          {(!cap.children || cap.children.length === 0) ? (
+            <div className="text-sm" style={{ opacity: 0.7 }}>
+              No L2 sub-capabilities yet.
+            </div>
+          ) : (
+            <div className="grid gap-2">
+              {cap.children!.map((l2) => (
+                <L2Row
+                  key={l2.id}
+                  cap={l2}
+                  onOpen={onOpen}
+                  compositeFor={compositeFor}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+function L2Row({
+  cap,
+  onOpen,
+  compositeFor,
+}: {
+  cap: Capability;
+  onOpen: (id: string) => void;
+  compositeFor: (cap: Capability) => number;
+}) {
+  const s = safeScore(cap, compositeFor);
+  const bandCls = s >= 0.75 ? "band-high" : s >= 0.5 ? "band-med" : "band-low";
+
+  return (
+    <div className={`card ${bandCls}`} style={{ padding: 8 }}>
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <div className="font-medium">{cap.name}</div>
+            <div className="badge" title={`Composite: ${(s * 100).toFixed(0)}%`}>
+              {(s * 100).toFixed(0)}%
+            </div>
+          </div>
+        </div>
+        <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+      </div>
+
+      {/* L3 list */}
+      {cap.children && cap.children.length > 0 && (
+        <ul style={{ marginTop: 6, paddingLeft: 12 }}>
+          {cap.children.map((l3) => (
+            <L3Row
+              key={l3.id}
+              cap={l3}
+              onOpen={onOpen}
+              compositeFor={compositeFor}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function L3Row({
+  cap,
+  onOpen,
+  compositeFor,
+}: {
+  cap: Capability;
+  onOpen: (id: string) => void;
+  compositeFor: (cap: Capability) => number;
+}) {
+  const s = safeScore(cap, compositeFor);
+  const bandCls = s >= 0.75 ? "band-high" : s >= 0.5 ? "band-med" : "band-low";
+
+  return (
+    <li className={`card ${bandCls}`} style={{ padding: 6, display: "flex", alignItems: "center", gap: 8 }}>
+      <span className="text-sm" style={{ flex: 1 }}>{cap.name}</span>
+      <span className="badge" title={`Composite: ${(s * 100).toFixed(0)}%`}>
+        {(s * 100).toFixed(0)}%
+      </span>
+      <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+    </li>
+  );
+}
+
+/** If a node has no scores, compute composite from its children. If leaf & no scores, return 0. */
+function safeScore(cap: Capability, compositeFor: (c: Capability) => number): number {
+  try {
+    const v = compositeFor(cap);
+    return Number.isFinite(v) ? v : 0;
+  } catch {
+    return 0;
+  }
 }

@@ -5,12 +5,13 @@ import { useScoringPage } from "@/controllers/useScoringPage";
 import { localStorageAdapter } from "@/adapters/storage/local";
 import { ScoringDrawer } from "@/ui/components/ScoringDrawer";
 import { WeightsDrawer } from "@/ui/components/WeightsDrawer";
-import { defaultWeights } from "@/domain/services/scoring";
 import { CapabilityAccordionCard } from "@/ui/components/CapabilityAccordionCard";
 import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
+import { ImportPanel } from "@/ui/components/ImportPanel";
+import { defaultWeights } from "@/domain/services/scoring";
 
 export default function ScoringPage() {
-  const { id } = useParams() as { id: string };
+  const { id } = useParams<{ id: string }>();
   const {
     items,
     weights,
@@ -22,35 +23,48 @@ export default function ScoringPage() {
     expandedL1,
     toggleExpanded,
     compositeFor,
-    addL1,
+    addL1, reload,
   } = useScoringPage(id, localStorageAdapter);
 
   const [sortKey, setSortKey] = React.useState("name");
   const [domainFilter, setDomainFilter] = React.useState("All Domains");
   const [weightsOpen, setWeightsOpen] = React.useState(false);
-  const [addOpen, setAddOpen] = React.useState(false);
+  const [showAddL1, setShowAddL1] = React.useState(false);
 
-  // --- Sorting & Filtering ---
-  const domains = Array.from(
-    new Set(items.map((x) => x.domain ?? "Unassigned"))
-  ).sort();
-
-  const filtered =
-    domainFilter === "All Domains"
-      ? items
-      : items.filter((x) => x.domain === domainFilter);
-
-  const sorted = [...filtered].sort((a, b) =>
-    sortKey === "score"
-      ? b.score - a.score
-      : a.name.localeCompare(b.name)
+  const domains = React.useMemo(
+    () => Array.from(new Set(items.map((x) => x.domain ?? "Unassigned"))).sort(),
+    [items]
   );
 
-  // --- Group by Domain for All Domains view ---
-  const grouped =
-    domainFilter === "All Domains"
-      ? Object.groupBy(sorted, (x) => x.domain ?? "Unassigned")
-      : null;
+  const filtered = React.useMemo(
+    () =>
+      items.filter(
+        (x) => domainFilter === "All Domains" || x.domain === domainFilter
+      ),
+    [items, domainFilter]
+  );
+
+  const sorted = React.useMemo(
+    () =>
+      [...filtered].sort((a, b) =>
+        sortKey === "score" ? b.score - a.score : a.name.localeCompare(b.name)
+      ),
+    [filtered, sortKey]
+  );
+
+  // --- Group by domain when viewing All Domains ---
+  const grouped = React.useMemo<Record<string, typeof items> | null>(() => {
+    if (domainFilter !== "All Domains") return null;
+    const buckets: Record<string, typeof items> = {};
+    for (const it of sorted) {
+      const d = it.domain ?? "Unassigned";
+      (buckets[d] ??= []).push(it);
+    }
+    return buckets;
+  }, [sorted, domainFilter]);
+
+  const existingL1 = React.useMemo(() => items.map((i) => i.name), [items]);
+  const LABS_IMPORT = process.env.NODE_ENV !== "production";
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -76,22 +90,36 @@ export default function ScoringPage() {
           <option value="score">Sort: Score</option>
         </select>
 
-        <button className="btn" onClick={() => setAddOpen(true)}>
+        <button className="btn" onClick={() => setShowAddL1(true)}>
           Add L1
         </button>
+
         <button className="btn ml-auto" onClick={() => setWeightsOpen(true)}>
           Weights
         </button>
       </div>
 
-      {/* --- Conditional Renders --- */}
+      {/* --- Optional: Intelligence Import Panel --- */}
+      {LABS_IMPORT && (
+        <ImportPanel
+          projectId={id}
+          storage={localStorageAdapter}
+          existingL1={existingL1}
+          defaultOpen={false}
+          onApplied={() => reload()}
+        />
+      )}
+
+      {/* --- Main Content --- */}
       {sorted.length === 0 ? (
-        <div className="card mt-6">
-          <div className="font-medium mb-2">No capabilities yet</div>
-          <p className="text-sm opacity-70 mb-3">
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="font-medium" style={{ marginBottom: 8 }}>
+            No capabilities yet
+          </div>
+          <p className="text-sm" style={{ opacity: 0.7, marginBottom: 12 }}>
             Start by adding an L1 capability or importing a capability map.
           </p>
-          <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
+          <button className="btn btn-primary" onClick={() => setShowAddL1(true)}>
             Add L1
           </button>
         </div>
@@ -117,7 +145,7 @@ export default function ScoringPage() {
           </section>
         ))
       ) : (
-        // --- Single-domain view ---
+        // --- Ungrouped grid ---
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sorted.map((x) => (
             <CapabilityAccordionCard
@@ -134,7 +162,7 @@ export default function ScoringPage() {
         </div>
       )}
 
-      {/* --- Drawers --- */}
+      {/* --- Drawers & Dialogs --- */}
       <ScoringDrawer
         open={!!selected}
         onClose={() => setOpenId(null)}
@@ -152,8 +180,8 @@ export default function ScoringPage() {
       />
 
       <AddL1Dialog
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
+        open={showAddL1}
+        onClose={() => setShowAddL1(false)}
         onCreate={(name, domain) => addL1(name, domain)}
         domainSuggestions={domains}
       />

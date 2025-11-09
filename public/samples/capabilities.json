@@ -1,0 +1,6 @@
+[
+  { "name": "Order Management", "level": "L1", "domain": "Core Ops" },
+  { "name": "Returns", "level": "L2", "parent": "Order Management" },
+  { "name": "Inventory", "level": "L1", "domain": "Core Ops" },
+  { "name": "Stock Visibility", "level": "L2", "parent": "Inventory" }
+]

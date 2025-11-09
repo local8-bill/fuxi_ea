@@ -1,0 +1,8 @@
+name,level,domain,parent
+Order Management,L1,Core Ops,
+Returns,L2,,Order Management
+Inventory,L1,Core Ops,
+Stock Visibility,L2,,Inventory
+Product Discovery,L1,Strategy,
+Opportunity Sizing,L2,,Product Discovery
+Tech Spike,L3,,Opportunity Sizing

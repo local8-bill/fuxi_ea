@@ -13,10 +13,10 @@ const WKEY = (p: string) => `fuxi:weights:${p}`;
 function normalize(w: Weights): Weights {
   const sum =
     w.opportunity +
-    w.maturity +
-    w.techFit +
-    w.strategicAlignment +
-    w.peopleReadiness || 1;
+      w.maturity +
+      w.techFit +
+      w.strategicAlignment +
+      w.peopleReadiness || 1;
   return {
     opportunity: w.opportunity / sum,
     maturity: w.maturity / sum,
@@ -26,7 +26,6 @@ function normalize(w: Weights): Weights {
   };
 }
 
-// compute composite recursively: if children exist, take avg of child composites
 function compositeFor(cap: Capability, weights: Weights): number {
   const kids = cap.children ?? [];
   if (kids.length > 0) {
@@ -53,12 +52,17 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [expandedL1, setExpandedL1] = useState<Record<string, boolean>>({});
 
-  // Load capabilities
+  // central reload function (so ImportPanel can refresh the page after import)
+  const reload = useCallback(async () => {
+    const rows = await storage.load(projectId);
+    setRoots(rows);
+  }, [projectId, storage]);
+
+  // initial load
   useEffect(() => {
     let mounted = true;
     storage.load(projectId).then((rows) => {
       if (!mounted) return;
-      // tolerate old flat shape (no children) — just accept as L1 roots
       setRoots(rows);
     });
     return () => {
@@ -66,7 +70,7 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     };
   }, [projectId, storage]);
 
-  // Load weights (once per project)
+  // weights load/save
   useEffect(() => {
     try {
       const raw = localStorage.getItem(WKEY(projectId));
@@ -74,14 +78,13 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     } catch {}
   }, [projectId]);
 
-  // Persist weights
   useEffect(() => {
     try {
       localStorage.setItem(WKEY(projectId), JSON.stringify(weights));
     } catch {}
   }, [projectId, weights]);
 
-  // Grid items are L1 roots only
+  // items (L1)
   const items = useMemo(
     () =>
       roots.map((c) => ({
@@ -99,7 +102,6 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     [openId, roots]
   );
 
-  // ➕ Add a new L1 capability (with optional Domain) — prepend so it shows first
   const addL1 = useCallback(
     (name: string, domain?: string) => {
       const n = name.trim();
@@ -108,7 +110,7 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
 
       setRoots((prev) => {
         const clone = structuredClone(prev) as Capability[];
-        clone.unshift({
+        clone.push({
           id: `cap-${Math.random().toString(36).slice(2, 8)}`,
           name: n,
           level: "L1" as any,
@@ -122,17 +124,14 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     [projectId, storage]
   );
 
-  // Update scores on any node, persist full tree
   const updateScores = useCallback(
     async (id: string, patch: Partial<Scores>) => {
       setRoots((prev) => {
         const clone = structuredClone(prev) as Capability[];
-
         const target = findById(clone, id);
         if (target) {
           target.scores = { ...(target.scores ?? {}), ...patch };
         }
-
         storage.save(projectId, clone);
         return clone;
       });
@@ -145,22 +144,17 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
   }, []);
 
   return {
-    // data for page
     items,
     weights,
     setWeights: (w: Weights) => setWeights(normalize(w)),
-    // drawer selection
     openId,
     setOpenId,
     selected,
     updateScores,
-    // accordion state
     expandedL1,
     toggleExpanded,
-    // helpers the card may use
     compositeFor: (cap: Capability) => compositeFor(cap, weights),
-
-    // new action
     addL1,
+    reload, // ← expose for ImportPanel
   };
 }
