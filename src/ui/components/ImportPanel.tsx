@@ -2,6 +2,7 @@
 import React from "react";
 import type { StoragePort } from "@/domain/ports/storage";
 import { useMapIntelligence } from "@/controllers/useMapIntelligence";
+import { alignViaApi } from "@/adapters/reasoning/client";
 
 type Props = {
   projectId: string;
@@ -106,6 +107,26 @@ export function ImportPanel({
             <button className="btn" onClick={onParseText} disabled={!text.trim()}>
               Parse Text
             </button>
+            <button
+  className="btn"
+  onClick={async () => {
+    if (!preview) return;
+    try {
+      const result = await alignViaApi(preview.roots, existingL1);
+      // merge into preview so it renders in the “Suggestions” section
+      (preview as any).suggestions = result.suggestions;
+      (preview as any).issues = [...new Set([...(preview.issues||[]), ...result.issues])];
+      // force a refresh by setting local state (reuse any existing setter; simplest is toggle text)
+      setText(t => t); 
+    } catch (e:any) {
+      console.error(e);
+      alert(e?.message ?? "AI align failed");
+    }
+  }}
+  disabled={!preview || busy}
+>
+  Auto-map with AI
+</button>
 
             <button
               className="btn btn-primary"

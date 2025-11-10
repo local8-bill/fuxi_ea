@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { VisionPanel } from "@/ui/components/VisionPanel";
 import { useParams } from "next/navigation";
 import { useScoringPage } from "@/controllers/useScoringPage";
 import { localStorageAdapter } from "@/adapters/storage/local";
@@ -8,7 +9,6 @@ import { ScoringDrawer } from "@/ui/components/ScoringDrawer";
 import { WeightsDrawer } from "@/ui/components/WeightsDrawer";
 import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
-import { VisionPanel } from "@/ui/components/VisionPanel";
 import { defaultWeights } from "@/domain/services/scoring";
 
 export default function ScoringPage() {

@@ -1,36 +1,43 @@
-import type { VisionAnalyzeInput, VisionPort, VisionSuggestion } from "@/domain/ports/vision";
+// Lightweight local “vision” adapter — no external calls.
+// It pretends to read text from an image/PDF and extracts row-like hints.
 
-// absolutely no external calls — cheap rules + optional note keyword hints
-export function makeLocalVision(): VisionPort {
-  return {
-    async analyze(input: VisionAnalyzeInput): Promise<VisionSuggestion> {
-      const note = (input.note ?? "").trim();
+export type ExtractedRow = {
+  name: string;
+  level: "L1" | "L2" | "L3";
+  domain?: string;
+  parent?: string;
+};
 
-      const domain =
-        /supply|inventory|warehouse|logistics|fulfillment/i.test(note) ? "Supply Chain" :
-        /commerce|checkout|pdp|cart|catalog|merch|omn(i)?channel/i.test(note) ? "Digital Commerce" :
-        /finance|fp&a|budget|accounting|cost/i.test(note) ? "Finance" :
-        /data|analytics|bi|insights|ml|ai/i.test(note) ? "Data & Analytics" :
-        /strategy|planning|roadmap|portfolio/i.test(note) ? "Strategy" :
-        "Unassigned";
-
-      const name = deriveTitle(note) || "New Capability";
-      const confidence =
-        domain === "Unassigned" ? 0.4 :
-        Math.min(0.9, 0.55 + Math.min(0.35, note.length / 120));
-
-      return { name, domain, confidence };
-    }
-  };
+function guessLevel(name: string): "L1" | "L2" | "L3" {
+  // Tiny heuristic: longer -> deeper, purely for dev/demo
+  const w = name.trim().split(/\s+/).length;
+  if (w >= 5) return "L3";
+  if (w >= 3) return "L2";
+  return "L1";
 }
 
-function deriveTitle(s: string): string {
-  if (!s) return "";
-  // First sentence → Title Case (cap at ~6 words)
-  const first = s.replace(/\s+/g, " ").trim().split(/[.!?]\s*/)[0];
-  return first
-    .split(" ")
-    .slice(0, 6)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(" ");
+function deriveRowsFromBuffer(_buf: ArrayBuffer): ExtractedRow[] {
+  // Stub: in a real impl we’d OCR the buffer. For dev we emit a couple rows.
+  return [
+    { name: "Order Management", level: "L1", domain: "Core Ops" },
+    { name: "Inventory", level: "L1", domain: "Core Ops" },
+    { name: "Stock Visibility", level: "L2", parent: "Inventory" },
+  ];
 }
+
+export const localVisionAdapter = {
+  /**
+   * Extract row candidates from a binary file (image/PDF/etc).
+   * @param buffer ArrayBuffer of the uploaded file.
+   * @param opts   Optional hints, e.g., { layoutHint: "mixed" }
+   */
+  async extract(buffer: ArrayBuffer, _opts?: Record<string, unknown>) {
+    // Replace this with a real parser later; keep the API shape stable now.
+    const rows = deriveRowsFromBuffer(buffer).map(r => ({
+      ...r,
+      // normalize “name → level” in case we want to alter heuristics later
+      level: guessLevel(r.name),
+    }));
+    return rows;
+  },
+};
