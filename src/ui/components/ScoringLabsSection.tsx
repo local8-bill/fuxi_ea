@@ -43,7 +43,7 @@ export function ScoringLabsSection({
           <span className="text-xs opacity-60">Tools</span>
         </header>
         <div className="flex-1">
-          <VisionPanel onAccept={onVisionAccept} />
+          <VisionPanel onAccept={onVisionAccept} bare />
         </div>
       </section>
     </div>

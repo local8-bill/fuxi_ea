@@ -9,9 +9,10 @@ export type VisionSuggestion = {
 
 type Props = {
   onAccept: (s: VisionSuggestion) => void;
+  bare?: boolean;
 };
 
-export function VisionPanel({ onAccept }: Props) {
+export function VisionPanel({ onAccept, bare = false }: Props) {
   const [note, setNote] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -59,10 +60,8 @@ export function VisionPanel({ onAccept }: Props) {
     }
   };
 
-  return (
-    <div className="card">
-      <div className="font-semibold mb-2">Vision (Labs)</div>
-
+  const content = (
+    <>
       <div className="grid gap-2 mb-2">
         <input
           className="input"
@@ -104,6 +103,15 @@ export function VisionPanel({ onAccept }: Props) {
           <div><strong>Domain:</strong> {suggestion.domain} <span className="opacity-70">({Math.round(suggestion.confidence * 100)}%)</span></div>
         </div>
       )}
+    </>
+  );
+
+  if (bare) return content;
+
+  return (
+    <div className="card">
+      <div className="font-semibold mb-2">Vision (Labs)</div>
+      {content}
     </div>
   );
 }
