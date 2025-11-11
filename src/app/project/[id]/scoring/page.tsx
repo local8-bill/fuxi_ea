@@ -5,12 +5,12 @@ import { useParams } from "next/navigation";
 import { useScoringPage } from "@/controllers/useScoringPage";
 import { localStorageAdapter } from "@/adapters/storage/local";
 
-import { CapabilityAccordionCard } from "@/ui/components/CapabilityAccordionCard";
 import { ScoringDrawer } from "@/ui/components/ScoringDrawer";
 import { WeightsDrawer } from "@/ui/components/WeightsDrawer";
 import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
-import { ImportPanel } from "@/ui/components/ImportPanel";
-import { VisionPanel } from "@/ui/components/VisionPanel";
+import { CapabilitySection } from "@/ui/components/CapabilitySection";
+import { ScoringControlsBar } from "@/ui/components/ScoringControlsBar";
+import { ScoringLabsSection } from "@/ui/components/ScoringLabsSection";
 import { defaultWeights } from "@/domain/services/scoring";
 
 export default function ScoringPage() {
@@ -72,76 +72,28 @@ export default function ScoringPage() {
 
   const existingL1 = React.useMemo(() => items.map((i) => i.name), [items]);
 
-  // Always-on Labs (so Vercel/prod shows the row)
-  const LABS = true;
-
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* ── Controls bar ─────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3 items-center mb-6">
-        <select
-          className="select"
-          value={domainFilter}
-          onChange={(e) => setDomainFilter(e.target.value)}
-        >
-          <option>All Domains</option>
-          {domains.map((d) => (
-            <option key={d}>{d}</option>
-          ))}
-        </select>
+      <ScoringControlsBar
+        domainFilter={domainFilter}
+        domains={domains}
+        sortKey={sortKey}
+        onDomainChange={setDomainFilter}
+        onSortChange={setSortKey}
+        onAddL1={() => setShowAddL1(true)}
+        onOpenWeights={() => setWeightsOpen(true)}
+      />
 
-        <select
-          className="select"
-          value={sortKey}
-          onChange={(e) => setSortKey(e.target.value as "name" | "score")}
-        >
-          <option value="name">Sort: Name</option>
-          <option value="score">Sort: Score</option>
-        </select>
-
-        <button className="btn" onClick={() => setShowAddL1(true)}>
-          Add L1
-        </button>
-
-        <button className="btn ml-auto" onClick={() => setWeightsOpen(true)}>
-          Weights
-        </button>
-      </div>
-
-      {/* LABS: Import + Vision */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 items-start">
-        {/* Import */}
-        <section className="card h-full min-h-[300px] flex flex-col">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold">Import (CSV / JSON) — Labs</h2>
-            <span className="text-xs opacity-60">Tools</span>
-          </div>
-          <div className="flex-1">
-            <ImportPanel
-              bare
-              projectId={id}
-              storage={localStorageAdapter}
-              existingL1={existingL1}
-              onApplied={reload}
-            />
-          </div>
-        </section>
-        {/* Vision */}
-        <section className="card h-full flex flex-col">
-          <header className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold">Vision (Labs)</h2>
-            <span className="text-xs opacity-60">Tools</span>
-          </header>
-          <div className="flex-1">
-            <VisionPanel
-              onAccept={(s) => {
-                addL1(s.name, s.domain);
-                reload();
-              }}
-            />
-          </div>
-        </section>
-      </div>
+      <ScoringLabsSection
+        projectId={id}
+        storage={localStorageAdapter}
+        existingL1={existingL1}
+        onImportApplied={reload}
+        onVisionAccept={(s) => {
+          addL1(s.name, s.domain);
+          reload();
+        }}
+      />
 
       {/* ── Main content ─────────────────────────────────────────────── */}
       {sorted.length === 0 ? (
@@ -154,43 +106,17 @@ export default function ScoringPage() {
             Add L1
           </button>
         </div>
-      ) : domainFilter === "All Domains" && grouped ? (
-        // Grouped by domain
-        Object.entries(grouped).map(([domain, caps]) => (
-          <section key={domain} className="mb-6">
-            <h2 className="text-base font-semibold mb-3">{domain}</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {caps.map((x) => (
-                <CapabilityAccordionCard
-                  key={x.id}
-                  cap={x.raw}
-                  l1Score={x.score}
-                  weights={weights}
-                  expanded={!!expandedL1[x.id]}
-                  onToggle={() => toggleExpanded(x.id)}
-                  onOpen={(cid) => setOpenId(cid)}
-                  compositeFor={compositeFor}
-                />
-              ))}
-            </div>
-          </section>
-        ))
       ) : (
-        // Ungrouped grid
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((x) => (
-            <CapabilityAccordionCard
-              key={x.id}
-              cap={x.raw}
-              l1Score={x.score}
-              weights={weights}
-              expanded={!!expandedL1[x.id]}
-              onToggle={() => toggleExpanded(x.id)}
-              onOpen={(cid) => setOpenId(cid)}
-              compositeFor={compositeFor}
-            />
-          ))}
-        </div>
+        <CapabilitySection
+          sorted={sorted}
+          grouped={grouped}
+          domainFilter={domainFilter}
+          weights={weights}
+          expandedL1={expandedL1}
+          onToggle={toggleExpanded}
+          onOpen={setOpenId}
+          compositeFor={compositeFor}
+        />
       )}
 
       {/* ── Drawers & dialogs ───────────────────────────────────────── */}
