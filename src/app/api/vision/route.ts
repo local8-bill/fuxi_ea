@@ -1,18 +1,32 @@
-import { NextRequest, NextResponse } from "next/server";
-import { localVisionAdapter } from "@/adapters/vision/local";
+// src/app/api/reasoning/align/route.ts
+import { NextResponse } from "next/server";
+import { makeLocalReasoning } from "@/adapters/reasoning/local";
+import type { ReasoningAlignInput, ReasoningAlignResult } from "@/domain/ports/reasoning";
 
-export const runtime = "nodejs"; // ensure we run server-side
+export const runtime = "nodejs";
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const form = await req.formData();
-    const file = form.get("file") as File | null;
-    if (!file) return NextResponse.json({ error: "missing file" }, { status: 400 });
+    const body = (await req.json()) as Partial<ReasoningAlignInput>;
+    const rows = Array.isArray(body?.rows) ? body!.rows : [];
+    const existingL1 = Array.isArray(body?.existingL1) ? body!.existingL1 : [];
 
-    const buf = await file.arrayBuffer();
-    const rows = await localVisionAdapter.extract(buf, { layoutHint: "mixed" });
-    return NextResponse.json({ rows });
+    if (!rows.length) {
+      return NextResponse.json(
+        { ok: false, error: "rows[] required" },
+        { status: 400 }
+      );
+    }
+
+    // v1: local matcher (fast, offline)
+    const r = makeLocalReasoning();
+    const result: ReasoningAlignResult = await r.align({ rows, existingL1 });
+
+    return NextResponse.json({ ok: true, result });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "vision error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "align failed" },
+      { status: 400 }
+    );
   }
 }

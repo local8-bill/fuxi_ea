@@ -43,7 +43,7 @@ export function ImportPanel({
       await parseFile(f, existingL1);
       setOpen(true);
     } catch {
-      // leave error handling to the hook's `error`
+      /* hook sets error */
     }
   };
 
@@ -53,8 +53,20 @@ export function ImportPanel({
     try {
       await parseString(src, kind, existingL1);
       setOpen(true);
-    } catch {
-      // hook exposes `error` already
+    } catch { /* hook sets error */ }
+  };
+
+  const onAutoMap = async () => {
+    if (!preview) return;
+    try {
+      const result = await alignViaApi(preview.roots, existingL1);
+      (preview as any).suggestions = result.suggestions;
+      (preview as any).issues = [...new Set([...(preview.issues || []), ...result.issues])];
+      // force a re-render
+      setText(t => t);
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message ?? "AI align failed");
     }
   };
 
@@ -63,7 +75,7 @@ export function ImportPanel({
       await applyToProject(projectId, storage);
       onApplied?.();
     } finally {
-      reset(); // always clear preview state
+      reset();
     }
   };
 
@@ -72,13 +84,15 @@ export function ImportPanel({
     reset();
   };
 
+  const suggestions = (preview as any)?.suggestions as
+    | { sourceName: string; action: "merge" | "attach" | "new"; targetId?: string; reason: string }[]
+    | undefined;
+
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="flex items-center justify-between mb-3">
         <div className="font-semibold">Import (CSV / JSON) — Labs</div>
-        <button className="btn" onClick={() => setOpen((v) => !v)}>
-          {open ? "Hide" : "Show"}
-        </button>
+        <button className="btn" onClick={() => setOpen(v => !v)}>{open ? "Hide" : "Show"}</button>
       </div>
 
       {open && (
@@ -94,45 +108,20 @@ export function ImportPanel({
               Choose File
             </label>
 
-            <select
-              className="select"
-              value={kind}
-              onChange={(e) => setKind(e.target.value as any)}
-            >
+            <select className="select" value={kind} onChange={(e) => setKind(e.target.value as any)}>
               <option value="csv">CSV</option>
               <option value="json">JSON</option>
             </select>
 
-            {/* Don’t block Parse Text while busy; user can fix/replace input */}
             <button className="btn" onClick={onParseText} disabled={!text.trim()}>
               Parse Text
             </button>
-            <button
-  className="btn"
-  onClick={async () => {
-    if (!preview) return;
-    try {
-      const result = await alignViaApi(preview.roots, existingL1);
-      // merge into preview so it renders in the “Suggestions” section
-      (preview as any).suggestions = result.suggestions;
-      (preview as any).issues = [...new Set([...(preview.issues||[]), ...result.issues])];
-      // force a refresh by setting local state (reuse any existing setter; simplest is toggle text)
-      setText(t => t); 
-    } catch (e:any) {
-      console.error(e);
-      alert(e?.message ?? "AI align failed");
-    }
-  }}
-  disabled={!preview || busy}
->
-  Auto-map with AI
-</button>
 
-            <button
-              className="btn btn-primary"
-              onClick={onApply}
-              disabled={!preview || busy}
-            >
+            <button className="btn" onClick={onAutoMap} disabled={!preview || busy}>
+              Auto-map with AI
+            </button>
+
+            <button className="btn btn-primary" onClick={onApply} disabled={!preview || busy}>
               Apply to Project
             </button>
 
@@ -158,27 +147,48 @@ export function ImportPanel({
           {preview && (
             <div className="text-sm" style={{ marginTop: 8 }}>
               <div className="mb-1">
-                <strong>Preview:</strong> {preview.flatCount} rows → {preview.roots.length} nodes,{" "}
-                {preview.issues.length} issues
+                <strong>Preview:</strong> {preview.flatCount} rows → {preview.roots.length} nodes, {preview.issues.length} issues
               </div>
 
-              {Object.keys(preview.suggestions).length > 0 && (
-                <div className="mb-1">
-                  <strong>Suggestions (incoming L1 → candidates):</strong>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {Object.keys(preview.suggestions).map((k) => (
-                      <span key={k} className="badge">
-                        {k}
-                      </span>
-                    ))}
+              {suggestions && suggestions.length > 0 && (
+                <div className="mt-3">
+                  <strong>AI Suggestions</strong>
+                  <div className="text-xs opacity-70 mb-2">Nothing is applied until you click “Apply to Project”.</div>
+                  <div className="overflow-auto" style={{ maxHeight: 220 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left", padding: "6px" }}>Incoming</th>
+                          <th style={{ textAlign: "left", padding: "6px" }}>Action</th>
+                          <th style={{ textAlign: "left", padding: "6px" }}>Target</th>
+                          <th style={{ textAlign: "left", padding: "6px" }}>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {suggestions.map((s, i) => (
+                          <tr key={i} className="border-t">
+                            <td style={{ padding: "6px" }}>{s.sourceName}</td>
+                            <td style={{ padding: "6px" }}>
+                              <span className="badge">{s.action.toUpperCase()}</span>
+                            </td>
+                            <td style={{ padding: "6px" }}>{s.targetId || "-"}</td>
+                            <td style={{ padding: "6px" }}>{s.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
 
-              <div className="mb-1">
-                <strong>Root L1s in preview:</strong>{" "}
-                {preview.roots.map((r) => r.name).join(", ")}
-              </div>
+              {(preview.issues?.length ?? 0) > 0 && (
+                <div className="mt-2">
+                  <strong>Issues:</strong>
+                  <ul className="list-disc ml-6">
+                    {preview.issues.map((m: string, i: number) => <li key={i}>{m}</li>)}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </>
