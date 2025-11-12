@@ -93,12 +93,11 @@ export function VisionPanel({
     }
   }
 
-  async function onChooseFile(file: File | null) {
+  function onChooseFile(file: File | null) {
     setSelectedFile(file);
     setRows(null);
     setError(null);
     setAiResult(null);
-    setFileName(file?.name ?? "");
   }
 
   function onClear() {
@@ -106,13 +105,6 @@ export function VisionPanel({
     setError(null);
     setAiResult(null);
     setSelectedFile(null);
-  }
-
-  function onChooseFile(file: File | null) {
-    setSelectedFile(file);
-    setRows(null);
-    setError(null);
-    setAiResult(null);
   }
 
   async function onAutoMap() {
