@@ -3,6 +3,8 @@
 import React from "react";
 import type { StoragePort } from "@/domain/ports/storage";
 import type { Capability } from "@/domain/model/capability";
+import type { ReasoningAlignResult } from "@/domain/ports/reasoning";
+import { alignViaApi } from "@/adapters/reasoning/client";
 
 /** Rows the Vision API returns */
 type VisionRow = {
@@ -29,16 +31,19 @@ export function VisionPanel({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<VisionRow[] | null>(null);
-  const [fileName, setFileName] = React.useState<string>("");
+  const [aiResult, setAiResult] = React.useState<ReasoningAlignResult | null>(null);
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const aiSuggestions = aiResult?.suggestions;
+  const aiIssues = aiResult?.issues ?? [];
 
   async function onAnalyze(file: File | null) {
     setError(null);
     setRows(null);
+    setAiResult(null);
     if (!file) return;
 
     try {
       setBusy(true);
-      setFileName(file.name);
 
       const fd = new FormData();
       fd.append("file", file);
@@ -79,7 +84,7 @@ export function VisionPanel({
 
       // 3) Clear local preview + notify parent
       setRows(null);
-      setFileName("");
+      setAiResult(null);
       onApplied?.();
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -88,10 +93,42 @@ export function VisionPanel({
     }
   }
 
+  async function onChooseFile(file: File | null) {
+    setSelectedFile(file);
+    setRows(null);
+    setError(null);
+    setAiResult(null);
+    setFileName(file?.name ?? "");
+  }
+
   function onClear() {
     setRows(null);
     setError(null);
-    setFileName("");
+    setAiResult(null);
+    setSelectedFile(null);
+  }
+
+  function onChooseFile(file: File | null) {
+    setSelectedFile(file);
+    setRows(null);
+    setError(null);
+    setAiResult(null);
+  }
+
+  async function onAutoMap() {
+    if (!rows || rows.length === 0) return;
+    try {
+      setBusy(true);
+      setError(null);
+      const current = await storage.load(projectId);
+      const existingL1 = current.filter((c) => c.level === "L1").map((c) => c.name);
+      const result = await alignViaApi(rows, existingL1);
+      setAiResult(result);
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -111,27 +148,33 @@ export function VisionPanel({
                 type="file"
                 accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.pdf"
                 style={{ display: "none" }}
-                onChange={(e) => onAnalyze(e.target.files?.[0] ?? null)}
+                onChange={(e) => onChooseFile(e.target.files?.[0] ?? null)}
               />
               Choose Image/PDF
             </label>
 
-            <span className="text-sm" style={{ opacity: 0.7 }}>
-              {busy ? "Analyzing…" : fileName || "No file selected"}
-            </span>
+            <button
+              className="btn"
+              onClick={() => onAnalyze(selectedFile)}
+              disabled={!selectedFile || busy}
+            >
+              Scan Image
+            </button>
 
-            <div className="flex gap-2 ml-auto">
-              <button
-                className="btn btn-primary"
-                onClick={onApply}
-                disabled={!rows || rows.length === 0 || busy}
-              >
-                Apply to Project
-              </button>
-              <button className="btn" onClick={onClear} disabled={busy}>
-                Clear
-              </button>
-            </div>
+            <button className="btn" onClick={onAutoMap} disabled={!rows || rows.length === 0 || busy}>
+              Auto-map with AI
+            </button>
+
+            <button
+              className="btn btn-primary"
+              onClick={onApply}
+              disabled={!rows || rows.length === 0 || busy}
+            >
+              Apply to Project
+            </button>
+            <button className="btn" onClick={onClear} disabled={busy}>
+              Clear
+            </button>
           </div>
 
           {error && (
@@ -166,6 +209,56 @@ export function VisionPanel({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {aiResult && (
+            <div className="text-sm" style={{ marginTop: 12 }}>
+              <div className="mb-1">
+                <strong>AI Suggestions</strong>
+              </div>
+              <div className="text-xs opacity-70 mb-2">
+                {aiSuggestions && aiSuggestions.length > 0
+                  ? "Nothing is applied until you click “Apply to Project”."
+                  : "No suggestions yet."}
+              </div>
+              {aiSuggestions && aiSuggestions.length > 0 && (
+                <div className="overflow-auto" style={{ maxHeight: 220 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left", padding: "6px" }}>Incoming</th>
+                        <th style={{ textAlign: "left", padding: "6px" }}>Action</th>
+                        <th style={{ textAlign: "left", padding: "6px" }}>Target</th>
+                        <th style={{ textAlign: "left", padding: "6px" }}>Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aiSuggestions.map((s, i) => (
+                        <tr key={i} className="border-t">
+                          <td style={{ padding: "6px" }}>{s.sourceName}</td>
+                          <td style={{ padding: "6px" }}>
+                            <span className="badge">{s.action.toUpperCase()}</span>
+                          </td>
+                          <td style={{ padding: "6px" }}>{s.targetId || "-"}</td>
+                          <td style={{ padding: "6px" }}>{s.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {aiIssues.length > 0 && (
+                <div className="mt-2">
+                  <strong>Issues:</strong>
+                  <ul className="list-disc ml-6">
+                    {aiIssues.map((m, i) => (
+                      <li key={i}>{m}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
