@@ -7,13 +7,27 @@ import type {
   ReasoningSuggestion,
 } from "@/domain/ports/reasoning";
 import { makeLocalReasoning } from "@/adapters/reasoning/local"; // for safe fallback
+import type {
+  ResponseOutputItem,
+  ResponseOutputMessage,
+  ResponseOutputText,
+} from "openai/resources/responses/responses";
 
 // Default model for cheap-ish alignment
 const DEFAULT_MODEL = process.env.OPENAI_REASONING_MODEL ?? "gpt-4o-mini";
+console.log("[OpenAIReasoning] env snapshot:", {
+  keyPrefix: process.env.OPENAI_API_KEY?.slice(0, 12),
+  keyLength: process.env.OPENAI_API_KEY?.length,
+  org: process.env.OPENAI_ORG_ID,
+  project: process.env.OPENAI_PROJECT_ID,
+  mode: process.env.REASONING_MODE,
+});
 
 // Keep a single client per process
 const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY!,
+  organization: process.env.OPENAI_ORG_ID,
+  project: process.env.OPENAI_PROJECT_ID,
 });
 
 export function makeOpenAIReasoning(): ReasoningPort {
@@ -73,6 +87,13 @@ No markdown, no prose outside JSON.
 Imported capability rows (trimmed):
 ${JSON.stringify(payload, null, 2)}
 `.trim();
+console.log("[Reasoning/OpenAI] mode=", process.env.REASONING_MODE);
+console.log(
+  "[Reasoning/OpenAI] key prefix=",
+  (process.env.OPENAI_API_KEY || "").slice(0, 8),
+  "project=",
+  process.env.OPENAI_PROJECT_ID,
+);
 
       try {
         // Option 1 (modern): responses API with JSON schema.
@@ -90,10 +111,10 @@ ${JSON.stringify(payload, null, 2)}
               content: userPrompt,
             },
           ],
-          response_format: {
-            type: "json_schema",
-            json_schema: {
+          text: {
+            format: {
               name: "ReasoningAlignResult",
+              type: "json_schema",
               schema: {
                 type: "object",
                 properties: {
@@ -128,9 +149,12 @@ ${JSON.stringify(payload, null, 2)}
 
         // Extract the JSON content. `responses.create` returns
         // a content array; we want the first text block.
-        const textPart = response.output[0].content.find(
-          (c) => c.type === "output_text",
-        ) as { type: "output_text"; text: { value: string } } | undefined;
+        const message = response.output.find(
+          (item): item is ResponseOutputMessage => item.type === "message",
+        );
+        const textPart = message?.content.find(
+          (c): c is ResponseOutputText => c.type === "output_text",
+        );
 
         if (!textPart) {
           return {
@@ -139,7 +163,7 @@ ${JSON.stringify(payload, null, 2)}
           };
         }
 
-        const parsed = JSON.parse(textPart.text.value) as {
+        const parsed = JSON.parse(textPart.text) as {
           suggestions: ReasoningSuggestion[];
           issues: string[];
         };

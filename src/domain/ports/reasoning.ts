@@ -13,7 +13,7 @@ export type ReasoningAlignRow = {
 export type ReasoningSuggestion = {
   sourceName: string;
   action: ReasoningAction;
-  targetId?: string;  // optional – AI may not set this yet
+  targetId?: string;
   reason: string;
 };
 
@@ -24,7 +24,7 @@ export type ReasoningAlignInput = {
 
 export type ReasoningAlignResult = {
   suggestions: ReasoningSuggestion[];
-  issues: string[];   // human-readable notes
+  issues: string[];
 };
 
 export interface ReasoningPort {
