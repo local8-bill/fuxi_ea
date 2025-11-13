@@ -1,0 +1,33 @@
+name,level,domain,parent
+Order Management,L1,Core Ops,
+ORDER MGMT,L1,TBD,
+Order Management Optimization,L2,Core Ops,
+Returns & RMA,L1,Core Ops,
+Returns Processing,L2,,Order Management
+RMA Handling,L3,,Returns Processing
+
+Inventory,L1,Core Ops,
+Inventory & Stock,L1,Operations,
+Stock Visibility,L2,,Inventory
+Safety Stock Analysis,L3,,Stock Visibility
+Store Inventory Accuracy,L2,,Inventory & Stock
+
+Order Capture,L1,Digital Commerce,
+Checkout Experience,L2,,Order Capture
+Cart & Checkout,L2,Commerce,
+Abandoned Cart Follow-up,L3,,Cart & Checkout
+
+Product Discovery,L1,Strategy,
+Product Discovery / Innovation,L1,Innovation,
+Opportunity Sizing,L2,,Product Discovery / Innovation
+Tech Spike Experiments,L2,,Product Discovery
+Spiking New Tech,L3,,Tech Spike Experiments
+
+Data & Insights Platform,L1,Data & Analytics,
+Operational Reporting,L2,TBD,Data & Insights Platform
+Order Mgmt Dashboards,L3,,Operational Reporting
+Inventory Dashboards,L3,,Operational Reporting
+
+Random Project Work,L2,???,
+Firefighting Tasks,L3,,Random Project Work
+Legacy Order System,L1,Applications,
