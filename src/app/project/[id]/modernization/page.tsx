@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useModernizationArtifacts } from "@/controllers/useModernizationArtifacts";
 import { ModernizationImportPanel } from "@/features/modernization/ModernizationImportPanel";
+import { ProjectNav } from "@/features/common/ProjectNav";
 
 export default function ModernizationPage() {
   const params = useParams<{ id: string }>();
@@ -18,6 +19,7 @@ export default function ModernizationPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      <ProjectNav projectId={params.id} active="modernization" />
       <div>
         <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
           Modernization Workspace

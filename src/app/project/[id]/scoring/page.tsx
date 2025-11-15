@@ -11,6 +11,7 @@ import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
 import { defaultWeights } from "@/domain/services/scoring";
 import { useModernizationSummary } from "@/features/modernization/useModernizationSummary";
+import { ProjectNav } from "@/features/common/ProjectNav";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -83,64 +84,71 @@ export default function ScoringPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* --- Controls --- */}
-      <div className="flex flex-wrap gap-3 items-center mb-6">
-        <select
-          className="select"
-          value={domainFilter}
-          onChange={(e) => setDomainFilter(e.target.value)}
-        >
-          <option>All Domains</option>
-          {domains.map((d) => (
-            <option key={d}>{d}</option>
-          ))}
-        </select>
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <ProjectNav projectId={id} active="scoring" />
 
-        <select
-          className="select"
-          value={sortKey}
-          onChange={(e) => setSortKey(e.target.value as "name" | "score")}
-        >
-          <option value="name">Sort: Name</option>
-          <option value="score">Sort: Score</option>
-        </select>
+      <section className="card space-y-4 border border-gray-100">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Capability Scoring Workspace</p>
+          <h1 className="text-3xl font-semibold text-slate-900 mt-1">Project {id}</h1>
+          <p className="text-sm text-slate-500 mt-2">
+            Score capabilities, compare domains, and explore AI-assisted insights for this project.
+          </p>
+        </div>
 
-        <button className="btn" onClick={() => setShowAddL1(true)}>
-          Add L1
-        </button>
-
-        {LABS_VISION && (
-          <button className="btn" onClick={() => setShowVision((v) => !v)}>
-            {showVision ? "Hide Vision" : "Vision (Labs)"}
-          </button>
-        )}
-
-        <button className="btn ml-auto" onClick={() => setWeightsOpen(true)}>
-          Weights
-        </button>
-      </div>
-
-      <div
-        className="card border border-gray-100 rounded-2xl bg-white cursor-pointer transition hover:shadow-lg mb-6"
-        onClick={() => router.push(`/project/${id}/modernization`)}
-      >
-        <div className="px-4 py-3">
-          <div className="text-sm font-semibold text-slate-500">Modernization</div>
-          <div className="text-lg font-semibold text-slate-800 mb-3">Workspace</div>
-          <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-            <span className="font-medium text-slate-800">
-              Uploaded Artifacts: {summary.artifacts}
-            </span>
-            <span className="font-medium text-slate-800">
-              Inventory Rows: {summary.inventoryRows}
-            </span>
-            <span className="font-medium text-slate-800">
-              Normalized Apps: {summary.normalizedApps}
-            </span>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div
+            className="rounded-2xl border border-gray-200 bg-slate-50 p-3 text-sm text-slate-600"
+            onClick={() => router.push(`/project/${id}/modernization`)}
+          >
+            <div className="text-slate-800 font-semibold mb-1">Modernization</div>
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Workspace</div>
+            <div className="flex flex-col gap-1">
+              <span>Uploaded Artifacts: {summary.artifacts}</span>
+              <span>Inventory Rows: {summary.inventoryRows}</span>
+              <span>Normalized Apps: {summary.normalizedApps}</span>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 text-sm text-slate-600">
+            <div className="text-slate-800 font-semibold mb-1">Domain Filter</div>
+            <p className="text-xs text-slate-500">Active selection: {domainFilter}</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 text-sm text-slate-600">
+            <div className="text-slate-800 font-semibold mb-1">Sort</div>
+            <p className="text-xs text-slate-500">Using {sortKey} order</p>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section className="card border border-gray-100 p-4 space-y-3">
+        <div className="flex flex-wrap gap-3">
+          <select className="select" value={domainFilter} onChange={(e) => setDomainFilter(e.target.value)}>
+            <option>All Domains</option>
+            {domains.map((d) => (
+              <option key={d}>{d}</option>
+            ))}
+          </select>
+
+          <select className="select" value={sortKey} onChange={(e) => setSortKey(e.target.value as "name" | "score")}>
+            <option value="name">Sort: Name</option>
+            <option value="score">Sort: Score</option>
+          </select>
+
+          <button className="btn" onClick={() => setShowAddL1(true)}>
+            Add L1
+          </button>
+
+          {LABS_VISION && (
+            <button className="btn" onClick={() => setShowVision((v) => !v)}>
+              {showVision ? "Hide Vision" : "Vision (Labs)"}
+            </button>
+          )}
+
+          <button className="btn ml-auto" onClick={() => setWeightsOpen(true)}>
+            Weights
+          </button>
+        </div>
+      </section>
 
       {/* --- Labs panels (optional) --- */}
       {LABS_IMPORT && (
