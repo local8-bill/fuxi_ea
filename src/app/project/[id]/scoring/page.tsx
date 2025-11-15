@@ -89,6 +89,7 @@ export default function ScoringPage() {
       <WorkspaceHeader
         title="Tech Stack Workspace"
         subtitle="STATUS"
+        description="Score capabilities, compare domains, and explore AI-assisted insights for this project."
         variant="scoring"
         summary={summary}
         domainLabel={domainFilter}

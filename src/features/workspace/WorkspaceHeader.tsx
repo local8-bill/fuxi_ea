@@ -14,6 +14,7 @@ type Summary = {
 type Props = {
   title: string;
   subtitle: string;
+  description: string;
   summary: Summary;
   variant: "scoring" | "techStack";
   domainLabel?: string;
@@ -23,6 +24,7 @@ type Props = {
 export function WorkspaceHeader({
   title,
   subtitle,
+  description,
   summary,
   variant,
   domainLabel,
@@ -33,6 +35,7 @@ export function WorkspaceHeader({
       <div>
         <p className="text-xs uppercase tracking-[0.45em] text-slate-500">{subtitle}</p>
         <h1 className="text-3xl font-semibold text-slate-900">{title}</h1>
+        <p className="text-sm text-slate-500 mt-1">{description}</p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <article className={cardClasses}>

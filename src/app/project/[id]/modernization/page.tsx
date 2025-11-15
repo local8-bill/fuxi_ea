@@ -25,6 +25,7 @@ export default function ModernizationPage() {
       <WorkspaceHeader
         title="Tech Stack Workspace"
         subtitle="STATUS"
+        description="Upload inventories and diagrams, then explore normalized applications and dependencies."
         variant="techStack"
         summary={summary}
       />
