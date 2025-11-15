@@ -3,7 +3,8 @@
 import { useParams } from "next/navigation";
 import { useModernizationArtifacts } from "@/controllers/useModernizationArtifacts";
 import { ModernizationImportPanel } from "@/features/modernization/ModernizationImportPanel";
-import { ProjectNav } from "@/features/common/ProjectNav";
+import { ProjectHeaderSummary } from "@/features/common/ProjectHeaderSummary";
+import { useModernizationSummary } from "@/features/modernization/useModernizationSummary";
 
 export default function ModernizationPage() {
   const params = useParams<{ id: string }>();
@@ -17,20 +18,20 @@ export default function ModernizationPage() {
     uploadDiagram,
   } = useModernizationArtifacts(params.id);
 
+  const summary = useModernizationSummary();
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-      <ProjectNav projectId={params.id} active="modernization" />
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-          Modernization Workspace
-        </p>
-        <h1 className="text-3xl font-semibold text-slate-900 mt-2">
-          Modernization Workspace
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Upload capability inventories and diagrams, then explore normalized applications and artifact history.
-        </p>
-      </div>
+      <section className="space-y-4">
+        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-900">
+          Modernization
+        </span>
+        <ProjectHeaderSummary
+          domainFilter="All Domains"
+          sortKey="name"
+          summary={summary}
+        />
+      </section>
       <ModernizationImportPanel
         artifacts={artifacts}
         inventoryRows={inventoryRows}

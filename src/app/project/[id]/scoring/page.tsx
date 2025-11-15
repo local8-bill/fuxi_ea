@@ -11,7 +11,7 @@ import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
 import { defaultWeights } from "@/domain/services/scoring";
 import { useModernizationSummary } from "@/features/modernization/useModernizationSummary";
-import { ProjectNav } from "@/features/common/ProjectNav";
+import { ProjectHeaderSummary } from "@/features/common/ProjectHeaderSummary";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -85,39 +85,16 @@ export default function ScoringPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-      <ProjectNav projectId={id} active="scoring" />
 
-      <section className="card space-y-4 border border-gray-100">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Capability Scoring Workspace</p>
-          <h1 className="text-3xl font-semibold text-slate-900 mt-1">Project {id}</h1>
-          <p className="text-sm text-slate-500 mt-2">
-            Score capabilities, compare domains, and explore AI-assisted insights for this project.
-          </p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <div
-            className="rounded-2xl border border-gray-200 bg-slate-50 p-3 text-sm text-slate-600"
-            onClick={() => router.push(`/project/${id}/modernization`)}
-          >
-            <div className="text-slate-800 font-semibold mb-1">Modernization</div>
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Workspace</div>
-            <div className="flex flex-col gap-1">
-              <span>Uploaded Artifacts: {summary.artifacts}</span>
-              <span>Inventory Rows: {summary.inventoryRows}</span>
-              <span>Normalized Apps: {summary.normalizedApps}</span>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-3 text-sm text-slate-600">
-            <div className="text-slate-800 font-semibold mb-1">Domain Filter</div>
-            <p className="text-xs text-slate-500">Active selection: {domainFilter}</p>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-3 text-sm text-slate-600">
-            <div className="text-slate-800 font-semibold mb-1">Sort</div>
-            <p className="text-xs text-slate-500">Using {sortKey} order</p>
-          </div>
-        </div>
+      <section className="space-y-4">
+        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-900">
+          Scoring
+        </span>
+        <ProjectHeaderSummary
+          domainFilter={domainFilter}
+          sortKey={sortKey}
+          summary={summary}
+        />
       </section>
 
       <section className="card border border-gray-100 p-4 space-y-3">
