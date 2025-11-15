@@ -18,6 +18,9 @@ type Props = {
   onUploadDiagram: (file: File, kind: "architecture_current" | "architecture_future") => Promise<void>;
 };
 
+const sectionClass =
+  "shadow-sm border border-gray-100 rounded-2xl bg-white p-4 flex flex-col";
+
 export function ModernizationImportPanel({
   artifacts,
   inventoryRows,
@@ -31,8 +34,14 @@ export function ModernizationImportPanel({
   const diagramInput = React.useRef<HTMLInputElement | null>(null);
 
   return (
-    <FuxiPanel title="Modernization Uploads" status={busy ? "Uploading..." : "Ready"}>
-      <div className="flex gap-2 flex-wrap mb-3">
+    <FuxiPanel title="Modernization Uploads" status={busy ? "Uploading…" : "Ready"}>
+      {busy && (
+        <div className="mb-3 text-sm font-medium text-gray-600">
+          Processing your file… hang tight.
+        </div>
+      )}
+
+      <div className="flex gap-2 flex-wrap mb-4">
         <button className="btn" onClick={() => inventoryInput.current?.click()} disabled={busy}>
           Upload Inventory (.xlsx)
         </button>
@@ -40,7 +49,7 @@ export function ModernizationImportPanel({
           ref={inventoryInput}
           type="file"
           accept=".xls,.xlsx"
-          style={{ display: "none" }}
+          className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) onUploadInventory(file);
@@ -55,7 +64,7 @@ export function ModernizationImportPanel({
           ref={diagramInput}
           type="file"
           accept=".png,.jpg,.pdf,.svg"
-          style={{ display: "none" }}
+          className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) onUploadDiagram(file, "architecture_current");
@@ -65,38 +74,71 @@ export function ModernizationImportPanel({
       </div>
 
       {error && (
-        <div className="text-sm text-red-600 mb-3">
-          {error}
-        </div>
+        <div className="text-sm text-red-600 mb-3">{error}</div>
       )}
 
       <div className="grid md:grid-cols-3 gap-4">
-        <section className="p-3 border rounded">
-          <div className="text-sm font-semibold mb-2">Artifacts ({artifacts.length})</div>
-          <ul className="list-disc ml-5 text-xs">
+        <section className={sectionClass}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+              Artifacts
+            </div>
+            <span className="badge">{artifacts.length}</span>
+          </div>
+          <ul className="list-disc ml-5 text-xs text-slate-700 space-y-1">
             {artifacts.map((a) => (
               <li key={a.id}>
                 {a.kind} · {a.filename}
               </li>
             ))}
+            {artifacts.length === 0 && <li className="text-gray-400">No uploads yet</li>}
           </ul>
         </section>
-        <section className="p-3 border rounded">
-          <div className="text-sm font-semibold mb-2">Inventory rows ({inventoryRows.length})</div>
-          <ul className="list-disc ml-5 text-xs">
+
+        <section className={sectionClass}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+              Inventory rows
+            </div>
+            <span className="badge">{inventoryRows.length}</span>
+          </div>
+          <ul className="list-disc ml-5 text-xs text-slate-700 space-y-1">
             {inventoryRows.slice(0, 5).map((row, idx) => (
-              <li key={`${row.systemName}-${idx}`}>{row.systemName}</li>
+              <li key={`${row.systemName}-${idx}`}>
+                {row.systemName}
+                {row.vendor ? ` — ${row.vendor}` : ""}
+              </li>
             ))}
-            {inventoryRows.length > 5 && <li>and {inventoryRows.length - 5} more…</li>}
+            {inventoryRows.length > 5 && (
+              <li className="text-slate-500">
+                and {inventoryRows.length - 5} more…
+              </li>
+            )}
+            {!inventoryRows.length && (
+              <li className="text-gray-400">Upload an inventory sheet to populate rows</li>
+            )}
           </ul>
         </section>
-        <section className="p-3 border rounded">
-          <div className="text-sm font-semibold mb-2">Normalized apps ({normalizedApps.length})</div>
-          <ul className="list-disc ml-5 text-xs">
+
+        <section className={sectionClass}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+              Normalized apps
+            </div>
+            <span className="badge">{normalizedApps.length}</span>
+          </div>
+          <ul className="list-disc ml-5 text-xs text-slate-700 space-y-1">
             {normalizedApps.slice(0, 5).map((app) => (
               <li key={app.id}>{app.normalizedName}</li>
             ))}
-            {normalizedApps.length > 5 && <li>and {normalizedApps.length - 5} more…</li>}
+            {normalizedApps.length > 5 && (
+              <li className="text-slate-500">
+                and {normalizedApps.length - 5} more…
+              </li>
+            )}
+            {!normalizedApps.length && (
+              <li className="text-gray-400">Normalization will happen once rows are processed</li>
+            )}
           </ul>
         </section>
       </div>

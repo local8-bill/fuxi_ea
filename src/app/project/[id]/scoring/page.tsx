@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { VisionPanel } from "@/ui/components/VisionPanel";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useScoringPage } from "@/controllers/useScoringPage";
 import { localStorageAdapter } from "@/adapters/storage/local";
 import { CapabilityAccordionCard } from "@/ui/components/CapabilityAccordionCard";
@@ -10,6 +10,7 @@ import { WeightsDrawer } from "@/ui/components/WeightsDrawer";
 import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
 import { defaultWeights } from "@/domain/services/scoring";
+import { useModernizationSummary } from "@/features/modernization/useModernizationSummary";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +32,8 @@ export default function ScoringPage() {
   const [weightsOpen, setWeightsOpen] = React.useState(false);
   const [showAddL1, setShowAddL1] = React.useState(false);
   const [showVision, setShowVision] = React.useState(false);
+  const router = useRouter();
+  const summary = useModernizationSummary();
 
   const domains = React.useMemo(
     () => Array.from(new Set(items.map((x) => x.domain ?? "Unassigned"))).sort(),
@@ -116,6 +119,27 @@ export default function ScoringPage() {
         <button className="btn ml-auto" onClick={() => setWeightsOpen(true)}>
           Weights
         </button>
+      </div>
+
+      <div
+        className="card border border-gray-100 rounded-2xl bg-white cursor-pointer transition hover:shadow-lg mb-6"
+        onClick={() => router.push(`/project/${id}/modernization`)}
+      >
+        <div className="px-4 py-3">
+          <div className="text-sm font-semibold text-slate-500">Modernization</div>
+          <div className="text-lg font-semibold text-slate-800 mb-3">Workspace</div>
+          <div className="flex flex-wrap gap-3 text-sm text-slate-600">
+            <span className="font-medium text-slate-800">
+              Uploaded Artifacts: {summary.artifacts}
+            </span>
+            <span className="font-medium text-slate-800">
+              Inventory Rows: {summary.inventoryRows}
+            </span>
+            <span className="font-medium text-slate-800">
+              Normalized Apps: {summary.normalizedApps}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* --- Labs panels (optional) --- */}
