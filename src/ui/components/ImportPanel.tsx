@@ -26,6 +26,7 @@ export function ImportPanel({
   // simple version bump to force re-render when we mutate preview
   const [, setVersion] = React.useState(0);
   const [aiBusy, setAiBusy] = React.useState(false);
+  const [parseStatus, setParseStatus] = React.useState<string | null>(null);
 
   const {
     busy,
@@ -55,10 +56,13 @@ export function ImportPanel({
     const src = text.trim();
     if (!src) return;
     try {
+      setParseStatus(estimateParseDuration(src));
       await parseString(src, kind, existingL1);
       setOpen(true);
     } catch {
       // hook exposes `error`
+    } finally {
+      setParseStatus(null);
     }
   };
 
@@ -169,6 +173,9 @@ export function ImportPanel({
             >
               Parse Text
             </button>
+            {parseStatus && (
+              <span className="text-xs opacity-70">{parseStatus}</span>
+            )}
 
             <button
               className={`btn ${aiBusy ? "opacity-70 cursor-wait" : ""}`}
@@ -256,4 +263,11 @@ export function ImportPanel({
       )}
     </div>
   );
+}
+
+function estimateParseDuration(text: string): string {
+  const len = text.trim().length;
+  if (!len) return "Parsing text…";
+  const sec = Math.min(6, Math.max(1, Math.ceil(len / 800)));
+  return `Parsing text (≈ ${sec}s)…`;
 }
