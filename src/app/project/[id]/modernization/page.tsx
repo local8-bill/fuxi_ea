@@ -17,14 +17,16 @@ export default function ModernizationPage() {
   } = useModernizationArtifacts(params.id);
 
   return (
-    <ModernizationImportPanel
-      artifacts={artifacts}
-      inventoryRows={inventoryRows}
-      normalizedApps={normalizedApps}
-      busy={busy}
-      error={error}
-      onUploadInventory={uploadInventory}
-      onUploadDiagram={uploadDiagram}
-    />
+    <div className="p-4">
+      <ModernizationImportPanel
+        artifacts={artifacts}
+        inventoryRows={inventoryRows}
+        normalizedApps={normalizedApps}
+        busy={busy}
+        error={error}
+        onUploadInventory={uploadInventory}
+        onUploadDiagram={uploadDiagram}
+      />
+    </div>
   );
 }

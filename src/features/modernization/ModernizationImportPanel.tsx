@@ -6,6 +6,7 @@ import type {
   InventoryRow,
   NormalizedApp,
 } from "@/domain/model/modernization";
+import { FuxiPanel } from "@/features/common/FuxiPanel";
 
 type Props = {
   artifacts: Artifact[];
@@ -30,14 +31,7 @@ export function ModernizationImportPanel({
   const diagramInput = React.useRef<HTMLInputElement | null>(null);
 
   return (
-    <div className="card mb-6">
-      <div className="flex items-center justify-between mb-3">
-        <div className="font-semibold">Modernization Uploads</div>
-        <div className="text-xs" style={{ opacity: 0.6 }}>
-          {busy ? "Uploading..." : "Ready"}
-        </div>
-      </div>
-
+    <FuxiPanel title="Modernization Uploads" status={busy ? "Uploading..." : "Ready"}>
       <div className="flex gap-2 flex-wrap mb-3">
         <button className="btn" onClick={() => inventoryInput.current?.click()} disabled={busy}>
           Upload Inventory (.xlsx)
@@ -106,6 +100,6 @@ export function ModernizationImportPanel({
           </ul>
         </section>
       </div>
-    </div>
+    </FuxiPanel>
   );
 }
