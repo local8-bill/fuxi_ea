@@ -1,6 +1,4 @@
 // src/app/layout.tsx
-"use client";
-
 import "./globals.css";
 import type { ReactNode } from "react";
 import { GlobalNav } from "@/features/common/GlobalNav";
