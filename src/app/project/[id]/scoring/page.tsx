@@ -11,7 +11,7 @@ import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
 import { defaultWeights } from "@/domain/services/scoring";
 import { useModernizationSummary } from "@/features/modernization/useModernizationSummary";
-import { ProjectHeaderSummary } from "@/features/common/ProjectHeaderSummary";
+import { WorkspaceHeader } from "@/features/workspace/WorkspaceHeader";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -86,17 +86,14 @@ export default function ScoringPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
 
-      <section className="space-y-4">
-        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-900">
-          Scoring
-        </span>
-        <ProjectHeaderSummary
-          domainFilter={domainFilter}
-          sortKey={sortKey}
-          summary={summary}
-          variant="scoring"
-        />
-      </section>
+      <WorkspaceHeader
+        title="Tech Stack Workspace"
+        subtitle="STATUS"
+        variant="scoring"
+        summary={summary}
+        domainLabel={domainFilter}
+        sortLabel={`${sortKey} order`}
+      />
 
       <section className="card border border-gray-100 p-4 space-y-3">
         <div className="flex flex-wrap gap-3">
