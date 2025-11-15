@@ -94,6 +94,7 @@ export default function ScoringPage() {
           domainFilter={domainFilter}
           sortKey={sortKey}
           summary={summary}
+          variant="scoring"
         />
       </section>
 
