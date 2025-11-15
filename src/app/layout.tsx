@@ -1,6 +1,9 @@
 // src/app/layout.tsx
+"use client";
+
 import "./globals.css";
 import type { ReactNode } from "react";
+import { GlobalNav } from "@/features/common/GlobalNav";
 
 export const metadata = {
   title: "Fuxi • Capability Scoring",
@@ -10,7 +13,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="min-h-screen bg-slate-50 text-slate-900">
+        <GlobalNav />
+        <div className="pt-6">{children}</div>
+      </body>
     </html>
   );
 }
