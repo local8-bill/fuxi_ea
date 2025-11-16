@@ -3,7 +3,6 @@
 import { useParams } from "next/navigation";
 import { useModernizationArtifacts } from "@/controllers/useModernizationArtifacts";
 import { ModernizationImportPanel } from "@/features/modernization/ModernizationImportPanel";
-import { WorkspaceHeader } from "@/features/workspace/WorkspaceHeader";
 import { useModernizationSummary } from "@/features/modernization/useModernizationSummary";
 
 export default function ModernizationPage() {
@@ -22,13 +21,13 @@ export default function ModernizationPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-      <WorkspaceHeader
-        title="Tech Stack Workspace"
-        subtitle="STATUS"
-        description="Upload inventories and diagrams, then explore normalized applications and dependencies."
-        variant="techStack"
-        summary={summary}
-      />
+      <section className="space-y-2">
+        <p className="text-xs uppercase tracking-[0.4em] text-slate-500">STATUS</p>
+        <h1 className="text-3xl font-semibold text-slate-900">Tech Stack Workspace</h1>
+        <p className="text-sm text-slate-500">
+          Upload inventories and diagrams, then explore normalized applications and dependencies.
+        </p>
+      </section>
       <ModernizationImportPanel
         artifacts={artifacts}
         inventoryRows={inventoryRows}

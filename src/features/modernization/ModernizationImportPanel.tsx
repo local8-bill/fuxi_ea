@@ -21,6 +21,9 @@ type Props = {
 const sectionClass =
   "shadow-sm border border-gray-100 rounded-2xl bg-white p-4 flex flex-col";
 
+const inventoryExts = new Set(["xlsx", "xls", "csv", "txt"]);
+const diagramExts = new Set(["png", "jpg", "jpeg", "pdf", "svg"]);
+
 export function ModernizationImportPanel({
   artifacts,
   inventoryRows,
@@ -30,11 +33,29 @@ export function ModernizationImportPanel({
   onUploadInventory,
   onUploadDiagram,
 }: Props) {
-  const inventoryInput = React.useRef<HTMLInputElement | null>(null);
-  const diagramInput = React.useRef<HTMLInputElement | null>(null);
+  const artifactInput = React.useRef<HTMLInputElement | null>(null);
+  const [uploadError, setUploadError] = React.useState<string | null>(null);
+
+  const handleArtifactUpload = (file: File) => {
+    setUploadError(null);
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (inventoryExts.has(ext)) {
+      onUploadInventory(file);
+      return;
+    }
+    if (diagramExts.has(ext)) {
+      onUploadDiagram(file, "architecture_current");
+      return;
+    }
+    setUploadError(
+      "Unsupported artifact type. Please upload an Excel/CSV inventory or a PNG/JPG/PDF/SVG diagram."
+    );
+  };
+
+  const combinedError = error || uploadError;
 
   return (
-    <FuxiPanel title="Modernization Uploads" status={busy ? "Uploading…" : "Ready"}>
+    <FuxiPanel title="Tech Stack Uploads" status={busy ? "Uploading…" : "Ready"}>
       {busy && (
         <div className="mb-3 text-sm font-medium text-gray-600">
           Processing your file… hang tight.
@@ -42,39 +63,23 @@ export function ModernizationImportPanel({
       )}
 
       <div className="flex gap-2 flex-wrap mb-4">
-        <button className="btn" onClick={() => inventoryInput.current?.click()} disabled={busy}>
-          Upload Inventory (.xlsx)
+        <button className="btn" onClick={() => artifactInput.current?.click()} disabled={busy}>
+          Upload Artifact
         </button>
         <input
-          ref={inventoryInput}
+          ref={artifactInput}
           type="file"
-          accept=".xls,.xlsx"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) onUploadInventory(file);
-            e.target.value = "";
-          }}
-        />
-
-        <button className="btn" onClick={() => diagramInput.current?.click()} disabled={busy}>
-          Upload Diagram (current)
-        </button>
-        <input
-          ref={diagramInput}
-          type="file"
-          accept=".png,.jpg,.pdf,.svg"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onUploadDiagram(file, "architecture_current");
+            if (file) handleArtifactUpload(file);
             e.target.value = "";
           }}
         />
       </div>
 
-      {error && (
-        <div className="text-sm text-red-600 mb-3">{error}</div>
+      {combinedError && (
+        <div className="text-sm text-red-600 mb-3">{combinedError}</div>
       )}
 
       <div className="grid md:grid-cols-3 gap-4">
@@ -110,9 +115,7 @@ export function ModernizationImportPanel({
               </li>
             ))}
             {inventoryRows.length > 5 && (
-              <li className="text-slate-500">
-                and {inventoryRows.length - 5} more…
-              </li>
+              <li className="text-slate-500">and {inventoryRows.length - 5} more…</li>
             )}
             {!inventoryRows.length && (
               <li className="text-gray-400">Upload an inventory sheet to populate rows</li>
@@ -132,9 +135,7 @@ export function ModernizationImportPanel({
               <li key={app.id}>{app.normalizedName}</li>
             ))}
             {normalizedApps.length > 5 && (
-              <li className="text-slate-500">
-                and {normalizedApps.length - 5} more…
-              </li>
+              <li className="text-slate-500">and {normalizedApps.length - 5} more…</li>
             )}
             {!normalizedApps.length && (
               <li className="text-gray-400">Normalization will happen once rows are processed</li>
