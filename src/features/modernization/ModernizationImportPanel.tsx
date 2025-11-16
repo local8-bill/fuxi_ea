@@ -16,13 +16,15 @@ type Props = {
   error: string | null;
   onUploadInventory: (file: File) => Promise<void>;
   onUploadDiagram: (file: File, kind: "architecture_current" | "architecture_future") => Promise<void>;
+  onUploadLucid: (file: File) => Promise<void>;
 };
 
 const sectionClass =
   "shadow-sm border border-gray-100 rounded-2xl bg-white p-4 flex flex-col";
 
-const inventoryExts = new Set(["xlsx", "xls", "csv", "txt"]);
+const inventoryExts = new Set(["xlsx", "xls", "txt"]);
 const diagramExts = new Set(["png", "jpg", "jpeg", "pdf", "svg"]);
+const lucidExts = new Set(["csv"]);
 
 export function ModernizationImportPanel({
   artifacts,
@@ -32,6 +34,7 @@ export function ModernizationImportPanel({
   error,
   onUploadInventory,
   onUploadDiagram,
+  onUploadLucid,
 }: Props) {
   const artifactInput = React.useRef<HTMLInputElement | null>(null);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
@@ -47,8 +50,12 @@ export function ModernizationImportPanel({
       onUploadDiagram(file, "architecture_current");
       return;
     }
+    if (lucidExts.has(ext)) {
+      onUploadLucid(file);
+      return;
+    }
     setUploadError(
-      "Unsupported artifact type. Please upload an Excel/CSV inventory or a PNG/JPG/PDF/SVG diagram."
+      "Unsupported artifact type. Please upload an Excel inventory, Lucid CSV, or PNG/JPG/PDF/SVG diagram."
     );
   };
 

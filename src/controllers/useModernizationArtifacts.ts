@@ -9,10 +9,14 @@ import type {
   ArtifactKind,
 } from "@/domain/model/modernization";
 import { normalizeAppsFromSources } from "@/domain/services/normalization";
+import type { DigitalEnterpriseView, DiagramNode } from "@/domain/model/digitalEnterprise";
 
 type DiagramBox = {
   label: string;
   kind: ArtifactKind;
+};
+type DigitalEnterpriseState = {
+  future?: DigitalEnterpriseView;
 };
 
 type UseModernizationArtifactsResult = {
@@ -21,11 +25,13 @@ type UseModernizationArtifactsResult = {
   normalizedApps: NormalizedApp[];
   busy: boolean;
   error: string | null;
+  digitalEnterprise: DigitalEnterpriseState;
   uploadInventory: (file: File) => Promise<void>;
   uploadDiagram: (
     file: File,
     kind: "architecture_current" | "architecture_future",
   ) => Promise<void>;
+  uploadLucid: (file: File) => Promise<void>;
 };
 
 export function useModernizationArtifacts(
@@ -35,6 +41,7 @@ export function useModernizationArtifacts(
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
   const [diagramBoxes, setDiagramBoxes] = useState<DiagramBox[]>([]);
   const [normalizedApps, setNormalizedApps] = useState<NormalizedApp[]>([]);
+  const [digitalEnterprise, setDigitalEnterprise] = useState<DigitalEnterpriseState>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const SUMMARY_KEY = "fuxi-modernization-summary";
@@ -144,6 +151,68 @@ export function useModernizationArtifacts(
     }
   };
 
+  const lucidToBoxes = (nodes: DiagramNode[]): DiagramBox[] =>
+    nodes.map((node) => ({
+      label: node.label,
+      kind: "architecture_future" as ArtifactKind,
+    }));
+
+  const uploadLucid = async (file: File) => {
+    setBusy(true);
+    setError(null);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("projectId", projectId);
+      form.append("view", "future_state");
+
+      const res = await fetch("/api/mre/artifacts/lucid", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Lucid upload failed: ${res.status} ${text}`);
+      }
+
+      const data = (await res.json()) as {
+        nodes: DiagramNode[];
+        edges: any[];
+        view: string;
+      };
+
+      setDigitalEnterprise((prev) => ({
+        ...prev,
+        [data.view]: {
+          projectId,
+          view: data.view,
+          nodes: data.nodes,
+          edges: data.edges,
+        },
+      }));
+
+      const nextBoxes = [...diagramBoxes, ...lucidToBoxes(data.nodes)];
+      setDiagramBoxes(nextBoxes);
+      await recomputeNormalized(inventoryRows, nextBoxes);
+
+      const artifact: Artifact = {
+        id: crypto.randomUUID(),
+        projectId,
+        kind: "architecture_future",
+        filename: file.name,
+        uploadedAt: new Date().toISOString(),
+      };
+      setArtifacts((prev) => [...prev, artifact]);
+    } catch (err) {
+      console.error("[Modernization] uploadLucid error:", err);
+      setError("Failed to upload Lucid artifact.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const summary = {
@@ -158,9 +227,11 @@ export function useModernizationArtifacts(
     artifacts,
     inventoryRows,
     normalizedApps,
+    digitalEnterprise,
     busy,
     error,
     uploadInventory,
     uploadDiagram,
+    uploadLucid,
   };
 }

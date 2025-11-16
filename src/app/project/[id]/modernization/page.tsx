@@ -15,6 +15,7 @@ export default function ModernizationPage() {
     error,
     uploadInventory,
     uploadDiagram,
+    uploadLucid,
   } = useModernizationArtifacts(params.id);
 
   const summary = useModernizationSummary();
@@ -36,6 +37,7 @@ export default function ModernizationPage() {
         error={error}
         onUploadInventory={uploadInventory}
         onUploadDiagram={uploadDiagram}
+        onUploadLucid={uploadLucid}
       />
     </div>
   );
