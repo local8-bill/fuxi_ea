@@ -11,7 +11,7 @@ type Tile = {
   href: string;
 };
 
-const PROJECT_ID = "demo";
+
 
 const TILE_DATA: Tile[] = [
   {
@@ -22,7 +22,7 @@ const TILE_DATA: Tile[] = [
       "Score & structure your capability map",
     ],
     cta: "Start Capability Modeling",
-    href: `/project/${PROJECT_ID}/scoring`,
+    href: "#", // no direct navigation for now
   },
   {
     title: "Technology Stack Modeling",
@@ -32,7 +32,7 @@ const TILE_DATA: Tile[] = [
       "Build your technology estate",
     ],
     cta: "Start Tech Modeling",
-    href: `/project/${PROJECT_ID}/modernization`,
+    href: "#", // no direct navigation for now
   },
   {
     title: "Digital Enterprise View",
@@ -42,17 +42,23 @@ const TILE_DATA: Tile[] = [
       "Modernization insights & narratives",
     ],
     cta: "Enter Digital Enterprise",
-    href: "/digital-enterprise",
+    href: "#", // no direct navigation for now
   },
 ];
 
 export default function StartPage() {
   const router = useRouter();
   const [project, setProject] = React.useState("");
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   const handleLaunch = () => {
-    const target = project.trim() || PROJECT_ID;
-    router.push(`/project/${target}/scoring`);
+    const trimmed = project.trim();
+    if (!trimmed) {
+      setErrorMsg("Please enter a project name.");
+      return;
+    }
+    setErrorMsg(null);
+    router.push(`/project/${trimmed}/scoring`);
   };
 
   return (
@@ -87,6 +93,11 @@ export default function StartPage() {
                 Open Project
               </button>
             </div>
+            {errorMsg && (
+            <p className="mt-2 text-xs text-red-600">
+              {errorMsg}
+            </p>
+          )}
           </div>
         </section>
 

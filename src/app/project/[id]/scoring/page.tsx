@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { VisionPanel } from "@/ui/components/VisionPanel";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useScoringPage } from "@/controllers/useScoringPage";
 import { localStorageAdapter } from "@/adapters/storage/local";
 import { CapabilityAccordionCard } from "@/ui/components/CapabilityAccordionCard";
@@ -10,17 +10,23 @@ import { WeightsDrawer } from "@/ui/components/WeightsDrawer";
 import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
 import { defaultWeights } from "@/domain/services/scoring";
-import { useModernizationSummary } from "@/features/modernization/useModernizationSummary";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
   const {
     loading,
-    items, weights, setWeights,
-    openId, setOpenId, selected, updateScores,
-    expandedL1, toggleExpanded,
+    items,
+    weights,
+    setWeights,
+    openId,
+    setOpenId,
+    selected,
+    updateScores,
+    expandedL1,
+    toggleExpanded,
     compositeFor,
-    addL1, reload,
+    addL1,
+    reload,
   } = useScoringPage(id, localStorageAdapter);
 
   // Feature flags (flip to false for prod if you want)
@@ -32,20 +38,18 @@ export default function ScoringPage() {
   const [weightsOpen, setWeightsOpen] = React.useState(false);
   const [showAddL1, setShowAddL1] = React.useState(false);
   const [showVision, setShowVision] = React.useState(false);
-  const router = useRouter();
-  const summary = useModernizationSummary();
 
   const domains = React.useMemo(
     () => Array.from(new Set(items.map((x) => x.domain ?? "Unassigned"))).sort(),
-    [items]
+    [items],
   );
 
   const filtered = React.useMemo(
     () =>
       items.filter(
-        (x) => domainFilter === "All Domains" || x.domain === domainFilter
+        (x) => domainFilter === "All Domains" || x.domain === domainFilter,
       ),
-    [items, domainFilter]
+    [items, domainFilter],
   );
 
   const sorted = React.useMemo(
@@ -57,7 +61,7 @@ export default function ScoringPage() {
         }
         return a.name.localeCompare(b.name);
       }),
-    [filtered, sortKey]
+    [filtered, sortKey],
   );
 
   // Group when All Domains selected; force "Unassigned" last
@@ -66,43 +70,57 @@ export default function ScoringPage() {
     const b: Record<string, typeof items> = {};
     for (const it of sorted) (b[it.domain ?? "Unassigned"] ??= []).push(it);
     const keys = Object.keys(b).sort((x, y) =>
-      x === "Unassigned" ? 1 : y === "Unassigned" ? -1 : x.localeCompare(y)
+      x === "Unassigned" ? 1 : y === "Unassigned" ? -1 : x.localeCompare(y),
     );
     return keys.map((k) => [k, b[k]] as const); // ordered entries
-  }, [sorted, domainFilter]);
+  }, [sorted, domainFilter, items]);
 
   const existingL1 = React.useMemo(() => items.map((i) => i.name), [items]);
 
-  // Show a super-light loading placeholder (avoids “twerkiness” flicker)
+  // Show a super-light loading placeholder (avoids flicker)
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="card">Loading project…</div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-
-      <section className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.4em] text-slate-500">STATUS</p>
-        <h1 className="text-3xl font-semibold text-slate-900">Capability Scoring Workspace</h1>
-        <p className="text-sm text-slate-500">
-          Score business capabilities, compare domains, and explore AI-assisted insights for this project.
+    <main className="mx-auto max-w-5xl px-4 py-6 space-y-6">
+      {/* Header to match Tech Stack look */}
+      <header className="space-y-1">
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+          Project: {id}
         </p>
-      </section>
+        <h1 className="text-2xl font-semibold text-slate-900">
+          Capability Scoring Workspace
+        </h1>
+        <p className="text-sm text-slate-500">
+          Score business capabilities, compare domains, and explore AI-assisted insights for this
+          project.
+        </p>
+      </header>
 
-      <section className="card border border-gray-100 p-4 space-y-3">
-        <div className="flex flex-wrap gap-3">
-          <select className="select" value={domainFilter} onChange={(e) => setDomainFilter(e.target.value)}>
+      {/* Controls card (filters, sort, actions) */}
+      <section className="card border border-gray-100 p-4 space-y-3 rounded-2xl">
+        <div className="flex flex-wrap gap-3 items-center">
+          <select
+            className="select"
+            value={domainFilter}
+            onChange={(e) => setDomainFilter(e.target.value)}
+          >
             <option>All Domains</option>
             {domains.map((d) => (
               <option key={d}>{d}</option>
             ))}
           </select>
 
-          <select className="select" value={sortKey} onChange={(e) => setSortKey(e.target.value as "name" | "score")}>
+          <select
+            className="select"
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as "name" | "score")}
+          >
             <option value="name">Sort: Name</option>
             <option value="score">Sort: Score</option>
           </select>
@@ -123,7 +141,7 @@ export default function ScoringPage() {
         </div>
       </section>
 
-      {/* --- Labs panels (optional) --- */}
+      {/* Labs panels */}
       {LABS_IMPORT && (
         <ImportPanel
           projectId={id}
@@ -143,43 +161,43 @@ export default function ScoringPage() {
         />
       )}
 
-      {/* --- Main Content --- */}
+      {/* Main content */}
       {sorted.length === 0 ? (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="font-medium" style={{ marginBottom: 8 }}>
-            No capabilities yet
-          </div>
-          <p className="text-sm" style={{ opacity: 0.7, marginBottom: 12 }}>
+        <section className="card rounded-2xl border border-slate-200 p-4 mt-2">
+          <div className="font-medium mb-2">No capabilities yet</div>
+          <p className="text-sm opacity-70 mb-3">
             Start by adding an L1 capability or importing a capability map.
           </p>
           <button className="btn btn-primary" onClick={() => setShowAddL1(true)}>
             Add L1
           </button>
-        </div>
+        </section>
       ) : domainFilter === "All Domains" && grouped ? (
-        // --- Grouped by Domain ---
-        grouped.map(([domain, caps]) => (
-          <section key={domain} className="mb-6">
-            <h2 className="text-base font-semibold mb-3">{domain}</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {caps.map((x) => (
-                <CapabilityAccordionCard
-                  key={x.id}
-                  cap={x.raw}
-                  l1Score={x.score}
-                  weights={weights}
-                  expanded={!!expandedL1[x.id]}
-                  onToggle={() => toggleExpanded(x.id)}
-                  onOpen={(cid) => setOpenId(cid)}
-                  compositeFor={compositeFor}
-                />
-              ))}
-            </div>
-          </section>
-        ))
+        // Grouped by Domain
+        <>
+          {grouped.map(([domain, caps]) => (
+            <section key={domain} className="space-y-3">
+              <h2 className="text-base font-semibold">{domain}</h2>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {caps.map((x) => (
+                  <CapabilityAccordionCard
+                    key={x.id}
+                    cap={x.raw}
+                    l1Score={x.score}
+                    weights={weights}
+                    expanded={!!expandedL1[x.id]}
+                    onToggle={() => toggleExpanded(x.id)}
+                    onOpen={(cid) => setOpenId(cid)}
+                    compositeFor={compositeFor}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </>
       ) : (
-        // --- Ungrouped grid ---
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        // Ungrouped grid
+        <section className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sorted.map((x) => (
             <CapabilityAccordionCard
               key={x.id}
@@ -192,10 +210,10 @@ export default function ScoringPage() {
               compositeFor={compositeFor}
             />
           ))}
-        </div>
+        </section>
       )}
 
-      {/* --- Drawers & Dialogs --- */}
+      {/* Drawers & Dialogs */}
       <ScoringDrawer
         open={!!selected}
         onClose={() => setOpenId(null)}
@@ -218,6 +236,6 @@ export default function ScoringPage() {
         onCreate={(name, domain) => addL1(name, domain)}
         domainSuggestions={domains}
       />
-    </div>
+    </main>
   );
 }

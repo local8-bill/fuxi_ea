@@ -1,0 +1,9 @@
+Step,From,To,Message,Notes
+1,Digital Enterprise Page,useModernizationArtifacts Controller,subscribe to digitalEnterprise.future,Reads Lucid nodes/edges stored in controller state
+2,Digital Enterprise Page,/api/digital-enterprise/stats,fetch stats for project,<id>,Client fetches stats on mount
+3,/api/digital-enterprise/stats,digitalEnterpriseStore,getDigitalEnterpriseView,Reads stored nodes/edges
+4,digitalEnterpriseStore,Digital Enterprise Page,return stats JSON,Client stores systemsFuture/integrationsFuture/domainsDetected
+5,Digital Enterprise Page,UI cards,render stat tiles,Shows values from stats API
+6,Digital Enterprise Page,Systems list (domain buckets),render grouped nodes,Uses controller-provided nodes to build domain cards
+7,User,Digital Enterprise Page,click system item,Selection handler runs
+8,Digital Enterprise Page,UI detail panel,show upstream/downstream counts,Calculates counts from controller edges state

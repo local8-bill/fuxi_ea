@@ -1,0 +1,10 @@
+Step,From,To,Message,Notes
+1,Modernization Upload UI,useModernizationArtifacts Controller,`uploadLucid(file, projectId)`,User clicks “Upload Artifact” and selects Lucid CSV
+2,useModernizationArtifacts Controller,/api/mre/artifacts/lucid,POST file + projectId + view=future_state,Controller routes to Lucid ingestion
+3,/api/mre/artifacts/lucid/route.ts,parseLucidCsv Service,parseLucidCsv(buffer, {projectId, view}),Server parses Lucid CSV into nodes/edges
+4,parseLucidCsv Service,/api/mre/artifacts/lucid/route.ts,return nodes/edges/view,Parsed DigitalEnterpriseView ready
+5,/api/mre/artifacts/lucid/route.ts,digitalEnterpriseStore,setDigitalEnterpriseView(digitalView),Store now keyed by project
+6,Digital Enterprise Page,/api/digital-enterprise/stats,GET ?project=<id>,Page polls stats endpoint
+7,/api/digital-enterprise/stats,digitalEnterpriseStore,getDigitalEnterpriseView(projectId),Stats route retrieves stored view
+8,/api/digital-enterprise/stats,Digital Enterprise Page,return {systemsFuture, integrationsFuture, domainsDetected},Client renders stat cards
+9,Digital Enterprise Page,UI cards,Systems/Integrations/Domains,Display counts supplied by stats API

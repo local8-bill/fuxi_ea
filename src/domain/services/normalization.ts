@@ -1,4 +1,4 @@
-import type { ArtifactKind, InventoryRow, NormalizedApp, Disposition } from "@/domain/model/modernization";
+import type { ArtifactKind, InventoryRow, NormalizedApp, Disposition } from "@/domain/model/tech-stack";
 
 type NormalizedBucket = {
   normalizedName: string;

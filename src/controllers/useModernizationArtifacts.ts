@@ -1,22 +1,15 @@
-// src/controllers/useModernizationArtifacts.ts
-"use client";
-
-import { useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import type {
   Artifact,
   InventoryRow,
   NormalizedApp,
   ArtifactKind,
-} from "@/domain/model/modernization";
+} from "@/domain/model/tech-stack";
 import { normalizeAppsFromSources } from "@/domain/services/normalization";
-import type { DigitalEnterpriseView, DiagramNode } from "@/domain/model/digitalEnterprise";
 
 type DiagramBox = {
   label: string;
   kind: ArtifactKind;
-};
-type DigitalEnterpriseState = {
-  future?: DigitalEnterpriseView;
 };
 
 type UseModernizationArtifactsResult = {
@@ -25,60 +18,59 @@ type UseModernizationArtifactsResult = {
   normalizedApps: NormalizedApp[];
   busy: boolean;
   error: string | null;
-  digitalEnterprise: DigitalEnterpriseState;
   uploadInventory: (file: File) => Promise<void>;
-  uploadDiagram: (
-    file: File,
-    kind: "architecture_current" | "architecture_future",
-  ) => Promise<void>;
+  uploadDiagram: (file: File, kind: ArtifactKind) => Promise<void>;
   uploadLucid: (file: File) => Promise<void>;
 };
 
-export function useModernizationArtifacts(
-  projectId: string,
-): UseModernizationArtifactsResult {
+/**
+ * Central controller for the Tech Stack / Modernization workspace.
+ * - Upload inventory (XLS/XLSX/CSV)
+ * - Upload diagrams (current/future)
+ * - Upload Lucid CSV (for Digital Enterprise)
+ * - Maintain normalized app list from inventory + diagrams
+ */
+export function useModernizationArtifacts(projectId: string): UseModernizationArtifactsResult {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
-  const [diagramBoxes, setDiagramBoxes] = useState<DiagramBox[]>([]);
   const [normalizedApps, setNormalizedApps] = useState<NormalizedApp[]>([]);
-  const [digitalEnterprise, setDigitalEnterprise] = useState<DigitalEnterpriseState>({});
+  const [diagramBoxes, setDiagramBoxes] = useState<DiagramBox[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const SUMMARY_KEY = "fuxi-modernization-summary";
 
-  const recomputeNormalized = async (
-    nextInventoryRows: InventoryRow[],
-    nextDiagramBoxes: DiagramBox[],
-  ) => {
+  const recomputeNormalized = useCallback(
+    async (nextInventory: InventoryRow[], nextBoxes: DiagramBox[]) => {
+      try {
+        const apps = await normalizeAppsFromSources({
+          inventoryRows: nextInventory,
+          diagramBoxes: nextBoxes.map((b) => ({ label: b.label, kind: b.kind })),
+        });
+        setNormalizedApps(apps);
+      } catch (err) {
+        console.error("recomputeNormalized error", err);
+        // Don't override an existing more-specific error message
+        setError((prev) => prev ?? "Failed to normalize applications.");
+      }
+    },
+    [],
+  );
+
+  async function uploadInventory(file: File) {
     try {
-      const apps = await normalizeAppsFromSources({
-        inventoryRows: nextInventoryRows,
-        diagramBoxes: nextDiagramBoxes.map((b) => ({
-          label: b.label,
-          kind: b.kind,
-        })),
-      });
-      setNormalizedApps(apps);
-    } catch (err) {
-      console.error("[Modernization] normalizeAppsFromSources failed:", err);
-      setError("Failed to normalize applications.");
-    }
-  };
+      setBusy(true);
+      setError(null);
 
-  const uploadInventory = async (file: File) => {
-    setBusy(true);
-    setError(null);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", projectId);
 
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("projectId", projectId);
-      form.append("kind", "inventory_excel");
-
-      const res = await fetch("/api/mre/artifacts/inventory", {
-        method: "POST",
-        body: form,
-      });
+      const res = await fetch(
+        `/api/mre/artifacts/inventory?project=${encodeURIComponent(projectId)}`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
 
       if (!res.ok) {
         const text = await res.text();
@@ -93,35 +85,35 @@ export function useModernizationArtifacts(
       setArtifacts((prev) => [...prev, data.artifact]);
 
       const newRows = data.inventoryRows ?? [];
-      const nextInventoryRows = [...inventoryRows, ...newRows];
-      setInventoryRows(nextInventoryRows);
+      const nextInventory = [...inventoryRows, ...newRows];
+      setInventoryRows(nextInventory);
 
-      await recomputeNormalized(nextInventoryRows, diagramBoxes);
+      await recomputeNormalized(nextInventory, diagramBoxes);
     } catch (err) {
-      console.error("[Modernization] uploadInventory error:", err);
+      console.error("uploadInventory error", err);
       setError("Failed to upload inventory.");
     } finally {
       setBusy(false);
     }
-  };
+  }
 
-  const uploadDiagram = async (
-    file: File,
-    kind: "architecture_current" | "architecture_future",
-  ) => {
-    setBusy(true);
-    setError(null);
-
+  async function uploadDiagram(file: File, kind: ArtifactKind) {
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("projectId", projectId);
-      form.append("kind", kind);
+      setBusy(true);
+      setError(null);
 
-      const res = await fetch("/api/mre/artifacts/diagram", {
-        method: "POST",
-        body: form,
-      });
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", projectId);
+      formData.append("kind", kind);
+
+      const res = await fetch(
+        `/api/mre/artifacts/diagram?project=${encodeURIComponent(projectId)}`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
 
       if (!res.ok) {
         const text = await res.text();
@@ -144,90 +136,56 @@ export function useModernizationArtifacts(
 
       await recomputeNormalized(inventoryRows, nextDiagramBoxes);
     } catch (err) {
-      console.error("[Modernization] uploadDiagram error:", err);
+      console.error("uploadDiagram error", err);
       setError("Failed to upload diagram.");
     } finally {
       setBusy(false);
     }
-  };
+  }
 
-  const lucidToBoxes = (nodes: DiagramNode[]): DiagramBox[] =>
-    nodes.map((node) => ({
-      label: node.label,
-      kind: "architecture_future" as ArtifactKind,
-    }));
-
-  const uploadLucid = async (file: File) => {
-    setBusy(true);
-    setError(null);
-
+  /**
+   * Lucid CSV upload — used to feed the Digital Enterprise view.
+   * We don't currently merge Lucid rows into normalizedApps here;
+   * instead, the Digital Enterprise page reads stats from its own API.
+   */
+  async function uploadLucid(file: File) {
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("projectId", projectId);
-      form.append("view", "future_state");
+      setBusy(true);
+      setError(null);
 
-      const res = await fetch("/api/mre/artifacts/lucid", {
-        method: "POST",
-        body: form,
-      });
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", projectId);
+
+      const res = await fetch(
+        `/api/digital-enterprise/lucid?project=${encodeURIComponent(projectId)}`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
 
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`Lucid upload failed: ${res.status} ${text}`);
       }
 
-      const data = (await res.json()) as {
-        nodes: DiagramNode[];
-        edges: any[];
-        view: string;
-      };
-
-      setDigitalEnterprise((prev) => ({
-        ...prev,
-        [data.view]: {
-          projectId,
-          view: data.view,
-          nodes: data.nodes,
-          edges: data.edges,
-        },
-      }));
-
-      const nextBoxes = [...diagramBoxes, ...lucidToBoxes(data.nodes)];
-      setDiagramBoxes(nextBoxes);
-      await recomputeNormalized(inventoryRows, nextBoxes);
-
-      const artifact: Artifact = {
-        id: crypto.randomUUID(),
-        projectId,
-        kind: "architecture_future",
-        filename: file.name,
-        uploadedAt: new Date().toISOString(),
-      };
-      setArtifacts((prev) => [...prev, artifact]);
+      const data = await res.json();
+      console.log("Lucid upload OK", data);
+      // Digital Enterprise stats will be read via /api/digital-enterprise/stats
+      // so we don't need to mutate normalizedApps here (yet).
     } catch (err) {
-      console.error("[Modernization] uploadLucid error:", err);
-      setError("Failed to upload Lucid artifact.");
+      console.error("uploadLucid error", err);
+      setError("Failed to upload Lucid CSV.");
     } finally {
       setBusy(false);
     }
-  };
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const summary = {
-      artifacts: artifacts.length,
-      inventoryRows: inventoryRows.length,
-      normalizedApps: normalizedApps.length,
-    };
-    window.localStorage?.setItem(SUMMARY_KEY, JSON.stringify(summary));
-  }, [artifacts.length, inventoryRows.length, normalizedApps.length]);
+  }
 
   return {
     artifacts,
     inventoryRows,
     normalizedApps,
-    digitalEnterprise,
     busy,
     error,
     uploadInventory,

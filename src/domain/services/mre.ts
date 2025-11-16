@@ -1,4 +1,4 @@
-import type { ArtifactKind } from "@/domain/model/modernization";
+import type { ArtifactKind } from "@/domain/model/tech-stack";
 
 export type ArchitectureBox = {
   label: string;

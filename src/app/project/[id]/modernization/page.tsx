@@ -2,8 +2,8 @@
 
 import { useParams } from "next/navigation";
 import { useModernizationArtifacts } from "@/controllers/useModernizationArtifacts";
-import { ModernizationImportPanel } from "@/features/modernization/ModernizationImportPanel";
-import { useModernizationSummary } from "@/features/modernization/useModernizationSummary";
+import { ModernizationImportPanel } from "@/features/tech-stack/ModernizationImportPanel";
+import { useModernizationSummary } from "@/features/tech-stack/useModernizationSummary";
 
 export default function ModernizationPage() {
   const params = useParams<{ id: string }>();
