@@ -87,9 +87,9 @@ export default function ScoringPage() {
 
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-[0.4em] text-slate-500">STATUS</p>
-        <h1 className="text-3xl font-semibold text-slate-900">Tech Stack Workspace</h1>
+        <h1 className="text-3xl font-semibold text-slate-900">Capability Scoring Workspace</h1>
         <p className="text-sm text-slate-500">
-          Score capabilities, compare domains, and explore AI-assisted insights for this project.
+          Score business capabilities, compare domains, and explore AI-assisted insights for this project.
         </p>
       </section>
 
