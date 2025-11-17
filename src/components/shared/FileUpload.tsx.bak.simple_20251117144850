@@ -1,0 +1,61 @@
+"use client";
+
+import { useState } from "react";
+
+interface FileUploadProps {
+  label: string;
+  onFileSelected: (file: File) => Promise<void> | void;
+}
+
+/**
+ * Lightweight shared file upload component.
+ * Used across pages so UX stays consistent.
+ */
+export function FileUpload({ label, onFileSelected }: FileUploadProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setBusy(true);
+    try {
+      await onFileSelected(file);
+    } catch (err: any) {
+      console.error("[FileUpload] error", err);
+      setError(err?.message ?? "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1 items-end">
+      <label className="sr-only">{label}</label>
+      <input
+        type="file"
+        onChange={handleChange}
+        disabled={busy}
+        className="hidden"
+        id="fuxi-lucid-upload-input"
+      />
+      <button
+        type="button"
+        onClick={() =>
+          document.getElementById("fuxi-lucid-upload-input")?.click()
+        }
+        disabled={busy}
+        className="px-3 py-2 text-xs rounded-full bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
+      >
+        {busy ? "Uploading…" : label}
+      </button>
+      {error && (
+        <span className="text-[0.65rem] text-red-500 mt-1 text-right max-w-xs">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}

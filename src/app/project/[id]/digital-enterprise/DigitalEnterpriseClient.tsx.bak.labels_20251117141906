@@ -137,25 +137,26 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
             <div className="border border-gray-200 rounded-xl p-4">
               <p className="text-[0.65rem] tracking-[0.2em] text-gray-500 mb-1">
-                SYSTEMS
+                SYSTEMS (FUTURE)
               </p>
               <p className="text-2xl font-semibold mb-1">
                 {formatNumber(stats.systemsFuture)}
               </p>
               <p className="text-xs text-gray-500">
                 Unique labeled systems that participate in at least one
-                connection in this architecture view.
+                connection in your Lucid diagram.
               </p>
             </div>
             <div className="border border-gray-200 rounded-xl p-4">
               <p className="text-[0.65rem] tracking-[0.2em] text-gray-500 mb-1">
-                INTEGRATIONS
+                INTEGRATIONS (FUTURE)
               </p>
               <p className="text-2xl font-semibold mb-1">
                 {formatNumber(stats.integrationsFuture)}
               </p>
               <p className="text-xs text-gray-500">
-                Unique system-to-system connections derived from connector lines.
+                Unique system-to-system connections derived from connector
+                lines.
               </p>
             </div>
             <div className="border border-gray-200 rounded-xl p-4">
@@ -177,7 +178,8 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               HIGHEST-CONNECTIVITY SYSTEMS
             </h2>
             <p className="text-xs text-gray-500 mb-4">
-              Top 10 systems by number of integrations in this ecosystem view.
+              Top 10 systems by number of integrations in your future-state
+              ecosystem.
             </p>
 
             <div className="overflow-x-auto border border-gray-200 rounded-xl">
