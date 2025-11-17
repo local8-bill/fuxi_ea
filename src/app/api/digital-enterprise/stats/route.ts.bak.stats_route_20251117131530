@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getStatsForProject } from "@/domain/services/digitalEnterpriseStore";
+
+export const runtime = "nodejs";
+
+export async function GET(req: NextRequest) {
+  try {
+    const url = new URL(req.url);
+    const projectId = (url.searchParams.get("project") ?? "").trim();
+
+    if (!projectId) {
+      console.error("[DE-STATS] Missing project id");
+      return NextResponse.json(
+        { ok: false, error: "Missing project id" },
+        { status: 400 },
+      );
+    }
+
+    const stats = getStatsForProject(projectId);
+    console.log(
+      "[DE-STATS] project=%s systems=%d integrations=%d topSystems=%d",
+      projectId,
+      stats.systemsFuture,
+      stats.integrationsFuture,
+      stats.topSystems.length,
+    );
+
+    return NextResponse.json(
+      {
+        ok: true,
+        stats,
+      },
+      { status: 200 },
+    );
+  } catch (err) {
+    console.error("[DE-STATS] GET error", err);
+    return NextResponse.json(
+      { ok: false, error: "Failed to compute stats" },
+      { status: 500 },
+    );
+  }
+}

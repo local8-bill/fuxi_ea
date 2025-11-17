@@ -49,9 +49,10 @@ export async function POST(req: NextRequest) {
 
     const stats = await getStatsForProject(projectId);
     console.log("[DE-LUCID] Success", {
-  projectId,
-  stats,
-});
+      projectId,
+      systemCount: stats.systemCount,
+      integrationCount: stats.integrationCount,
+    });
 
     return NextResponse.json(
       {

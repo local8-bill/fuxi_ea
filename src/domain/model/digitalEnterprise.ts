@@ -1,30 +1,41 @@
-export type DiagramViewKind = "lucid_architecture";
+export type NodeType = "system" | "domain" | "note" | "infra" | "unknown";
 
-export type DiagramNode = {
+export type DigitalEnterpriseNode = {
   id: string;
   label: string;
-  type?: string | null;
-  domain?: string | null;
+  rawName?: string;
+  rawShapeLibrary?: string;
+  type: NodeType;
+  domain?: string;
+  containerId?: string;
+  degree: number;
 };
 
-export type DiagramEdge = {
+export type DigitalEnterpriseEdge = {
   id: string;
-  from: string;
-  to: string;
-  label?: string | null;
+  fromId: string;
+  toId: string;
+  label?: string;
 };
+
+export type DigitalEnterpriseViewKind = "future_architecture";
 
 export type DigitalEnterpriseView = {
   projectId: string;
-  view: DiagramViewKind;
-  nodes: DiagramNode[];
-  edges: DiagramEdge[];
-  uploadedAt: string;
+  view: DigitalEnterpriseViewKind;
+  nodes: DigitalEnterpriseNode[];
+  edges: DigitalEnterpriseEdge[];
+};
+
+export type DigitalEnterpriseTopSystem = {
+  name: string;
+  domain?: string;
+  integrations: number;
 };
 
 export type DigitalEnterpriseStats = {
-  projectId: string;
   systemsFuture: number;
   integrationsFuture: number;
   domainsDetected: number;
+  topSystems: DigitalEnterpriseTopSystem[];
 };

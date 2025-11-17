@@ -38,7 +38,7 @@ export default function TechStackPage() {
         fd.append("file", file);
         fd.append("projectId", String(projectId));
 
-        const res = await fetch(`/api/digital-enterprise/lucid?project=${encodeURIComponent(projectId)}`, {
+        const res = await fetch("/api/digital-enterprise/lucid", {
           method: "POST",
           body: fd,
         });

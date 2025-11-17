@@ -13,13 +13,13 @@ This describes the Lucid CSV upload path and how stats are surfaced on the Digit
 
 ## Sequence
 1. UI calls `uploadLucid(file, projectId)` when the user hits “Upload Artifact” and selects a Lucid CSV.
-2. Controller sends a POST to `/api/mre/artifacts/lucid` with the file, projectId, and `view=future_state`.
-3. The Lucid API route loads the buffer, passes it to `parseLucidCsv`, and awaits nodes/edges.
-4. The parser returns `DigitalEnterpriseView` with nodes, edges, and view metadata.
-5. The route stores that view via `setDigitalEnterpriseView`, keyed by `projectId`.
+2. Controller sends a POST to `/api/mre/artifacts/lucid` with the file, projectId, and `view` metadata.
+3. The Lucid API route loads the buffer, passes it to `parseLucidCsv`, and awaits its parsed `DigitalEnterpriseItem[]`.
+4. The parser returns discrete `system` and `integration` items, including all the label/edge metadata the store needs.
+5. The route returns the artifact + parsed `lucidItems` and the controller writes them into `digitalEnterpriseStore` via `saveLucidItemsForProject`.
 6. When the Digital Enterprise page mounts, it fetches `/api/digital-enterprise/stats?project=<id>`.
-7. The stats route looks up the same project in `digitalEnterpriseStore` and derives `systemsFuture`, `integrationsFuture`, and `domainsDetected`
+7. The stats route calls `getStatsForProject(projectId)` on the store and returns `{ systemsFuture, integrationsFuture, domainsDetected }`.
 8. Stats API returns the counts to the page.
-9. The page updates its cards with the returned numbers and draws domain listings using the cached nodes/edges from `useModernizationArtifacts`.
+9. The page updates its cards with the returned numbers and continues to render domain listings/selection UI from the cached nodes/edges provided by `useModernizationArtifacts`.
 
 Use this text per step to annotate Lucid chart arrows, and export each diagram as SVG after importing the CSV or manually drawing the lanes.

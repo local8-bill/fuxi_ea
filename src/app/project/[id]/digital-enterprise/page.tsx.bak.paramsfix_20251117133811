@@ -1,0 +1,195 @@
+import type { ReactElement } from "react";
+import {
+  getStatsForProject,
+  type DigitalEnterpriseStats,
+} from "@/domain/services/digitalEnterpriseStore";
+
+interface PageProps {
+  params: { id?: string };
+}
+
+function formatNumber(n: number | undefined | null): string {
+  if (n == null || Number.isNaN(n)) return "0";
+  return n.toLocaleString();
+}
+
+function resolveSystemName(s: any): string {
+  return (
+    s?.systemName ||
+    s?.name ||
+    s?.label ||
+    s?.id ||
+    s?.systemId ||
+    "Unknown"
+  );
+}
+
+function resolveIntegrationCount(s: any): number {
+  return (
+    s?.integrationCount ??
+    s?.integrations ??
+    s?.degree ??
+    0
+  );
+}
+
+export default async function DigitalEnterprisePage(
+  { params }: PageProps
+): Promise<ReactElement> {
+  // Be defensive: params or params.id might be undefined in some edge paths
+  const rawId = params?.id;
+  const projectId =
+    typeof rawId === "string" && rawId !== "undefined" ? rawId : "";
+
+  console.log("[DE-PAGE] params", params, "resolvedProjectId", projectId);
+
+  let stats: DigitalEnterpriseStats | null = null;
+
+  if (projectId) {
+    try {
+      stats = await getStatsForProject(projectId);
+    } catch (err: any) {
+      console.error("[DE-PAGE] Failed to load stats", {
+        projectId,
+        message: err?.message ?? String(err),
+      });
+    }
+  } else {
+    console.warn("[DE-PAGE] Missing projectId in params; skipping stats load");
+  }
+
+  const hasData =
+    !!stats &&
+    ((stats.systemsFuture ?? 0) > 0 || (stats.integrationsFuture ?? 0) > 0);
+
+  const titleProject = projectId || "(unknown)";
+
+  return (
+    <div className="px-8 py-10 max-w-6xl mx-auto">
+      <section className="mb-8">
+        <p className="text-xs tracking-[0.2em] text-gray-500 mb-2">
+          DIGITAL ENTERPRISE
+        </p>
+        <h1 className="text-3xl font-semibold mb-2">
+          Future-State Ecosystem for Project: {titleProject}
+        </h1>
+        <p className="text-sm text-gray-500 max-w-2xl">
+          These metrics are derived directly from your Lucid architecture
+          diagram. We count unique systems that participate in at least one
+          connection and their integrations.
+        </p>
+      </section>
+
+      {!hasData && (
+        <div className="mt-10 text-sm text-gray-500">
+          No digital enterprise metrics are available yet for this project.
+          Upload a Lucid CSV on the Tech Stack page to populate this view.
+        </div>
+      )}
+
+      {hasData && stats && (
+        <>
+          {/* Metric cards */}
+          <section className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
+            <div className="border border-gray-200 rounded-xl p-4">
+              <p className="text-[0.65rem] tracking-[0.2em] text-gray-500 mb-1">
+                SYSTEMS (FUTURE)
+              </p>
+              <p className="text-2xl font-semibold mb-1">
+                {formatNumber(stats.systemsFuture)}
+              </p>
+              <p className="text-xs text-gray-500">
+                Unique labeled systems that participate in at least one
+                connection in your Lucid diagram.
+              </p>
+            </div>
+            <div className="border border-gray-200 rounded-xl p-4">
+              <p className="text-[0.65rem] tracking-[0.2em] text-gray-500 mb-1">
+                INTEGRATIONS (FUTURE)
+              </p>
+              <p className="text-2xl font-semibold mb-1">
+                {formatNumber(stats.integrationsFuture)}
+              </p>
+              <p className="text-xs text-gray-500">
+                Unique system-to-system connections derived from connector lines.
+              </p>
+            </div>
+            <div className="border border-gray-200 rounded-xl p-4">
+              <p className="text-[0.65rem] tracking-[0.2em] text-gray-500 mb-1">
+                DOMAINS DETECTED
+              </p>
+              <p className="text-2xl font-semibold mb-1">
+                {formatNumber(stats.domainsDetected ?? 0)}
+              </p>
+              <p className="text-xs text-gray-500">
+                Domain / ecosystem clustering will evolve in a later pass.
+              </p>
+            </div>
+          </section>
+
+          {/* Top systems table */}
+          <section className="mt-12">
+            <h2 className="text-sm font-semibold mb-1">
+              HIGHEST-CONNECTIVITY SYSTEMS
+            </h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Top 10 systems by number of integrations in your future-state
+              ecosystem.
+            </p>
+
+            <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+                      #
+                    </th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+                      SYSTEM
+                    </th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+                      INTEGRATIONS
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.topSystems.map((s, idx) => {
+                    const name = resolveSystemName(s);
+                    const count = resolveIntegrationCount(s);
+
+                    return (
+                      <tr
+                        key={s.systemId ?? s.id ?? idx}
+                        className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"}
+                      >
+                        <td className="px-4 py-2 text-xs text-gray-500">
+                          {idx + 1}
+                        </td>
+                        <td className="px-4 py-2 text-xs">
+                          {name}
+                        </td>
+                        <td className="px-4 py-2 text-xs">
+                          {formatNumber(count)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {stats.topSystems.length === 0 && (
+                    <tr>
+                      <td
+                        className="px-4 py-4 text-xs text-gray-500"
+                        colSpan={3}
+                      >
+                        No systems with integrations detected yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}

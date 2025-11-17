@@ -1,105 +1,172 @@
-import type {
-  DigitalEnterpriseItem,
-} from "@/domain/services/digitalEnterpriseStore";
+import fs from "fs";
+import path from "path";
 
-type ParseParams = {
-  projectId: string;
-  view: string; // "future" | "current" etc. (kept for future use)
-};
+// Lucid CSV ingestion tuned to header:
+// ["Id","Name","Shape Library","Page ID","Contained By","Group",
+//  "Line Source","Line Destination","Source Arrow","Destination Arrow",
+//  "Status","Text Area 1","Text Area 2","Comments"]
+//
+// Rules:
+// - Rows with Line Source / Line Destination => edges (integrations)
+// - Rows WITHOUT line source/dest but WITH Text Area text => nodes (systems)
+// - Node label comes from Text Area 1 / 2; we IGNORE Name ("Text", "Line", etc.)
+// - Unlabeled shapes (no text) are ignored as systems.
 
-function splitCsvLine(line: string): string[] {
-  // Good enough for Lucid’s simple export (no fancy quoting in labels we care about)
-  return line.split(",");
+const HEADER_DUMP_PATH = path.join(process.cwd(), "lucid_header_dump.txt");
+
+export interface LucidNode {
+  id: string;
+  label: string;
+  domain?: string | null;
+  raw?: Record<string, string>;
 }
 
-export function parseLucidCsv(
-  buffer: Buffer,
-  params: ParseParams,
-): DigitalEnterpriseItem[] {
-  const csvText = buffer.toString("utf8");
-  const rawLines = csvText.split(/\r?\n/);
+export interface LucidEdge {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  label?: string | null;
+  raw?: Record<string, string>;
+}
 
-  const lines = rawLines
+export interface LucidParseResult {
+  nodes: LucidNode[];
+  edges: LucidEdge[];
+}
+
+// Basic CSV → array of row objects
+function parseCsvToRows(
+  text: string
+): { header: string[]; rows: Record<string, string>[] } {
+  const trimmed = (text || "").trim();
+  if (!trimmed) {
+    console.warn("[LucidIngestion] Empty CSV text");
+    return { header: [], rows: [] };
+  }
+
+  const lines = trimmed
+    .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
   if (lines.length < 2) {
-    throw new Error("Lucid CSV is empty or missing header row");
+    console.warn("[LucidIngestion] CSV has header only or no lines", {
+      lineCount: lines.length,
+    });
+    return { header: [], rows: [] };
   }
 
-  const header = splitCsvLine(lines[0]);
+  const header = lines[0].split(",").map((h) => h.trim());
+  console.log("[LucidIngestion] CSV header", { header });
 
-  const idxId = header.indexOf("Id");
-  const idxName = header.indexOf("Name");
-  const idxShapeLib = header.indexOf("Shape Library");
-  const idxSrc = header.indexOf("Line Source");
-  const idxDst = header.indexOf("Line Destination");
-  const idxText1 = header.indexOf("Text Area 1");
-  const idxStatus = header.indexOf("Status");
-
-  if (idxId === -1) {
-    throw new Error("Lucid CSV missing Id column");
+  // Keep header dump for debugging
+  try {
+    fs.writeFileSync(HEADER_DUMP_PATH, JSON.stringify(header, null, 2), "utf8");
+    console.log("[LucidIngestion] Header written to:", HEADER_DUMP_PATH);
+  } catch (err) {
+    console.warn("[LucidIngestion] Failed to write header dump", err);
   }
 
-  const items: DigitalEnterpriseItem[] = [];
+  const rows: Record<string, string>[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const row = splitCsvLine(lines[i]);
-    if (!row.length) continue;
+    const line = lines[i];
+    if (!line) continue;
 
-    const id = (row[idxId] ?? "").trim();
-    if (!id) continue;
+    // NOTE: simple split – assumes no embedded commas in quoted fields.
+    const values = line.split(",").map((v) => v.trim());
+    if (values.length === 1 && values[0] === "") continue;
 
-    const name = idxName >= 0 ? (row[idxName] ?? "").trim() : "";
-    const text1 = idxText1 >= 0 ? (row[idxText1] ?? "").trim() : "";
-    const labelRaw = name || text1;
-
-    const shapeLib =
-      idxShapeLib >= 0 ? (row[idxShapeLib] ?? "").trim() : "";
-    const src = idxSrc >= 0 ? (row[idxSrc] ?? "").trim() : "";
-    const dst = idxDst >= 0 ? (row[idxDst] ?? "").trim() : "";
-    const status =
-      idxStatus >= 0 ? (row[idxStatus] ?? "").trim() : "";
-
-    const label = labelRaw.trim();
-
-    // Heuristic: if we have a Line Source / Line Destination, treat as integration
-    if (src || dst) {
-      items.push({
-        projectId: params.projectId,
-        kind: "integration",
-        id: `edge:${id}`,
-        label:
-          label ||
-          (src && dst
-            ? `${src} → ${dst}`
-            : src || dst || `integration-${id}`),
-        sourceId: src || undefined,
-        targetId: dst || undefined,
-      });
-      continue;
+    const row: Record<string, string> = {};
+    for (let j = 0; j < header.length; j++) {
+      row[header[j]] = values[j] ?? "";
     }
-
-    // Otherwise, potential system node.
-    // Filter out obvious non-systems like the Document/Page rows with no meaningful label.
-    if (!label) {
-      continue;
-    }
-
-    // Optional: skip the top-level document or page rows
-    const lowered = label.toLowerCase();
-    if (lowered === "document" || lowered === "page") {
-      continue;
-    }
-
-    items.push({
-      projectId: params.projectId,
-      kind: "system",
-      id: `node:${id}`,
-      label,
-      // status could be used later (e.g., “Draft”, “Future”), for now we ignore it.
-    });
+    rows.push(row);
   }
 
-  return items;
+  console.log("[LucidIngestion] Parsed CSV rows", {
+    rowCount: rows.length,
+  });
+
+  return { header, rows };
+}
+
+export function parseLucidCsv(csvText: string): LucidParseResult {
+  console.log("[LucidIngestion] parseLucidCsv start", {
+    textLength: csvText?.length ?? 0,
+  });
+
+  const { rows } = parseCsvToRows(csvText);
+  const nodesMap = new Map<string, LucidNode>();
+  const edges: LucidEdge[] = [];
+
+  rows.forEach((row, idx) => {
+    const id = (row["Id"] ?? "").trim();
+    const name = (row["Name"] ?? "").trim(); // shape type (Text, Line, Process, etc.)
+    const text1 = (row["Text Area 1"] ?? "").trim();
+    const text2 = (row["Text Area 2"] ?? "").trim();
+    const lineSource = (row["Line Source"] ?? "").trim();
+    const lineDestination = (row["Line Destination"] ?? "").trim();
+
+    const hasLine = !!lineSource || !!lineDestination;
+    const hasText = !!text1 || !!text2;
+
+    // Edge row: connectors / lines
+    if (hasLine) {
+      if (!lineSource || !lineDestination) {
+        console.warn("[LucidIngestion] Skipping edge with missing endpoint", {
+          index: idx,
+          lineSource,
+          lineDestination,
+          row,
+        });
+        return;
+      }
+
+      const edgeLabel = text1 || text2 || null;
+
+      const edge: LucidEdge = {
+        id: `${lineSource}__${lineDestination}__${idx}`,
+        sourceId: lineSource,
+        targetId: lineDestination,
+        label: edgeLabel,
+        raw: row,
+      };
+
+      edges.push(edge);
+      return;
+    }
+
+    // Node row: shapes with text (actual systems / steps)
+    if (!hasText) {
+      // Ignore unlabeled shapes; "Name" here is just shape type
+      return;
+    }
+
+    const nodeId = id || `${name || "node"}__${idx}`;
+    const label = text1 || text2 || name || nodeId;
+
+    if (!nodesMap.has(nodeId)) {
+      nodesMap.set(nodeId, {
+        id: nodeId,
+        label,
+        domain: null, // domain will be inferred in a later pass
+        raw: row,
+      });
+    }
+  });
+
+  const nodes = Array.from(nodesMap.values());
+
+  console.log("[LucidIngestion] parseLucidCsv result", {
+    nodeCount: nodes.length,
+    edgeCount: edges.length,
+  });
+
+  const result: LucidParseResult = {
+    nodes,
+    edges,
+  };
+
+  return result;
 }

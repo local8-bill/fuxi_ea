@@ -12,8 +12,8 @@ This file outlines the client-side rendering and interactions inside `/project/[
 ## Steps
 1. The page mounts and subscribes to `useModernizationArtifacts`, so it always has the latest nodes/edges produced by past uploads.
 2. A `useEffect` fetches `/api/digital-enterprise/stats?project=<id>` and waits for the JSON response.
-3. The stats endpoint calls `getDigitalEnterpriseView(projectId)` and reads the stored `DigitalEnterpriseView` from `digitalEnterpriseStore`.
-4. Stats returns `{ systemsFuture, integrationsFuture, domainsDetected }` based on node/edge counts.
+3. The stats endpoint now calls `getStatsForProject(projectId)` on `digitalEnterpriseStore`, which reads the `DigitalEnterpriseItem`s saved by the Lucid upload route.
+4. Stats returns `{ systemsFuture, integrationsFuture, domainsDetected }` derived from system/integration counts so far.
 5. The page stores those counts and renders the three stat tiles accordingly.
 6. Nodes are grouped by domain (using `node.domainHint || "Unassigned"`) and shown as cards with mini lists (first 20 systems + "+ N more…" when needed).
 7. When a row is clicked, the page highlights it and surfaces upstream/downstream counts computed from the cached `edges` array.
