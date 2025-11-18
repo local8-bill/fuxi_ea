@@ -10,6 +10,7 @@ import {
   fetchDigitalEnterpriseStats,
 } from "@/lib/api/digitalEnterprise";
 import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
+import { normalizeSystemName } from "@/domain/services/systemNormalization";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -25,6 +26,22 @@ interface InventoryStatsLocal {
   projectId: string;
   rowCount: number;
   uniqueSystems: number;
+}
+
+interface DiagramSystem {
+  id: string;
+  name: string;
+  normalizedName: string;
+  integrationCount: number;
+}
+
+interface DiffStats {
+  inventoryCount: number;
+  diagramCount: number;
+  overlapCount: number;
+  inventoryOnlyNorms: string[];
+  diagramOnly: DiagramSystem[];
+  overlapSystems: DiagramSystem[];
 }
 
 function formatNumber(n: number | undefined | null): string {
@@ -47,13 +64,23 @@ export function TechStackClient({ projectId }: Props) {
   const [uploadingLucid, setUploadingLucid] = useState<boolean>(false);
   const [deError, setDeError] = useState<string | null>(null);
 
-  // Load DE stats on mount / project change
+  // Diff plumbing
+  const [inventorySystemsNorm, setInventorySystemsNorm] = useState<string[]>([]);
+  const [inventoryDisplayByNorm, setInventoryDisplayByNorm] = useState<
+    Record<string, string>
+  >({});
+  const [diagramSystems, setDiagramSystems] = useState<DiagramSystem[]>([]);
+  const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
+  const [diffError, setDiffError] = useState<string | null>(null);
+
+  // Load DE stats and systems on mount / project change
   useEffect(() => {
     let cancelled = false;
 
-    async function loadDE() {
+    async function loadDEAndSystems() {
       setLoadingDE(true);
       setDeError(null);
+      setDiffError(null);
 
       try {
         const stats = await fetchDigitalEnterpriseStats(projectId);
@@ -75,14 +102,112 @@ export function TechStackClient({ projectId }: Props) {
           setLoadingDE(false);
         }
       }
+
+      // Load diagram systems for diff view
+      try {
+        const res = await fetch(
+          `/api/digital-enterprise/systems?project=${encodeURIComponent(
+            projectId,
+          )}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          console.error(
+            "[TECH-STACK] Failed to load diagram systems for diff",
+            res.status,
+            text,
+          );
+          if (!cancelled) {
+            setDiffError("Failed to load diagram systems for diff view.");
+            setDiagramSystems([]);
+          }
+          return;
+        }
+        const json = await res.json();
+        if (cancelled) return;
+
+        if (json && Array.isArray(json.systems)) {
+          const systems: DiagramSystem[] = json.systems.map((s: any) => ({
+            id: String(s.id ?? s.name ?? s.normalizedName ?? "unknown"),
+            name: String(s.name ?? "Unknown"),
+            normalizedName: String(
+              s.normalizedName ?? normalizeSystemName(s.name),
+            ),
+            integrationCount: Number(s.integrationCount ?? 0),
+          }));
+          setDiagramSystems(systems);
+        } else {
+          setDiagramSystems([]);
+        }
+      } catch (err: any) {
+        console.error("[TECH-STACK] Error fetching diagram systems for diff", err);
+        if (!cancelled) {
+          setDiffError("Failed to load diagram systems for diff view.");
+          setDiagramSystems([]);
+        }
+      }
     }
 
-    loadDE();
+    loadDEAndSystems();
 
     return () => {
       cancelled = true;
     };
   }, [projectId]);
+
+  // Compute diff whenever inventory systems or diagram systems change
+  useEffect(() => {
+    const invNormSet = new Set(
+      (inventorySystemsNorm ?? []).filter((n) => n && n.trim().length > 0),
+    );
+    const diagNormSet = new Set(
+      (diagramSystems ?? [])
+        .map((s) => s.normalizedName)
+        .filter((n) => n && n.trim().length > 0),
+    );
+
+    if (invNormSet.size === 0 && diagNormSet.size === 0) {
+      setDiffStats(null);
+      return;
+    }
+
+    const inventoryOnlyNorms: string[] = [];
+    const overlapNorms = new Set<string>();
+
+    // Inventory-driven perspective
+    for (const norm of invNormSet) {
+      if (diagNormSet.has(norm)) {
+        overlapNorms.add(norm);
+      } else {
+        inventoryOnlyNorms.push(norm);
+      }
+    }
+
+    const diagramOnly: DiagramSystem[] = [];
+    const overlapSystems: DiagramSystem[] = [];
+
+    for (const s of diagramSystems) {
+      const norm = s.normalizedName;
+      if (!norm) continue;
+      if (invNormSet.has(norm)) {
+        overlapSystems.push(s);
+      } else {
+        diagramOnly.push(s);
+      }
+    }
+
+    const diff: DiffStats = {
+      inventoryCount: invNormSet.size,
+      diagramCount: diagNormSet.size,
+      overlapCount: overlapNorms.size,
+      inventoryOnlyNorms,
+      diagramOnly,
+      overlapSystems,
+    };
+
+    setDiffStats(diff);
+  }, [inventorySystemsNorm, diagramSystems]);
 
   async function handleInventoryUpload(file: File) {
     setUploadingInv(true);
@@ -96,7 +221,7 @@ export function TechStackClient({ projectId }: Props) {
 
       if (!file.name.toLowerCase().endsWith(".csv")) {
         throw new Error(
-          "Unsupported file type. Please export your Excel inventory as CSV and upload the .csv file."
+          "Unsupported file type. Please export your Excel inventory as CSV and upload the .csv file.",
         );
       }
 
@@ -115,13 +240,33 @@ export function TechStackClient({ projectId }: Props) {
 
       // Inventory upload counts as one artifact (for now)
       setArtifactCount((prev) =>
-        stats.rowCount > 0 ? Math.max(prev, 1) : prev
+        stats.rowCount > 0 ? Math.max(prev, 1) : prev,
       );
 
-      console.log("[TECH-STACK] Inventory parsed locally", stats);
+      // Build normalized system set and display map for diff
+      const normSet = new Set<string>();
+      const displayMap: Record<string, string> = {};
+      for (const item of parsed.rows) {
+        const displayName = item.systemName || "";
+        const norm = normalizeSystemName(displayName);
+        if (!norm) continue;
+        normSet.add(norm);
+        if (!displayMap[norm] && displayName) {
+          displayMap[norm] = displayName;
+        }
+      }
+      setInventorySystemsNorm(Array.from(normSet));
+      setInventoryDisplayByNorm(displayMap);
+
+      console.log("[TECH-STACK] Inventory parsed locally", {
+        rowCount: stats.rowCount,
+        uniqueSystems: stats.uniqueSystems,
+      });
     } catch (err: any) {
       console.error("[TECH-STACK] Inventory upload failed (client parse)", err);
       setInvError(err?.message ?? "Inventory upload failed.");
+      setInventorySystemsNorm([]);
+      setInventoryDisplayByNorm({});
     } finally {
       setUploadingInv(false);
     }
@@ -130,6 +275,7 @@ export function TechStackClient({ projectId }: Props) {
   async function handleLucidUpload(file: File) {
     setUploadingLucid(true);
     setDeError(null);
+    setDiffError(null);
 
     try {
       const resp = await uploadLucidCsv(projectId, file);
@@ -139,6 +285,44 @@ export function TechStackClient({ projectId }: Props) {
       const stats = await fetchDigitalEnterpriseStats(projectId);
       if (stats) {
         setDeStats(stats);
+      }
+
+      // Refresh diagram systems for diff view
+      try {
+        const res = await fetch(
+          `/api/digital-enterprise/systems?project=${encodeURIComponent(
+            projectId,
+          )}`,
+          { cache: "no-store" },
+        );
+        if (res.ok) {
+          const json = await res.json();
+          if (json && Array.isArray(json.systems)) {
+            const systems: DiagramSystem[] = json.systems.map((s: any) => ({
+              id: String(s.id ?? s.name ?? s.normalizedName ?? "unknown"),
+              name: String(s.name ?? "Unknown"),
+              normalizedName: String(
+                s.normalizedName ?? normalizeSystemName(s.name),
+              ),
+              integrationCount: Number(s.integrationCount ?? 0),
+            }));
+            setDiagramSystems(systems);
+          } else {
+            setDiagramSystems([]);
+          }
+        } else {
+          const text = await res.text().catch(() => "");
+          console.error(
+            "[TECH-STACK] Failed to refresh diagram systems after Lucid upload",
+            res.status,
+            text,
+          );
+        }
+      } catch (err: any) {
+        console.error(
+          "[TECH-STACK] Error refreshing diagram systems after Lucid upload",
+          err,
+        );
       }
 
       // Count Lucid as another artifact
@@ -215,7 +399,7 @@ export function TechStackClient({ projectId }: Props) {
       )}
 
       {/* Digital Enterprise preview */}
-      <Card>
+      <Card className="mb-8">
         <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
           DIGITAL ENTERPRISE PREVIEW
         </p>
@@ -255,6 +439,104 @@ export function TechStackClient({ projectId }: Props) {
             No Digital Enterprise metrics yet. Upload a Lucid CSV to populate this
             preview.
           </div>
+        )}
+      </Card>
+
+      {/* Modernization Diff */}
+      <Card>
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          MODERNIZATION DIFF
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          Compares your inventory spreadsheet against the Lucid architecture view to
+          highlight systems that are only in inventory, only in the diagram, or present
+          in both.
+        </p>
+
+        {diffError && (
+          <div className="mb-3 text-xs text-red-500">{diffError}</div>
+        )}
+
+        {diffStats ? (
+          <>
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <MetricCard
+                label="SYSTEMS IN INVENTORY"
+                value={formatNumber(diffStats.inventoryCount)}
+                description="Distinct systems from your inventory spreadsheet."
+              />
+              <MetricCard
+                label="SYSTEMS IN DIAGRAM"
+                value={formatNumber(diffStats.diagramCount)}
+                description="Distinct systems from the Lucid architecture view."
+              />
+              <MetricCard
+                label="MATCHED SYSTEMS"
+                value={formatNumber(diffStats.overlapCount)}
+                description="Systems that appear in both inventory and diagram."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Inventory-only */}
+              <div>
+                <p className="text-xs font-semibold mb-2">
+                  Inventory Only (candidate retirements or gaps in diagram)
+                </p>
+                {diffStats.inventoryOnlyNorms.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No inventory-only systems detected yet.
+                  </p>
+                ) : (
+                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
+                    {diffStats.inventoryOnlyNorms.map((norm) => {
+                      const display =
+                        inventoryDisplayByNorm[norm] || norm || "(unknown)";
+                      return (
+                        <li key={norm} className="px-3 py-2">
+                          {display}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {/* Diagram-only */}
+              <div>
+                <p className="text-xs font-semibold mb-2">
+                  Diagram Only (net-new or architectural additions)
+                </p>
+                {diffStats.diagramOnly.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No diagram-only systems detected yet.
+                  </p>
+                ) : (
+                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
+                    {diffStats.diagramOnly.map((s) => (
+                      <li
+                        key={s.id}
+                        className="px-3 py-2 flex items-center justify-between gap-2"
+                      >
+                        <span className="truncate">{s.name}</span>
+                        {s.integrationCount > 0 && (
+                          <span className="text-[0.65rem] text-gray-500 whitespace-nowrap">
+                            {formatNumber(s.integrationCount)} links
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-gray-500">
+            Upload an inventory CSV and a Lucid CSV for this project to see differences
+            between what you have in your spreadsheet and what appears in the
+            architecture diagram.
+          </p>
         )}
       </Card>
     </div>
