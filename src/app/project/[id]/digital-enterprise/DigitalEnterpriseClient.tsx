@@ -1,16 +1,53 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
+import {
+  SystemImpactPanel,
+  type SystemImpact,
+} from "@/components/digital-enterprise/SystemImpactPanel";
+
+interface TopSystemRaw {
+  systemId?: string;
+  id?: string;
+  systemName?: string;
+  name?: string;
+  label?: string;
+  integrationCount?: number;
+  integrations?: number;
+  degree?: number;
+}
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
   integrationsFuture: number;
-  domainsDetected: number;
-  topSystems: any[];
+  domainsDetected?: number;
+  topSystems: TopSystemRaw[];
 }
 
 interface Props {
   projectId: string;
+}
+
+function resolveSystemName(s: TopSystemRaw): string {
+  return (
+    s.systemName ||
+    s.name ||
+    s.label ||
+    s.id ||
+    s.systemId ||
+    "Unknown"
+  );
+}
+
+function resolveIntegrationCount(s: TopSystemRaw): number {
+  return (
+    s.integrationCount ??
+    s.integrations ??
+    s.degree ??
+    0
+  );
 }
 
 function formatNumber(n: number | undefined | null): string {
@@ -18,43 +55,26 @@ function formatNumber(n: number | undefined | null): string {
   return n.toLocaleString();
 }
 
-function resolveSystemName(s: any): string {
-  return (
-    s?.systemName ||
-    s?.name ||
-    s?.label ||
-    s?.id ||
-    s?.systemId ||
-    "Unknown"
-  );
-}
-
-function resolveIntegrationCount(s: any): number {
-  return (
-    s?.integrationCount ??
-    s?.integrations ??
-    s?.degree ??
-    0
-  );
-}
-
 export function DigitalEnterpriseClient({ projectId }: Props) {
   const [stats, setStats] = useState<DigitalEnterpriseStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!projectId) {
-      setLoading(false);
-      setError("Missing project id.");
-      return;
-    }
+  const [impact, setImpact] = useState<SystemImpact | null>(null);
 
+  useEffect(() => {
     let cancelled = false;
 
-    async function load() {
+    async function loadStats() {
+      if (!projectId) {
+        setError("Missing project ID.");
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
+
       try {
         const res = await fetch(
           `/api/digital-enterprise/stats?project=${encodeURIComponent(
@@ -62,29 +82,36 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           )}`,
           { cache: "no-store" }
         );
+
         if (!res.ok) {
           const text = await res.text().catch(() => "");
-          console.error("[DE-CLIENT] stats fetch failed", res.status, text);
+          console.error("[DE-PAGE] Failed to load stats", res.status, text);
           if (!cancelled) {
-            setError(`Stats failed with status ${res.status}`);
+            setError("Failed to load digital enterprise metrics.");
+            setStats(null);
           }
           return;
         }
-        const json = await res.json();
+
+        const json = (await res.json()) as DigitalEnterpriseStats;
         if (!cancelled) {
           setStats(json);
+          setError(null);
         }
       } catch (err: any) {
-        console.error("[DE-CLIENT] stats fetch error", err);
+        console.error("[DE-PAGE] Error loading stats", err);
         if (!cancelled) {
-          setError(err?.message ?? "Failed to load stats");
+          setError("Failed to load digital enterprise metrics.");
+          setStats(null);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
-    load();
+    loadStats();
 
     return () => {
       cancelled = true;
@@ -96,21 +123,29 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     ((stats.systemsFuture ?? 0) > 0 ||
       (stats.integrationsFuture ?? 0) > 0);
 
+  function handleSelectSystem(name: string, degree: number) {
+    // For now, we mock upstream/downstream split.
+    // Backend traversal will replace this logic later.
+    const upstreamCount = Math.max(0, Math.floor(degree / 2));
+    const downstreamCount = Math.max(0, degree - upstreamCount);
+
+    setImpact({
+      systemName: name,
+      totalDegree: degree,
+      upstreamCount,
+      downstreamCount,
+      upstream: [],
+      downstream: [],
+    });
+  }
+
   return (
     <div className="px-8 py-10 max-w-6xl mx-auto">
-      <section className="mb-8">
-        <p className="text-xs tracking-[0.2em] text-gray-500 mb-2">
-          DIGITAL ENTERPRISE
-        </p>
-        <h1 className="text-3xl font-semibold mb-2">
-          Future-State Ecosystem for Project: {projectId || "(unknown)"}
-        </h1>
-        <p className="text-sm text-gray-500 max-w-2xl">
-          These metrics are derived directly from your Lucid architecture
-          diagram. We count unique systems that participate in at least one
-          connection and their integrations.
-        </p>
-      </section>
+      <WorkspaceHeader
+        statusLabel="DIGITAL ENTERPRISE"
+        title={`Ecosystem View for Project: ${projectId || "(unknown)"}`}
+        description="These metrics are derived directly from your Lucid architecture diagram. We count unique systems that participate in at least one connection and their integrations."
+      />
 
       {loading && (
         <div className="mt-10 text-sm text-gray-500">
@@ -135,40 +170,21 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
         <>
           {/* Metric cards */}
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
-            <div className="border border-gray-200 rounded-xl p-4">
-              <p className="text-[0.65rem] tracking-[0.2em] text-gray-500 mb-1">
-                SYSTEMS
-              </p>
-              <p className="text-2xl font-semibold mb-1">
-                {formatNumber(stats.systemsFuture)}
-              </p>
-              <p className="text-xs text-gray-500">
-                Unique labeled systems that participate in at least one
-                connection in this architecture view.
-              </p>
-            </div>
-            <div className="border border-gray-200 rounded-xl p-4">
-              <p className="text-[0.65rem] tracking-[0.2em] text-gray-500 mb-1">
-                INTEGRATIONS
-              </p>
-              <p className="text-2xl font-semibold mb-1">
-                {formatNumber(stats.integrationsFuture)}
-              </p>
-              <p className="text-xs text-gray-500">
-                Unique system-to-system connections derived from connector lines.
-              </p>
-            </div>
-            <div className="border border-gray-200 rounded-xl p-4">
-              <p className="text-[0.65rem] tracking-[0.2em] text-gray-500 mb-1">
-                DOMAINS DETECTED
-              </p>
-              <p className="text-2xl font-semibold mb-1">
-                {formatNumber(stats.domainsDetected ?? 0)}
-              </p>
-              <p className="text-xs text-gray-500">
-                Domain / ecosystem clustering will evolve in a later pass.
-              </p>
-            </div>
+            <MetricCard
+              label="SYSTEMS"
+              value={formatNumber(stats.systemsFuture)}
+              description="Unique labeled systems that participate in at least one connection in this architecture view."
+            />
+            <MetricCard
+              label="INTEGRATIONS"
+              value={formatNumber(stats.integrationsFuture)}
+              description="Unique system-to-system connections derived from connector lines."
+            />
+            <MetricCard
+              label="DOMAINS DETECTED"
+              value={formatNumber(stats.domainsDetected ?? 0)}
+              description="Domain / ecosystem clustering will evolve in a later pass."
+            />
           </section>
 
           {/* Top systems table */}
@@ -180,7 +196,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               Top 10 systems by number of integrations in this ecosystem view.
             </p>
 
-            <div className="overflow-x-auto border border-gray-200 rounded-xl">
+            <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
@@ -199,17 +215,26 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                   {stats.topSystems.map((s, idx) => {
                     const name = resolveSystemName(s);
                     const count = resolveIntegrationCount(s);
+                    const key = s.systemId ?? s.id ?? `${name}-${idx}`;
 
                     return (
                       <tr
-                        key={s.systemId ?? s.id ?? idx}
-                        className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"}
+                        key={key}
+                        className={
+                          idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"
+                        }
                       >
                         <td className="px-4 py-2 text-xs text-gray-500">
                           {idx + 1}
                         </td>
                         <td className="px-4 py-2 text-xs">
-                          {name}
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSystem(name, count)}
+                            className="text-left w-full underline-offset-2 hover:underline"
+                          >
+                            {name}
+                          </button>
                         </td>
                         <td className="px-4 py-2 text-xs">
                           {formatNumber(count)}
@@ -230,6 +255,16 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                 </tbody>
               </table>
             </div>
+          </section>
+
+          {/* Impact panel */}
+          <section className="mt-10">
+            <SystemImpactPanel
+              impact={impact}
+              loading={false}
+              error={null}
+              className="w-full"
+            />
           </section>
         </>
       )}

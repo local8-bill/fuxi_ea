@@ -3,11 +3,6 @@ import type {
   LucidEdge,
   LucidParseResult,
 } from "./lucidIngestion";
-import {
-  normalizeLabel,
-  classifyLabel,
-  type NodeKind,
-} from "./digitalEnterpriseNormalization";
 
 /**
  * In-memory Digital Enterprise store.
@@ -50,6 +45,19 @@ export interface DigitalEnterpriseStats {
 
 const store = new Map<string, StoredDigitalEnterpriseView>();
 
+function normalizeLabel(raw: unknown): string {
+  if (raw == null) return "";
+  let s = String(raw).trim();
+  // Strip leading/trailing quotes (handle messy CSV leftovers)
+  while (s.startsWith('"') || s.startsWith("'")) {
+    s = s.slice(1).trim();
+  }
+  while (s.endsWith('"') || s.endsWith("'")) {
+    s = s.slice(0, -1).trim();
+  }
+  return s;
+}
+
 export async function saveDigitalEnterpriseView(
   projectId: string,
   view: LucidParseResult | undefined
@@ -74,8 +82,11 @@ export async function saveDigitalEnterpriseView(
   const edgeCount = stored.edges?.length ?? 0;
 
   console.log(
-    "[DE-STORE] saved view",
-    { projectId, nodeCount, edgeCount, uploadedAt }
+    "[DE-STORE] saved view for project=%s nodes=%d edges=%d uploadedAt=%s",
+    projectId,
+    nodeCount,
+    edgeCount,
+    uploadedAt
   );
 }
 
@@ -95,10 +106,10 @@ export async function getDigitalEnterpriseView(
 /**
  * Compute stats from the stored view.
  *
- * - systemsFuture: number of unique normalized labels for nodes classified as "system"
+ * - systemsFuture: number of unique normalized labels (conceptual systems)
  * - integrationsFuture: number of edges
  * - domainsDetected: stubbed to 0 for now
- * - topSystems: top 10 by **aggregated degree per label** for system nodes only
+ * - topSystems: top 10 by **aggregated degree per label**
  */
 export async function getStatsForProject(
   projectId: string
@@ -117,8 +128,8 @@ export async function getStatsForProject(
     };
   }
 
-  const nodes: LucidNode[] = view.nodes ?? [];
-  const edges: LucidEdge[] = view.edges ?? [];
+  const nodes: LucidNode[] = view.nodes;
+  const edges: LucidEdge[] = view.edges;
 
   // Degree per node ID: how many edges touch this Lucid node
   const degreeByNode = new Map<string, number>();
@@ -134,7 +145,7 @@ export async function getStatsForProject(
     }
   }
 
-  // Aggregate by normalized label (conceptual system name) for nodes classified as "system".
+  // Aggregate by normalized label (conceptual system name)
   interface Agg {
     label: string;
     degree: number;
@@ -144,23 +155,9 @@ export async function getStatsForProject(
 
   const aggByLabel = new Map<string, Agg>();
 
-  let totalNodes = 0;
-  let systemNodes = 0;
-  let nonSystemNodes = 0;
-
   for (const n of nodes) {
-    totalNodes += 1;
-
-    const rawLabel = (n as any).label ?? "";
-    const label = normalizeLabel(rawLabel);
-    const kind: NodeKind = classifyLabel(label);
-
-    if (!label || kind !== "system") {
-      nonSystemNodes += 1;
-      continue; // skip non-system nodes for stats
-    }
-
-    systemNodes += 1;
+    const label = normalizeLabel(n.label);
+    if (!label) continue; // skip unlabeled
 
     const nodeDegree = degreeByNode.get(n.id) ?? 0;
     const key = label;
@@ -170,7 +167,7 @@ export async function getStatsForProject(
       aggByLabel.set(key, {
         label,
         degree: nodeDegree,
-        domain: (n as any).domain ?? null,
+        domain: n.domain ?? null,
         representativeId: n.id,
       });
     } else {
@@ -205,24 +202,19 @@ export async function getStatsForProject(
     })
     .slice(0, 10);
 
-  console.log("[DE-STATS]", {
-    projectId,
-    systemsFuture,
-    integrationsFuture,
-    topSystemsCount: topSystems.length,
-    meta: {
-      totalNodes,
-      systemNodes,
-      nonSystemNodes,
-    },
-  });
-
   const stats: DigitalEnterpriseStats = {
     systemsFuture,
     integrationsFuture,
     domainsDetected,
     topSystems,
   };
+
+  console.log("[DE-STATS] project=%s systems=%d integrations=%d topSystems=%d", {
+    projectId,
+    systemsFuture,
+    integrationsFuture,
+    topSystems: topSystems.length,
+  });
 
   return stats;
 }

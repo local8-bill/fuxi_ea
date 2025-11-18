@@ -1,0 +1,77 @@
+export interface InventoryStats {
+  projectId: string;
+  rowCount: number;
+  uniqueSystems: number;
+}
+
+export interface InventoryStatsResponse {
+  ok: boolean;
+  projectId: string;
+  stats: InventoryStats;
+}
+
+export interface InventoryUploadResponse {
+  ok: boolean;
+  projectId: string;
+  rowCount: number;
+  uniqueSystems: number;
+  stats?: InventoryStats;
+  error?: string;
+  detail?: string;
+}
+
+export async function uploadInventorySpreadsheet(
+  projectId: string,
+  file: File
+): Promise<InventoryUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(
+    "/api/inventory/upload?project=" + encodeURIComponent(projectId),
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  const json = (await res.json()) as InventoryUploadResponse;
+
+  if (!res.ok || !json.ok) {
+    throw new Error(
+      json.error || "Inventory upload failed (" + res.status + ")"
+    );
+  }
+
+  return json;
+}
+
+export async function fetchInventoryStats(
+  projectId: string
+): Promise<InventoryStats | null> {
+  try {
+    const res = await fetch(
+      "/api/inventory/stats?project=" + encodeURIComponent(projectId),
+      {
+        method: "GET",
+        cache: "no-store",
+      }
+    );
+
+    // If the route isn't wired yet or project has no stats, just treat as "no data"
+    if (!res.ok) {
+      return null;
+    }
+
+    const json = (await res.json()) as InventoryStatsResponse;
+
+    if (!json.ok || !json.stats) {
+      return null;
+    }
+
+    return json.stats;
+  } catch (_err) {
+    // Swallow network / parse errors for now – UI will just show no inventory
+    return null;
+  }
+}

@@ -9,7 +9,10 @@ import {
   uploadLucidCsv,
   fetchDigitalEnterpriseStats,
 } from "@/lib/api/digitalEnterprise";
-import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
+import {
+  uploadInventorySpreadsheet,
+  type InventoryStats,
+} from "@/lib/api/inventory";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -19,12 +22,6 @@ interface DigitalEnterpriseStats {
 
 interface Props {
   projectId: string;
-}
-
-interface InventoryStatsLocal {
-  projectId: string;
-  rowCount: number;
-  uniqueSystems: number;
 }
 
 function formatNumber(n: number | undefined | null): string {
@@ -37,7 +34,7 @@ export function TechStackClient({ projectId }: Props) {
   const [artifactCount, setArtifactCount] = useState<number>(0);
   const [inventoryRows, setInventoryRows] = useState<number>(0);
   const [normalizedApps, setNormalizedApps] = useState<number>(0);
-  const [invStats, setInvStats] = useState<InventoryStatsLocal | null>(null);
+  const [invStats, setInvStats] = useState<InventoryStats | null>(null);
   const [uploadingInv, setUploadingInv] = useState<boolean>(false);
   const [invError, setInvError] = useState<string | null>(null);
 
@@ -89,38 +86,26 @@ export function TechStackClient({ projectId }: Props) {
     setInvError(null);
 
     try {
-      console.log("[TECH-STACK] Inventory upload started", {
-        projectId,
-        fileName: file.name,
-      });
-
-      if (!file.name.toLowerCase().endsWith(".csv")) {
-        throw new Error(
-          "Unsupported file type. Please export your Excel inventory as CSV and upload the .csv file."
-        );
-      }
-
-      const text = await file.text();
-      const parsed = parseInventoryCsv(text);
-
-      const stats: InventoryStatsLocal = {
-        projectId,
-        rowCount: parsed.rows.length,
-        uniqueSystems: parsed.uniqueSystems,
-      };
+      const resp = await uploadInventorySpreadsheet(projectId, file);
+      const stats: InventoryStats =
+        resp.stats ?? {
+          projectId: resp.projectId,
+          rowCount: resp.rowCount,
+          uniqueSystems: resp.uniqueSystems,
+        };
 
       setInvStats(stats);
       setInventoryRows(stats.rowCount);
       setNormalizedApps(stats.uniqueSystems);
 
-      // Inventory upload counts as one artifact (for now)
+      // Very simple artifact heuristic: inventory upload counts as one artifact
       setArtifactCount((prev) =>
         stats.rowCount > 0 ? Math.max(prev, 1) : prev
       );
 
-      console.log("[TECH-STACK] Inventory parsed locally", stats);
+      console.log("[TECH-STACK] Inventory upload success", resp);
     } catch (err: any) {
-      console.error("[TECH-STACK] Inventory upload failed (client parse)", err);
+      console.error("[TECH-STACK] Inventory upload failed", err);
       setInvError(err?.message ?? "Inventory upload failed.");
     } finally {
       setUploadingInv(false);

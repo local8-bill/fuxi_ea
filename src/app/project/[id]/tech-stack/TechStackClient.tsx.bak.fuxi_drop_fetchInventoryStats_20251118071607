@@ -9,7 +9,11 @@ import {
   uploadLucidCsv,
   fetchDigitalEnterpriseStats,
 } from "@/lib/api/digitalEnterprise";
-import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
+import {
+  uploadInventorySpreadsheet,
+  fetchInventoryStats,
+  type InventoryStats,
+} from "@/lib/api/inventory";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -21,35 +25,62 @@ interface Props {
   projectId: string;
 }
 
-interface InventoryStatsLocal {
-  projectId: string;
-  rowCount: number;
-  uniqueSystems: number;
-}
-
 function formatNumber(n: number | undefined | null): string {
   if (n == null || Number.isNaN(n)) return "0";
   return n.toLocaleString();
 }
 
 export function TechStackClient({ projectId }: Props) {
-  // Inventory / artifacts
   const [artifactCount, setArtifactCount] = useState<number>(0);
   const [inventoryRows, setInventoryRows] = useState<number>(0);
   const [normalizedApps, setNormalizedApps] = useState<number>(0);
-  const [invStats, setInvStats] = useState<InventoryStatsLocal | null>(null);
-  const [uploadingInv, setUploadingInv] = useState<boolean>(false);
-  const [invError, setInvError] = useState<string | null>(null);
 
-  // Digital Enterprise
+  const [invStats, setInvStats] = useState<InventoryStats | null>(null);
   const [deStats, setDeStats] = useState<DigitalEnterpriseStats | null>(null);
+
+  const [loadingInv, setLoadingInv] = useState<boolean>(true);
   const [loadingDE, setLoadingDE] = useState<boolean>(true);
+  const [uploadingInv, setUploadingInv] = useState<boolean>(false);
   const [uploadingLucid, setUploadingLucid] = useState<boolean>(false);
+
+  const [invError, setInvError] = useState<string | null>(null);
   const [deError, setDeError] = useState<string | null>(null);
 
-  // Load DE stats on mount / project change
   useEffect(() => {
     let cancelled = false;
+
+    async function loadInventory() {
+      setLoadingInv(true);
+      setInvError(null);
+
+      try {
+        const stats = await fetchInventoryStats(projectId);
+        if (cancelled) return;
+
+        if (stats) {
+          setInvStats(stats);
+          setInventoryRows(stats.rowCount);
+          setNormalizedApps(stats.uniqueSystems);
+          setArtifactCount((prev) =>
+            stats.rowCount > 0 ? Math.max(prev, 1) : prev
+          );
+        } else {
+          setInvStats(null);
+          setInventoryRows(0);
+          setNormalizedApps(0);
+        }
+      } catch (err: any) {
+        console.error("[TECH-STACK] Error loading inventory stats", err);
+        if (!cancelled) {
+          setInvError("Failed to load inventory statistics.");
+          setInvStats(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingInv(false);
+        }
+      }
+    }
 
     async function loadDE() {
       setLoadingDE(true);
@@ -77,6 +108,7 @@ export function TechStackClient({ projectId }: Props) {
       }
     }
 
+    loadInventory();
     loadDE();
 
     return () => {
@@ -89,38 +121,23 @@ export function TechStackClient({ projectId }: Props) {
     setInvError(null);
 
     try {
-      console.log("[TECH-STACK] Inventory upload started", {
-        projectId,
-        fileName: file.name,
-      });
-
-      if (!file.name.toLowerCase().endsWith(".csv")) {
-        throw new Error(
-          "Unsupported file type. Please export your Excel inventory as CSV and upload the .csv file."
-        );
-      }
-
-      const text = await file.text();
-      const parsed = parseInventoryCsv(text);
-
-      const stats: InventoryStatsLocal = {
-        projectId,
-        rowCount: parsed.rows.length,
-        uniqueSystems: parsed.uniqueSystems,
+      const resp = await uploadInventorySpreadsheet(projectId, file);
+      const stats = resp.stats ?? {
+        projectId: resp.projectId,
+        rowCount: resp.rowCount,
+        uniqueSystems: resp.uniqueSystems,
       };
 
       setInvStats(stats);
       setInventoryRows(stats.rowCount);
       setNormalizedApps(stats.uniqueSystems);
-
-      // Inventory upload counts as one artifact (for now)
       setArtifactCount((prev) =>
         stats.rowCount > 0 ? Math.max(prev, 1) : prev
       );
 
-      console.log("[TECH-STACK] Inventory parsed locally", stats);
+      console.log("[TECH-STACK] Inventory upload success", resp);
     } catch (err: any) {
-      console.error("[TECH-STACK] Inventory upload failed (client parse)", err);
+      console.error("[TECH-STACK] Inventory upload failed", err);
       setInvError(err?.message ?? "Inventory upload failed.");
     } finally {
       setUploadingInv(false);
@@ -134,14 +151,10 @@ export function TechStackClient({ projectId }: Props) {
     try {
       const resp = await uploadLucidCsv(projectId, file);
       console.log("[TECH-STACK] Lucid upload success", resp);
-
-      // Refresh DE stats after a successful upload
       const stats = await fetchDigitalEnterpriseStats(projectId);
       if (stats) {
         setDeStats(stats);
       }
-
-      // Count Lucid as another artifact
       setArtifactCount((prev) => Math.max(prev, 1));
     } catch (err: any) {
       console.error("[TECH-STACK] Lucid upload failed", err);
@@ -179,7 +192,7 @@ export function TechStackClient({ projectId }: Props) {
       <FileUploadPanel
         title="UPLOAD INVENTORY SPREADSHEET"
         helper="Export your technology inventory from Excel as CSV and upload it here. We'll parse systems and normalize them for comparison."
-        label={uploadingInv ? "Uploading..." : "Upload Inventory CSV"}
+        label={uploadingInv ? "Uploading…" : "Upload Inventory CSV"}
         onFileSelected={handleInventoryUpload}
         className="mb-4"
       />
@@ -187,7 +200,7 @@ export function TechStackClient({ projectId }: Props) {
       <FileUploadPanel
         title="UPLOAD LUCID CSV"
         helper="Upload a Lucid CSV export of your architecture diagram. We'll infer systems and integrations automatically and update the Digital Enterprise metrics."
-        label={uploadingLucid ? "Uploading..." : "Upload Lucid CSV"}
+        label={uploadingLucid ? "Uploading…" : "Upload Lucid CSV"}
         onFileSelected={handleLucidUpload}
       />
 
@@ -225,7 +238,7 @@ export function TechStackClient({ projectId }: Props) {
         </p>
         {loadingDE && (
           <div className="text-sm text-gray-500">
-            Loading Digital Enterprise preview...
+            Loading Digital Enterprise preview…
           </div>
         )}
         {!loadingDE && deError && (

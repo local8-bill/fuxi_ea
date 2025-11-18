@@ -1,0 +1,180 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
+
+interface DigitalEnterpriseStats {
+  systemsFuture: number;
+  integrationsFuture: number;
+  domainsDetected: number;
+  topSystems: any[];
+}
+
+interface Props {
+  projectId: string;
+}
+
+function formatNumber(n: number | undefined | null): string {
+  if (n == null || Number.isNaN(n)) return "0";
+  return n.toLocaleString();
+}
+
+function resolveSystemName(s: any): string {
+  return (
+    s?.systemName || s?.name || s?.label || s?.id || s?.systemId || "Unknown"
+  );
+}
+
+function resolveIntegrationCount(s: any): number {
+  return (s?.integrationCount ?? s?.integrations ?? s?.degree ?? 0) as number;
+}
+
+export function DigitalEnterpriseClient({ projectId }: Props) {
+  const [stats, setStats] = useState<DigitalEnterpriseStats | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!projectId) {
+      setLoading(false);
+      setError("Missing project id.");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(
+          `/api/digital-enterprise/stats?project=${encodeURIComponent(
+            projectId,
+          )}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          console.error("[DE-CLIENT] stats fetch failed", res.status, text);
+          if (!cancelled) {
+            setError(`Stats failed with status ${res.status}`);
+          }
+          return;
+        }
+        const json = await res.json();
+        if (!cancelled) {
+          setStats(json);
+        }
+      } catch (err: any) {
+        console.error("[DE-CLIENT] stats fetch error", err);
+        if (!cancelled) {
+          setError(err?.message ?? "Failed to load stats");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const hasData =
+    !!stats &&
+    ((stats.systemsFuture ?? 0) > 0 || (stats.integrationsFuture ?? 0) > 0);
+
+  return (
+    <div className="px-8 py-10 max-w-6xl mx-auto">
+      <WorkspaceHeader
+        statusLabel="DIGITAL ENTERPRISE"
+        title={`Future-State Ecosystem for Project: ${
+          projectId || "(unknown)"
+        }`}
+        description="These metrics are derived directly from your Lucid architecture diagram. We count unique systems that participate in at least one connection and their integrations."
+      />
+
+      {loading && (
+        <div className="mt-10 text-sm text-gray-500">Loading digital enterprise metrics…</div>
+      )}
+
+      {!loading && error && (
+        <div className="mt-10 text-sm text-red-500">{error}</div>
+      )}
+
+      {!loading && !error && !hasData && (
+        <div className="mt-10 text-sm text-gray-500">
+          No digital enterprise metrics are available yet for this project. Upload a Lucid CSV on the Tech Stack page to populate this view.
+        </div>
+      )}
+
+      {!loading && !error && hasData && stats && (
+        <>
+          <section className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
+            <MetricCard
+              label="SYSTEMS"
+              value={formatNumber(stats.systemsFuture)}
+              description="Unique labeled systems that participate in at least one connection in this architecture view."
+            />
+            <MetricCard
+              label="INTEGRATIONS"
+              value={formatNumber(stats.integrationsFuture)}
+              description="Unique system-to-system connections derived from connector lines."
+            />
+            <MetricCard
+              label="DOMAINS DETECTED"
+              value={formatNumber(stats.domainsDetected ?? 0)}
+              description="Domain / ecosystem clustering will evolve in a later pass."
+            />
+          </section>
+
+          <section className="mt-12">
+            <h2 className="text-sm font-semibold mb-1">HIGHEST-CONNECTIVITY SYSTEMS</h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Top 10 systems by number of integrations in this ecosystem view.
+            </p>
+
+            <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">#</th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">SYSTEM</th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">INTEGRATIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.topSystems.map((s, idx) => {
+                    const name = resolveSystemName(s);
+                    const count = resolveIntegrationCount(s);
+
+                    return (
+                      <tr
+                        key={s.systemId ?? s.id ?? idx}
+                        className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"}
+                      >
+                        <td className="px-4 py-2 text-xs text-gray-500">{idx + 1}</td>
+                        <td className="px-4 py-2 text-xs">{name}</td>
+                        <td className="px-4 py-2 text-xs">{formatNumber(count)}</td>
+                      </tr>
+                    );
+                  })}
+                  {stats.topSystems.length === 0 && (
+                    <tr>
+                      <td className="px-4 py-4 text-xs text-gray-500" colSpan={3}>
+                        No systems with integrations detected yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
