@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStatsForProject } from "@/domain/services/digitalEnterpriseStore";
+import { normalizeSystemName } from "@/domain/services/systemNormalization";
 
 export const runtime = "nodejs";
 
@@ -8,50 +9,49 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const projectId = url.searchParams.get("project") ?? "";
 
-    console.log("[DE-SYSTEMS] GET start", { projectId });
-
     if (!projectId) {
-      console.warn("[DE-SYSTEMS] Missing project query param");
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Missing project id",
-        },
+        { ok: false, error: "Missing project param", systems: [] },
         { status: 400 },
       );
     }
 
-    const stats = getStatsForProject(projectId);
+    // ✅ THIS WAS THE BUG: we need to await
+    const stats = await getStatsForProject(projectId);
+    const rawTop = (stats as any)?.topSystems ?? [];
 
-    // We expect internal stats.topSystems to be an array when available
-    const rawTopSystems = (stats as any)?.topSystems;
+    const systems = (rawTop as any[]).map((s, idx) => {
+      const rawName =
+        s?.systemName ??
+        s?.name ??
+        s?.label ??
+        s?.id ??
+        s?.systemId ??
+        "Unknown";
 
-    let systems: { id: string; name: string }[] = [];
+      const normalizedName = normalizeSystemName(rawName);
+      const integrationCount = (s?.integrationCount ??
+        s?.integrations ??
+        s?.degree ??
+        0) as number;
 
-    if (Array.isArray(rawTopSystems)) {
-      systems = rawTopSystems.map((s: any, idx: number) => ({
-        id:
-          s?.systemId ??
-          s?.id ??
-          String(idx),
-        name:
-          s?.systemName ??
-          s?.name ??
-          s?.label ??
-          s?.id ??
-          "Unknown",
-      }));
-    }
+      return {
+        id: s?.systemId ?? s?.id ?? String(idx),
+        rawName,
+        name: rawName,
+        normalizedName,
+        integrationCount,
+      };
+    });
 
     console.log("[DE-SYSTEMS] GET success", {
       projectId,
-      systemCount: systems.length,
+      systems: systems.length,
     });
 
     return NextResponse.json({
       ok: true,
       projectId,
-      systemCount: systems.length,
       systems,
     });
   } catch (err: any) {
@@ -59,8 +59,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Failed to load diagram systems",
-        detail: err?.message ?? String(err),
+        error: err?.message ?? "Failed to load diagram systems",
+        systems: [],
       },
       { status: 500 },
     );

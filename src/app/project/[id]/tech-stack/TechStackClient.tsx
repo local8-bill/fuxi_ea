@@ -354,8 +354,8 @@ export function TechStackClient({ projectId }: Props) {
           INPUTS
         </p>
         <p className="text-xs text-gray-500">
-          Upload artifacts to build a live view of your digital enterprise for project{" "}
-          <span className="font-medium">{projectId}</span>.
+          Upload artifacts to build a live view of your digital enterprise for
+          project <span className="font-medium">{projectId}</span>.
         </p>
       </Card>
 
@@ -436,8 +436,8 @@ export function TechStackClient({ projectId }: Props) {
         )}
         {!loadingDE && !deError && !hasDE && (
           <div className="text-sm text-gray-500">
-            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate this
-            preview.
+            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate
+            this preview.
           </div>
         )}
       </Card>
@@ -448,9 +448,9 @@ export function TechStackClient({ projectId }: Props) {
           MODERNIZATION DIFF
         </p>
         <p className="text-xs text-gray-500 mb-4">
-          Compares your inventory spreadsheet against the Lucid architecture view to
-          highlight systems that are only in inventory, only in the diagram, or present
-          in both.
+          Compares your inventory spreadsheet against the Lucid architecture
+          view to highlight systems that are only in inventory, only in the
+          diagram, or present in both.
         </p>
 
         {diffError && (
@@ -533,9 +533,72 @@ export function TechStackClient({ projectId }: Props) {
           </>
         ) : (
           <p className="text-xs text-gray-500">
-            Upload an inventory CSV and a Lucid CSV for this project to see differences
-            between what you have in your spreadsheet and what appears in the
-            architecture diagram.
+            Upload an inventory CSV and a Lucid CSV for this project to see
+            differences between what you have in your spreadsheet and what
+            appears in the architecture diagram.
+          </p>
+        )}
+      </Card>
+
+      {/* MODERNIZATION DIFF VISUALIZATION */}
+      <Card className="mt-6">
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          DIFF VISUALIZATION
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          Quick view of how many systems exist only in inventory, only in the
+          diagram, or in both.
+        </p>
+
+        {diffStats ? (
+          (() => {
+            const inv = diffStats.inventoryOnlyNorms.length;
+            const dia = diffStats.diagramOnly.length;
+            const match = diffStats.overlapSystems.length;
+
+            if (!inv && !dia && !match) {
+              return (
+                <p className="text-xs text-gray-500">
+                  Upload both an inventory CSV and a Lucid CSV for this project
+                  to enable the diff visualization.
+                </p>
+              );
+            }
+
+            const max = Math.max(inv, dia, match, 1);
+
+            const rows = [
+              { key: "inventory", label: "Inventory only", value: inv },
+              { key: "diagram", label: "Diagram only", value: dia },
+              { key: "matched", label: "Matched (in both)", value: match },
+            ];
+
+            return (
+              <div className="space-y-3">
+                {rows.map((row) => {
+                  const pct = max ? (row.value / max) * 100 : 0;
+                  return (
+                    <div key={row.key} className="text-xs">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="text-gray-600">{row.label}</span>
+                        <span className="text-gray-500">{row.value}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-slate-900"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
+        ) : (
+          <p className="text-xs text-gray-500">
+            Upload both an inventory CSV and a Lucid CSV for this project to
+            enable the diff visualization.
           </p>
         )}
       </Card>
