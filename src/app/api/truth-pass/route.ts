@@ -81,6 +81,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+  const intakeSummary = intake ? `Industry: ${intake.industry}. Drivers: ${intake.drivers?.join(", ")}. Aggression: ${intake.aggression}. Change absorption: ${intake.changeAbsorption}.` : "No intake provided.";
+  
     const systemPrompt = [
       "You are helping an enterprise architect reconcile system names",
       "between an inventory spreadsheet and an architecture diagram.",

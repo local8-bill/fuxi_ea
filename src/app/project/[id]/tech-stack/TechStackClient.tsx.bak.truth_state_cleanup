@@ -44,26 +44,15 @@ interface DiffStats {
   overlapSystems: DiagramSystem[];
 }
 
-interface ProjectIntake {
-  projectId: string;
-  industry: string | null;
-  drivers: string[];
-  aggression: string | null;
-}
+type TruthDecision = "keep" | "remove" | "ignore";
 
 interface TruthRow {
   norm: string;
   inventoryName: string | null;
-  diagramName: string | null;
-  recommended: string;
-  confidence: number;
-  note?: string;
-}
-
-interface TruthCandidate {
-  norm: string;
-  inventoryName: string | null;
   diagramNames: string[];
+  recommended: string;
+  confidencePct: number;
+  rationale: string;
 }
 
 function formatNumber(n: number | undefined | null): string {
@@ -71,29 +60,35 @@ function formatNumber(n: number | undefined | null): string {
   return n.toLocaleString();
 }
 
-function normalizeForCompare(value: string | null | undefined): string {
+function normalizeForCompare(value) {
   return (value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function loadProjectIntake(projectId: string): ProjectIntake | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(`fuxi:intake:${projectId}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    return {
-      projectId: String(parsed.projectId ?? projectId),
-      industry: parsed.industry ?? null,
-      drivers: Array.isArray(parsed.drivers)
-        ? parsed.drivers.map((d: unknown) => String(d))
-        : [],
-      aggression: parsed.aggression ?? null,
-    };
-  } catch (err) {
-    console.warn("[TECH-STACK] Failed to load intake context", err);
-    return null;
+
+// Small, deterministic explanation if AI is unavailable (fallback)
+function localExplainTruthRow(row: TruthRow): string {
+  const { inventoryName, diagramNames } = row;
+  const hasInventory = !!inventoryName;
+  const hasDiagram = diagramNames.length > 0;
+
+  if (hasInventory && hasDiagram) {
+    const inventory = inventoryName!.trim().toLowerCase();
+    const diagram = diagramNames[0].trim().toLowerCase();
+    if (inventory === diagram) {
+      return "Inventory and diagram already use the same name.";
+    }
+    return "Names differ slightly; using the diagram label as the canonical name.";
   }
+
+  if (hasInventory && !hasDiagram) {
+    return "Only appears in your inventory spreadsheet.";
+  }
+
+  if (!hasInventory && hasDiagram) {
+    return "Only appears in the Lucid diagram.";
+  }
+
+  return "Heuristic suggestion based on available names.";
 }
 
 export function TechStackClient({ projectId }: Props) {
@@ -111,7 +106,7 @@ export function TechStackClient({ projectId }: Props) {
   const [uploadingLucid, setUploadingLucid] = useState<boolean>(false);
   const [deError, setDeError] = useState<string | null>(null);
 
-  // Diff plumbing
+  // Diff plumbing (engine behind Truth Pass)
   const [inventorySystemsNorm, setInventorySystemsNorm] = useState<string[]>([]);
   const [inventoryDisplayByNorm, setInventoryDisplayByNorm] = useState<
     Record<string, string>
@@ -120,25 +115,41 @@ export function TechStackClient({ projectId }: Props) {
   const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
 
-  // Intake context (from /project/[id]/intake)
-  const [intakeContext, setIntakeContext] = useState<ProjectIntake | null>(null);
-
-  // Truth Pass (AI results)
+  // Truth-pass state
+  const [truthRows, setTruthRows] = useState<TruthUiRow[]>([]);
+  const [truthLoading, setTruthLoading] = useState(false);
+  const [truthError, setTruthError] = useState<string | null>(null);
+  const [truthDecisions, setTruthDecisions] = useState<
+    Record<string, TruthDecision>
+  >({});
+  const [intakeContext, setIntakeContext] = useState<any>(null);
+ //
   const [truthRows, setTruthRows] = useState<TruthRow[]>([]);
   const [truthLoading, setTruthLoading] = useState<boolean>(false);
   const [truthError, setTruthError] = useState<string | null>(null);
+  const [truthRows, setTruthRows] = useState<TruthUiRow[]>([]);
 
+// ---- Load DE stats + diagram systems on mount / project change ----
+  function loadProjectIntake(pid: string): ProjectIntake | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(`fuxi:intake:${pid}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      console.error("[INTAKE] Failed to load", e);
+      return null;
+    }
+  }
   useEffect(() => {
-    // Load intake context from localStorage on project change
     const ctx = loadProjectIntake(projectId);
     setIntakeContext(ctx);
-
     let cancelled = false;
 
     async function loadDEAndSystems() {
       setLoadingDE(true);
       setDeError(null);
       setDiffError(null);
+      setTruthError(null);
 
       try {
         const stats = await fetchDigitalEnterpriseStats(projectId);
@@ -214,8 +225,20 @@ export function TechStackClient({ projectId }: Props) {
     };
   }, [projectId]);
 
-  // Compute diff whenever inventory systems or diagram systems change
+  // ---- Compute diff whenever inventory systems or diagram systems change ----
+  function loadProjectIntake(pid: string): ProjectIntake | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(`fuxi:intake:${pid}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      console.error("[INTAKE] Failed to load", e);
+      return null;
+    }
+  }
   useEffect(() => {
+    const ctx = loadProjectIntake(projectId);
+    setIntakeContext(ctx);
     const invNormSet = new Set(
       (inventorySystemsNorm ?? []).filter((n) => n && n.trim().length > 0),
     );
@@ -227,6 +250,7 @@ export function TechStackClient({ projectId }: Props) {
 
     if (invNormSet.size === 0 && diagNormSet.size === 0) {
       setDiffStats(null);
+      setTruthRows([]);
       return;
     }
 
@@ -266,122 +290,162 @@ export function TechStackClient({ projectId }: Props) {
     setDiffStats(diff);
   }, [inventorySystemsNorm, diagramSystems]);
 
-  function buildTruthCandidates(): TruthCandidate[] {
-    if (!diffStats) return [];
-
-    const candidates: TruthCandidate[] = [];
-    const seen = new Set<string>();
-
-    // Overlap norms
-    if (diffStats.overlapSystems.length > 0) {
-      const byNorm = new Map<
-        string,
-        { invName: string | null; diagNames: string[] }
-      >();
-
-      for (const s of diffStats.overlapSystems) {
-        const norm = s.normalizedName;
-        if (!norm) continue;
-        const current = byNorm.get(norm) ?? {
-          invName: inventoryDisplayByNorm[norm] ?? null,
-          diagNames: [],
-        };
-        current.diagNames.push(s.name);
-        byNorm.set(norm, current);
-      }
-
-      for (const [norm, payload] of byNorm.entries()) {
-        candidates.push({
-          norm,
-          inventoryName: payload.invName,
-          diagramNames: payload.diagNames,
-        });
-        seen.add(norm);
-      }
-    }
-
-    // A few inventory-only through AI as well
-    for (const norm of diffStats.inventoryOnlyNorms) {
-      if (seen.has(norm)) continue;
-      candidates.push({
-        norm,
-        inventoryName: inventoryDisplayByNorm[norm] ?? null,
-        diagramNames: [],
-      });
-    }
-
-    return candidates.slice(0, 50);
-  }
-
-  async function runTruthPass(candidates: TruthCandidate[]) {
-    if (!candidates.length) {
-      setTruthRows([]);
-      return;
-    }
-
-    setTruthLoading(true);
-    setTruthError(null);
-
+  // ---- Call AI Truth Pass whenever diff changes ----
+  function loadProjectIntake(pid: string): ProjectIntake | null {
+    if (typeof window === "undefined") return null;
     try {
-      const res = await fetch("/api/truth-pass", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          intakeContext,
-          candidates,
-        }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.error("[TRUTH-PASS] API error", res.status, text);
-        setTruthError(
-          "AI suggestions are temporarily unavailable. Showing nothing for now.",
-        );
+      const raw = window.localStorage.getItem(`fuxi:intake:${pid}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      console.error("[INTAKE] Failed to load", e);
+      return null;
+    }
+  }
+  useEffect(() => {
+    const ctx = loadProjectIntake(projectId);
+    setIntakeContext(ctx);
+    async function runTruthPass() {
+      if (!diffStats) {
         setTruthRows([]);
+        setTruthError(null);
         return;
       }
 
-      const json = await res.json();
-      if (!json || !Array.isArray(json.rows)) {
+      const invNorms = new Set(
+        (inventorySystemsNorm ?? []).filter((n) => n && n.trim().length > 0),
+      );
+      const diagNorms = new Set(
+        (diagramSystems ?? [])
+          .map((s) => s.normalizedName)
+          .filter((n) => n && n.trim().length > 0),
+      );
+
+      const allNorms = new Set<string>();
+      invNorms.forEach((n) => allNorms.add(n));
+      diagNorms.forEach((n) => allNorms.add(n));
+
+      if (allNorms.size === 0) {
+        setTruthRows([]);
+        setTruthError(null);
+        return;
+      }
+
+      const candidates = Array.from(allNorms).map((norm) => {
+        const inventoryName = inventoryDisplayByNorm[norm] ?? null;
+        const diagramNames = diagramSystems
+          .filter((s) => s.normalizedName === norm)
+          .map((s) => s.name)
+          .filter((name, idx, arr) => name && arr.indexOf(name) === idx);
+
+        return {
+          norm,
+          inventoryName,
+          diagramNames,
+        };
+      });
+
+      setTruthLoading(true);
+      setTruthError(null);
+
+      try {
+        const res = await fetch("/api/truth-pass", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            candidates,
+          }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          console.error("[TRUTH-PASS] API error", res.status, text);
+          setTruthError(
+            "AI suggestions are temporarily unavailable. Showing nothing for now.",
+          );
+          setTruthRows([]);
+          return;
+        }
+
+        const json = await res.json();
+        if (!json || !Array.isArray(json.rows)) {
         console.error("[TRUTH-PASS] Unexpected response shape", json);
         setTruthError(
-          "AI suggestions returned an unexpected format. Showing nothing for now.",
+        "AI suggestions returned an unexpected format. Showing nothing for now.",
+      );
+      return;
+      }
+const newRows = json.rows;
+
+        const rows: TruthRow[] = json.rows.map((r: any) => ({
+          norm: String(r.norm ?? ""),
+          inventoryName:
+            r.inventoryName === null || r.inventoryName === undefined
+              ? null
+              : String(r.inventoryName),
+          diagramNames: Array.isArray(r.diagramNames)
+            ? r.diagramNames.map((d: any) => String(d))
+            : [],
+          recommended: String(r.recommended ?? r.norm ?? ""),
+          confidencePct: Number(r.confidencePct ?? 70),
+          rationale: String(
+            r.rationale ??
+              localExplainTruthRow({
+                norm: String(r.norm ?? ""),
+                inventoryName:
+                  r.inventoryName === null || r.inventoryName === undefined
+                    ? null
+                    : String(r.inventoryName),
+                diagramNames: Array.isArray(r.diagramNames)
+                  ? r.diagramNames.map((d: any) => String(d))
+                  : [],
+                recommended: String(r.recommended ?? r.norm ?? ""),
+                confidencePct: Number(r.confidencePct ?? 70),
+                rationale: "",
+              }),
+          ),
+        }));
+
+        // Simple sort: high confidence first
+        rows.sort((a, b) => {
+          if (b.confidencePct !== a.confidencePct) {
+            return b.confidencePct - a.confidencePct;
+          }
+          return a.recommended.localeCompare(b.recommended);
+        });
+
+        setTruthRows(rows.slice(0, 50));
+      } catch (err: any) {
+        console.error("[TRUTH-PASS] Failed to fetch AI suggestions", err);
+        setTruthError(
+          "AI suggestions failed to load. Check server logs or OpenAI configuration.",
         );
         setTruthRows([]);
-        return;
+      } finally {
+        setTruthLoading(false);
       }
-
-      setTruthRows(json.rows as TruthRow[]);
-    } catch (err) {
-      console.error("[TRUTH-PASS] Network / runtime error", err);
-      setTruthError(
-        "AI suggestions hit a network error. Try refreshing or running again.",
-      );
-      setTruthRows([]);
-    } finally {
-      setTruthLoading(false);
     }
+
+    runTruthPass();
+  }, [
+    projectId,
+    diffStats,
+    inventorySystemsNorm,
+    inventoryDisplayByNorm,
+    diagramSystems,
+  ]);
+
+  // Placeholder for future persistence
+  function handleTruthDecision(id: string, decision: TruthDecision) {
+    setTruthDecisions((prev) => ({
+      ...prev,
+      [id]: decision,
+    }));
   }
 
-  // Kick AI when diff changes
-  useEffect(() => {
-    if (!diffStats) {
-      setTruthRows([]);
-      return;
-    }
-
-    const candidates = buildTruthCandidates();
-    if (!candidates.length) {
-      setTruthRows([]);
-      return;
-    }
-
-    void runTruthPass(candidates);
-  }, [diffStats, inventoryDisplayByNorm, diagramSystems, projectId, intakeContext]);
-
-  // Inventory upload
+  // ---- Inventory upload ----
   async function handleInventoryUpload(file: File) {
     setUploadingInv(true);
     setInvError(null);
@@ -443,11 +507,12 @@ export function TechStackClient({ projectId }: Props) {
     }
   }
 
-  // Lucid upload
+  // ---- Lucid upload ----
   async function handleLucidUpload(file: File) {
     setUploadingLucid(true);
     setDeError(null);
     setDiffError(null);
+    setTruthError(null);
 
     try {
       const resp = await uploadLucidCsv(projectId, file);
@@ -509,6 +574,7 @@ export function TechStackClient({ projectId }: Props) {
     ((deStats.systemsFuture ?? 0) > 0 ||
       (deStats.integrationsFuture ?? 0) > 0);
 
+  // ---- Render ----
   return (
     <div className="px-8 py-10 max-w-6xl mx-auto">
       <WorkspaceHeader
@@ -523,8 +589,7 @@ export function TechStackClient({ projectId }: Props) {
           INPUTS
         </p>
         <p className="text-xs text-gray-500">
-          Upload artifacts to build a live view of your digital enterprise for
-          project{" "}
+          Upload artifacts to build a live view of your digital enterprise for project{" "}
           <span className="font-medium">{projectId}</span>.
         </p>
       </Card>
@@ -569,224 +634,7 @@ export function TechStackClient({ projectId }: Props) {
       )}
 
       {/* Digital Enterprise preview */}
-      <Card className="mb-8">
-        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-          DIGITAL ENTERPRISE PREVIEW
-        </p>
-        <p className="text-xs text-gray-500 mb-4">
-          Derived from your Lucid architecture diagram. Systems and integrations
-          here represent the structural view of your ecosystem.
-        </p>
-        {loadingDE && (
-          <div className="text-sm text-gray-500">
-            Loading Digital Enterprise preview...
-          </div>
-        )}
-        {!loadingDE && deError && (
-          <div className="text-sm text-red-500">{deError}</div>
-        )}
-        {!loadingDE && !deError && hasDE && deStats && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MetricCard
-              label="SYSTEMS"
-              value={formatNumber(deStats.systemsFuture)}
-              description="Unique labeled systems in this diagram."
-            />
-            <MetricCard
-              label="INTEGRATIONS"
-              value={formatNumber(deStats.integrationsFuture)}
-              description="System-to-system connections from Lucid connector lines."
-            />
-            <MetricCard
-              label="DOMAINS DETECTED"
-              value={formatNumber(deStats.domainsDetected ?? 0)}
-              description="Domain clustering will be introduced in a later iteration."
-            />
-          </div>
-        )}
-        {!loadingDE && !deError && !hasDE && (
-          <div className="text-sm text-gray-500">
-            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate this
-            preview.
-          </div>
-        )}
-      </Card>
-
-      {/* Modernization Diff */}
-      <Card>
-        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-          MODERNIZATION DIFF
-        </p>
-        <p className="text-xs text-gray-500 mb-4">
-          Compares your inventory spreadsheet against the Lucid architecture view to
-          highlight systems that are only in inventory, only in the diagram, or
-          present in both.
-        </p>
-
-        {diffError && (
-          <div className="mb-3 text-xs text-red-500">{diffError}</div>
-        )}
-
-        {diffStats ? (
-          <>
-            <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <MetricCard
-                label="SYSTEMS IN INVENTORY"
-                value={formatNumber(diffStats.inventoryCount)}
-                description="Distinct systems from your inventory spreadsheet."
-              />
-              <MetricCard
-                label="SYSTEMS IN DIAGRAM"
-                value={formatNumber(diffStats.diagramCount)}
-                description="Distinct systems from the Lucid architecture view."
-              />
-              <MetricCard
-                label="MATCHED SYSTEMS"
-                value={formatNumber(diffStats.overlapCount)}
-                description="Systems that appear in both inventory and diagram."
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Inventory-only */}
-              <div>
-                <p className="text-xs font-semibold mb-2">
-                  Inventory Only (candidate removals or gaps in diagram)
-                </p>
-                {diffStats.inventoryOnlyNorms.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    No inventory-only systems detected yet.
-                  </p>
-                ) : (
-                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
-                    {diffStats.inventoryOnlyNorms.map((norm) => {
-                      const display =
-                        inventoryDisplayByNorm[norm] || norm || "(unknown)";
-                      return (
-                        <li key={norm} className="px-3 py-2">
-                          {display}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              {/* Diagram-only */}
-              <div>
-                <p className="text-xs font-semibold mb-2">
-                  Diagram Only (net-new or architectural additions)
-                </p>
-                {diffStats.diagramOnly.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    No diagram-only systems detected yet.
-                  </p>
-                ) : (
-                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
-                    {diffStats.diagramOnly.map((s) => (
-                      <li
-                        key={s.id}
-                        className="px-3 py-2 flex items-center justify-between gap-2"
-                      >
-                        <span className="truncate">{s.name}</span>
-                        {s.integrationCount > 0 && (
-                          <span className="text-[0.65rem] text-gray-500 whitespace-nowrap">
-                            {formatNumber(s.integrationCount)} links
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <p className="text-xs text-gray-500">
-            Upload an inventory CSV and a Lucid CSV for this project to see
-            differences between what you have in your spreadsheet and what appears in
-            the architecture diagram.
-          </p>
-        )}
-      </Card>
-
-      {/* DIFF VISUALIZATION */}
-      <Card className="mt-6">
-        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-          DIFF VISUALIZATION
-        </p>
-        <p className="text-xs text-gray-500 mb-4">
-          Quick view of how many systems exist only in inventory, only in the diagram,
-          or in both.
-        </p>
-
-        {diffStats ? (
-          (() => {
-            const inv = diffStats.inventoryOnlyNorms?.length ?? 0;
-            const dia = diffStats.diagramOnly?.length ?? 0;
-            const match = diffStats.overlapSystems?.length ?? 0;
-            const total = inv + dia + match;
-
-            if (!total) {
-              return (
-                <p className="text-xs text-gray-500">
-                  Upload both an inventory CSV and a Lucid CSV for this project to
-                  enable the diff visualization.
-                </p>
-              );
-            }
-
-            const max = Math.max(inv, dia, match, 1);
-
-            const rows = [
-              {
-                key: "inventory",
-                label: "Inventory only",
-                value: inv,
-              },
-              {
-                key: "diagram",
-                label: "Diagram only",
-                value: dia,
-              },
-              {
-                key: "matched",
-                label: "Matched (in both)",
-                value: match,
-              },
-            ];
-
-            return (
-              <div className="space-y-3">
-                {rows.map((row) => {
-                  const pct = max ? (row.value / max) * 100 : 0;
-                  return (
-                    <div key={row.key} className="text-xs">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className="text-gray-600">{row.label}</span>
-                        <span className="text-gray-500">{row.value}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-slate-900"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()
-        ) : (
-          <p className="text-xs text-gray-500">
-            Upload both an inventory CSV and a Lucid CSV for this project to enable
-            the diff visualization.
-          </p>
-        )}
-      </Card>
-
-      {/* TRUTH PASS – AI suggestions */}
+            {/* TRUTH PASS · AI suggestions */}
       <Card className="mt-6">
         <div className="mb-1 flex items-center justify-between">
           <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 uppercase">
@@ -798,20 +646,15 @@ export function TechStackClient({ projectId }: Props) {
                 ? "inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-[0.7rem] font-semibold text-emerald-700 animate-pulse"
                 : "inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[0.7rem] font-semibold text-slate-50"
             }
-            title={
-              truthLoading
-                ? "Fuxi is scanning your current artifacts to suggest canonical system names."
-                : "These rows are powered by Fuxi's AI pass across your current inventory and Lucid diagram."
-            }
           >
             {truthLoading ? "Fuxi is thinking…" : "AI Powered"}
           </span>
         </div>
+
         <p className="text-xs text-gray-500 mb-3">
           Fuxi compares your inventory and Lucid diagram for project{" "}
           <span className="font-medium">{projectId}</span>{" "}
-          and suggests a canonical system name with a confidence rating. Use this as a
-          sanity check before you trust the diff.
+          and suggests a canonical system name with a confidence rating.
         </p>
 
         {truthError && (
@@ -824,9 +667,9 @@ export function TechStackClient({ projectId }: Props) {
         )}
 
         {truthRows.length === 0 && !truthLoading && !truthError && (
-          <p className="text-xs text-gray-500">
-            Once you upload both an inventory CSV and a Lucid CSV, Fuxi will run a
-            Truth Pass to suggest canonical system names.
+          <p className="mb-2 text-[0.75rem] text-slate-500">
+            Upload an inventory CSV and a Lucid CSV to see Fuxi&apos;s
+            first-pass suggestions.
           </p>
         )}
 
@@ -835,30 +678,25 @@ export function TechStackClient({ projectId }: Props) {
             <div className="grid grid-cols-3 gap-4 px-4 py-2 text-[0.65rem] tracking-[0.22em] text-gray-500 uppercase bg-slate-50">
               <span>Inventory</span>
               <span>Diagram</span>
-              <span className="text-right">Action</span>
+              <span className="text-right">Decision</span>
             </div>
 
             <div className="divide-y divide-gray-100">
               {truthRows.map((row, i) => {
                 const inventoryLabel =
-                  row.inventoryName && row.inventoryName.trim().length > 0
-                    ? row.inventoryName
-                    : "Not in inventory";
+                  row.inventoryName || "Not in inventory";
                 const diagramLabel =
-                  row.diagramName && row.diagramName.trim().length > 0
-                    ? row.diagramName
-                    : "Not in diagram";
+                  row.diagramName || "Not in diagram";
                 const recommendedName =
                   row.recommended && row.recommended.trim().length > 0
                     ? row.recommended
-                    : inventoryLabel !== "Not in inventory"
-                    ? inventoryLabel
-                    : diagramLabel;
+                    : inventoryLabel || diagramLabel;
 
                 const invMatches =
                   inventoryLabel !== "Not in inventory" &&
                   normalizeForCompare(inventoryLabel) ===
                     normalizeForCompare(recommendedName);
+
                 const diagMatches =
                   diagramLabel !== "Not in diagram" &&
                   normalizeForCompare(diagramLabel) ===
@@ -869,10 +707,10 @@ export function TechStackClient({ projectId }: Props) {
 
                 return (
                   <div
-                    key={row.norm ?? i}
+                    key={row.id ?? i}
                     className="grid grid-cols-3 gap-4 px-4 py-3 text-sm items-center"
                   >
-                    {/* Inventory column */}
+                    {/* INVENTORY */}
                     <div className="flex items-center gap-2">
                       <span
                         className={
@@ -890,7 +728,7 @@ export function TechStackClient({ projectId }: Props) {
                       )}
                     </div>
 
-                    {/* Diagram column */}
+                    {/* DIAGRAM */}
                     <div className="flex items-center gap-2">
                       <span
                         className={
@@ -908,7 +746,7 @@ export function TechStackClient({ projectId }: Props) {
                       )}
                     </div>
 
-                    {/* Confidence + actions */}
+                    {/* CONFIDENCE + ACTIONS */}
                     <div className="flex flex-col items-end justify-center gap-1 text-right">
                       <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[0.7rem] font-medium text-white">
                         {Math.round(row.confidence ?? 70)}%
@@ -924,13 +762,8 @@ export function TechStackClient({ projectId }: Props) {
                           Delete
                         </button>
                       </div>
-                      <span
-                        className="text-[0.65rem] text-slate-500"
-                        title={row.note ?? undefined}
-                      >
-                        AI:{" "}
-                        {row.note ??
-                          "Suggestion based on your current artifacts."}
+                      <span className="text-[0.65rem] text-slate-500">
+                        AI: {row.note ?? "Suggestion based on your current artifacts."}
                       </span>
                     </div>
                   </div>
@@ -944,6 +777,7 @@ export function TechStackClient({ projectId }: Props) {
           </div>
         )}
       </Card>
+
     </div>
   );
 }
