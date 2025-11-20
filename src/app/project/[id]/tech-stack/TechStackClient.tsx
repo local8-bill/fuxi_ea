@@ -44,10 +44,41 @@ interface DiffStats {
   overlapSystems: DiagramSystem[];
 }
 
+type TruthDecision = "keep" | "remove" | "ignore";
+
+interface TruthCandidate {
+  id: string;
+  source: "inventory" | "diagram";
+  displayName: string;
+  normalizedName: string;
+}
+
 function formatNumber(n: number | undefined | null): string {
   if (n == null || Number.isNaN(n)) return "0";
   return n.toLocaleString();
 }
+
+// Static preview rows – illustrative only.
+const TRUTH_PREVIEW_ROWS = [
+  {
+    inventory: "Oracle",
+    diagram: "Oracle EBS",
+    confidenceLabel: "High",
+    confidencePct: 90,
+  },
+  {
+    inventory: "Oracle SOA",
+    diagram: "SOA",
+    confidenceLabel: "High",
+    confidencePct: 90,
+  },
+  {
+    inventory: "AWS Redshift",
+    diagram: "Redshift",
+    confidenceLabel: "High",
+    confidencePct: 90,
+  },
+];
 
 export function TechStackClient({ projectId }: Props) {
   // Inventory / artifacts
@@ -64,7 +95,7 @@ export function TechStackClient({ projectId }: Props) {
   const [uploadingLucid, setUploadingLucid] = useState<boolean>(false);
   const [deError, setDeError] = useState<string | null>(null);
 
-  // Diff plumbing
+  // Diff plumbing (engine behind Truth Pass)
   const [inventorySystemsNorm, setInventorySystemsNorm] = useState<string[]>([]);
   const [inventoryDisplayByNorm, setInventoryDisplayByNorm] = useState<
     Record<string, string>
@@ -73,7 +104,12 @@ export function TechStackClient({ projectId }: Props) {
   const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
 
-  // Load DE stats and systems on mount / project change
+  // Truth-pass state (simple in-memory decisions – placeholder for future)
+  const [truthDecisions, setTruthDecisions] = useState<
+    Record<string, TruthDecision>
+  >({});
+
+  // ---- Load DE stats + diagram systems on mount / project change ----
   useEffect(() => {
     let cancelled = false;
 
@@ -103,7 +139,7 @@ export function TechStackClient({ projectId }: Props) {
         }
       }
 
-      // Load diagram systems for diff view
+      // Load diagram systems for diff / truth pass
       try {
         const res = await fetch(
           `/api/digital-enterprise/systems?project=${encodeURIComponent(
@@ -156,7 +192,7 @@ export function TechStackClient({ projectId }: Props) {
     };
   }, [projectId]);
 
-  // Compute diff whenever inventory systems or diagram systems change
+  // ---- Compute diff whenever inventory systems or diagram systems change ----
   useEffect(() => {
     const invNormSet = new Set(
       (inventorySystemsNorm ?? []).filter((n) => n && n.trim().length > 0),
@@ -175,7 +211,6 @@ export function TechStackClient({ projectId }: Props) {
     const inventoryOnlyNorms: string[] = [];
     const overlapNorms = new Set<string>();
 
-    // Inventory-driven perspective
     for (const norm of invNormSet) {
       if (diagNormSet.has(norm)) {
         overlapNorms.add(norm);
@@ -209,6 +244,52 @@ export function TechStackClient({ projectId }: Props) {
     setDiffStats(diff);
   }, [inventorySystemsNorm, diagramSystems]);
 
+  // ---- Truth candidates (not yet wired into UI – engine for later) ----
+  const truthCandidates: TruthCandidate[] = (() => {
+    if (!diffStats) return [];
+
+    const candidates: TruthCandidate[] = [];
+
+    for (const norm of diffStats.inventoryOnlyNorms) {
+      const display = inventoryDisplayByNorm[norm] || norm || "(unknown)";
+      candidates.push({
+        id: `inv:${norm}`,
+        source: "inventory",
+        displayName: display,
+        normalizedName: norm,
+      });
+    }
+
+    for (const s of diffStats.diagramOnly) {
+      candidates.push({
+        id: `dia:${s.id}`,
+        source: "diagram",
+        displayName: s.name,
+        normalizedName: s.normalizedName,
+      });
+    }
+
+    return candidates.slice(0, 50);
+  })();
+
+  function handleTruthDecision(id: string, decision: TruthDecision) {
+    setTruthDecisions((prev) => ({
+      ...prev,
+      [id]: decision,
+    }));
+  }
+
+  function confidenceForCandidate(c: TruthCandidate): {
+    label: string;
+    pct: number;
+  } {
+    if (c.source === "diagram") {
+      return { label: "Medium", pct: 70 };
+    }
+    return { label: "High", pct: 90 };
+  }
+
+  // ---- Inventory upload ----
   async function handleInventoryUpload(file: File) {
     setUploadingInv(true);
     setInvError(null);
@@ -238,12 +319,10 @@ export function TechStackClient({ projectId }: Props) {
       setInventoryRows(stats.rowCount);
       setNormalizedApps(stats.uniqueSystems);
 
-      // Inventory upload counts as one artifact (for now)
       setArtifactCount((prev) =>
         stats.rowCount > 0 ? Math.max(prev, 1) : prev,
       );
 
-      // Build normalized system set and display map for diff
       const normSet = new Set<string>();
       const displayMap: Record<string, string> = {};
       for (const item of parsed.rows) {
@@ -272,6 +351,7 @@ export function TechStackClient({ projectId }: Props) {
     }
   }
 
+  // ---- Lucid upload ----
   async function handleLucidUpload(file: File) {
     setUploadingLucid(true);
     setDeError(null);
@@ -281,13 +361,11 @@ export function TechStackClient({ projectId }: Props) {
       const resp = await uploadLucidCsv(projectId, file);
       console.log("[TECH-STACK] Lucid upload success", resp);
 
-      // Refresh DE stats after a successful upload
       const stats = await fetchDigitalEnterpriseStats(projectId);
       if (stats) {
         setDeStats(stats);
       }
 
-      // Refresh diagram systems for diff view
       try {
         const res = await fetch(
           `/api/digital-enterprise/systems?project=${encodeURIComponent(
@@ -325,7 +403,6 @@ export function TechStackClient({ projectId }: Props) {
         );
       }
 
-      // Count Lucid as another artifact
       setArtifactCount((prev) => Math.max(prev, 1));
     } catch (err: any) {
       console.error("[TECH-STACK] Lucid upload failed", err);
@@ -340,6 +417,7 @@ export function TechStackClient({ projectId }: Props) {
     ((deStats.systemsFuture ?? 0) > 0 ||
       (deStats.integrationsFuture ?? 0) > 0);
 
+  // ---- Render ----
   return (
     <div className="px-8 py-10 max-w-6xl mx-auto">
       <WorkspaceHeader
@@ -354,8 +432,8 @@ export function TechStackClient({ projectId }: Props) {
           INPUTS
         </p>
         <p className="text-xs text-gray-500">
-          Upload artifacts to build a live view of your digital enterprise for
-          project <span className="font-medium">{projectId}</span>.
+          Upload artifacts to build a live view of your digital enterprise for project{" "}
+          <span className="font-medium">{projectId}</span>.
         </p>
       </Card>
 
@@ -436,171 +514,88 @@ export function TechStackClient({ projectId }: Props) {
         )}
         {!loadingDE && !deError && !hasDE && (
           <div className="text-sm text-gray-500">
-            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate
-            this preview.
+            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate this
+            preview.
           </div>
         )}
       </Card>
 
-      {/* Modernization Diff */}
-      <Card>
-        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-          MODERNIZATION DIFF
-        </p>
-        <p className="text-xs text-gray-500 mb-4">
-          Compares your inventory spreadsheet against the Lucid architecture
-          view to highlight systems that are only in inventory, only in the
-          diagram, or present in both.
-        </p>
-
-        {diffError && (
-          <div className="mb-3 text-xs text-red-500">{diffError}</div>
-        )}
-
-        {diffStats ? (
-          <>
-            <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <MetricCard
-                label="SYSTEMS IN INVENTORY"
-                value={formatNumber(diffStats.inventoryCount)}
-                description="Distinct systems from your inventory spreadsheet."
-              />
-              <MetricCard
-                label="SYSTEMS IN DIAGRAM"
-                value={formatNumber(diffStats.diagramCount)}
-                description="Distinct systems from the Lucid architecture view."
-              />
-              <MetricCard
-                label="MATCHED SYSTEMS"
-                value={formatNumber(diffStats.overlapCount)}
-                description="Systems that appear in both inventory and diagram."
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Inventory-only */}
-              <div>
-                <p className="text-xs font-semibold mb-2">
-                  Inventory Only (candidate retirements or gaps in diagram)
-                </p>
-                {diffStats.inventoryOnlyNorms.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    No inventory-only systems detected yet.
-                  </p>
-                ) : (
-                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
-                    {diffStats.inventoryOnlyNorms.map((norm) => {
-                      const display =
-                        inventoryDisplayByNorm[norm] || norm || "(unknown)";
-                      return (
-                        <li key={norm} className="px-3 py-2">
-                          {display}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              {/* Diagram-only */}
-              <div>
-                <p className="text-xs font-semibold mb-2">
-                  Diagram Only (net-new or architectural additions)
-                </p>
-                {diffStats.diagramOnly.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    No diagram-only systems detected yet.
-                  </p>
-                ) : (
-                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
-                    {diffStats.diagramOnly.map((s) => (
-                      <li
-                        key={s.id}
-                        className="px-3 py-2 flex items-center justify-between gap-2"
-                      >
-                        <span className="truncate">{s.name}</span>
-                        {s.integrationCount > 0 && (
-                          <span className="text-[0.65rem] text-gray-500 whitespace-nowrap">
-                            {formatNumber(s.integrationCount)} links
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <p className="text-xs text-gray-500">
-            Upload an inventory CSV and a Lucid CSV for this project to see
-            differences between what you have in your spreadsheet and what
-            appears in the architecture diagram.
-          </p>
-        )}
-      </Card>
-
-      {/* MODERNIZATION DIFF VISUALIZATION */}
+      {/* TRUTH PASS (PREVIEW) – highlight Fuxi recommendation */}
       <Card className="mt-6">
         <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-          DIFF VISUALIZATION
+          TRUTH PASS (PREVIEW)
         </p>
         <p className="text-xs text-gray-500 mb-4">
-          Quick view of how many systems exist only in inventory, only in the
-          diagram, or in both.
+          Fuxi&apos;s first pass at lining up your inventory systems with the Lucid
+          diagram for project {projectId}. Use this as a sanity check before trusting
+          the diff.
         </p>
 
-        {diffStats ? (
-          (() => {
-            const inv = diffStats.inventoryOnlyNorms.length;
-            const dia = diffStats.diagramOnly.length;
-            const match = diffStats.overlapSystems.length;
+        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+          <div className="grid grid-cols-3 gap-4 px-4 py-2 text-[0.65rem] tracking-[0.22em] text-gray-500 uppercase bg-slate-50">
+            <span>Inventory</span>
+            <span>Diagram</span>
+            <span className="text-right">Action</span>
+          </div>
 
-            if (!inv && !dia && !match) {
+          <div className="divide-y divide-gray-100">
+            {TRUTH_PREVIEW_ROWS.map((row, i) => {
+              // For now, we treat the diagram name as Fuxi's recommended label.
+              const recommendedSide: "inventory" | "diagram" = "diagram";
+              const inventoryRecommended = recommendedSide === "inventory";
+              const diagramRecommended = recommendedSide === "diagram";
+
+              const inventoryClass = inventoryRecommended
+                ? "font-semibold text-slate-900"
+                : "font-medium text-slate-500";
+              const diagramClass = diagramRecommended
+                ? "font-semibold text-slate-900"
+                : "font-medium text-slate-500";
+
               return (
-                <p className="text-xs text-gray-500">
-                  Upload both an inventory CSV and a Lucid CSV for this project
-                  to enable the diff visualization.
-                </p>
+                <div
+                  key={i}
+                  className="grid grid-cols-3 gap-4 px-4 py-3 text-sm items-center"
+                >
+                  {/* Inventory name */}
+                  <div className="flex items-center">
+                    <span className={inventoryClass}>{row.inventory}</span>
+                  </div>
+
+                  {/* Diagram / recommended name */}
+                  <div className="flex items-center gap-2">
+                    <span className={diagramClass}>{row.diagram}</span>
+                    {diagramRecommended && (
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[0.65rem] font-medium text-emerald-700">
+                        Recommended
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Confidence + actions */}
+                  <div className="flex items-center justify-end gap-3">
+                    <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[0.7rem] font-medium text-white">
+                      {row.confidencePct}%
+                    </span>
+                    <button className="px-2.5 py-1 rounded-md bg-gray-100 text-[0.7rem] font-medium text-gray-700 hover:bg-gray-200">
+                      Keep
+                    </button>
+                    <button className="px-2.5 py-1 rounded-md bg-gray-100 text-[0.7rem] font-medium text-gray-700 hover:bg-gray-200">
+                      Edit
+                    </button>
+                    <button className="px-2.5 py-1 rounded-md bg-gray-100 text-[0.7rem] font-medium text-red-600 hover:bg-gray-200">
+                      Delete
+                    </button>
+                  </div>
+                </div>
               );
-            }
+            })}
+          </div>
 
-            const max = Math.max(inv, dia, match, 1);
-
-            const rows = [
-              { key: "inventory", label: "Inventory only", value: inv },
-              { key: "diagram", label: "Diagram only", value: dia },
-              { key: "matched", label: "Matched (in both)", value: match },
-            ];
-
-            return (
-              <div className="space-y-3">
-                {rows.map((row) => {
-                  const pct = max ? (row.value / max) * 100 : 0;
-                  return (
-                    <div key={row.key} className="text-xs">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className="text-gray-600">{row.label}</span>
-                        <span className="text-gray-500">{row.value}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-slate-900"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()
-        ) : (
-          <p className="text-xs text-gray-500">
-            Upload both an inventory CSV and a Lucid CSV for this project to
-            enable the diff visualization.
-          </p>
-        )}
+          <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[0.7rem] text-slate-500">
+            Preview only — decisions not yet saved.
+          </div>
+        </div>
       </Card>
     </div>
   );
