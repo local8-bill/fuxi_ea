@@ -1,3 +1,16 @@
+#!/bin/zsh
+set -e
+
+TARGET="src/components/panels/FileUploadPanel.tsx"
+BACKUP="src/components/panels/FileUploadPanel.tsx.bak_$(date +%Y%m%d%H%M%S)"
+
+echo "📦 Backing up existing FileUploadPanel.tsx to:"
+echo "   $BACKUP"
+cp "$TARGET" "$BACKUP"
+
+echo "✍️  Writing cleaned FileUploadPanel.tsx…"
+
+cat << 'EOF' > "$TARGET"
 "use client";
 
 import React from "react";
@@ -33,3 +46,9 @@ export function FileUploadPanel({
     </div>
   );
 }
+EOF
+
+echo "✅ Done!"
+echo "🔄 Restart your dev server (npm run dev)"
+echo "🔁 Hard-refresh your browser (Shift + Reload)"
+echo "🧹 Sanity check: There should be ZERO 'Choose File' buttons remaining."

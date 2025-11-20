@@ -324,13 +324,13 @@ export function TechStackClient({ projectId }: Props) {
 
         const json = await res.json();
         if (!json || !Array.isArray(json.rows)) {
-        console.error("[TRUTH-PASS] Unexpected response shape", json);
-        setTruthError(
-        "AI suggestions returned an unexpected format. Showing nothing for now.",
-      );
-      return;
-      }
-const newRows = json.rows;
+          console.error("[TRUTH-PASS] Unexpected response shape", json);
+          setTruthError(
+            "AI suggestions returned an unexpected format. Showing nothing for now.",
+          );
+          setTruthRows([]);
+          return;
+        }
 
         const rows: TruthRow[] = json.rows.map((r: any) => ({
           norm: String(r.norm ?? ""),

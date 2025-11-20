@@ -1,0 +1,37 @@
+"use client";
+
+import { Card } from "@/components/ui/Card";
+import { FileUpload } from "@/components/shared/FileUpload";
+
+type FileUploadPanelProps = {
+  title: string;
+  helper?: string;
+  label: string;
+  onFileSelected: (file: File) => Promise<void> | void;
+  className?: string;
+};
+
+export function FileUploadPanel({
+  title,
+  helper,
+  label,
+  onFileSelected,
+  className,
+}: FileUploadPanelProps) {
+  return (
+    <Card className={className}>
+      <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+        {title}
+      </p>
+      {helper && (
+        <p className="text-xs text-gray-500">
+          {helper}
+        </p>
+      )}
+
+      <div className="mt-4">
+        <FileUpload label={label} onFileSelected={onFileSelected} />
+      </div>
+    </Card>
+  );
+}

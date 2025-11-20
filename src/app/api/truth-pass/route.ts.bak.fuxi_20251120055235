@@ -1,0 +1,153 @@
+import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+
+interface TruthPassCandidate {
+  norm: string;
+  inventoryName: string | null;
+  diagramNames: string[];
+}
+
+interface TruthPassResult {
+  id: string;
+  projectId: string | null;
+  norm: string;
+  inventoryName: string | null;
+  diagramName: string | null;
+  canonicalName: string;
+  confidencePct: number;
+  confidenceLabel: "High" | "Medium" | "Low";
+  recommendedSource: "inventory" | "diagram";
+}
+
+function computeHeuristicConfidence(candidate: TruthPassCandidate): {
+  canonicalName: string;
+  confidencePct: number;
+  confidenceLabel: "High" | "Medium" | "Low";
+  recommendedSource: "inventory" | "diagram";
+} {
+  const norm = (candidate.norm || "").toLowerCase().trim();
+  const inventoryName = candidate.inventoryName?.trim() || null;
+  const diagramName =
+    Array.isArray(candidate.diagramNames) && candidate.diagramNames.length > 0
+      ? String(candidate.diagramNames[0]).trim()
+      : null;
+
+  // Fallback canonical name
+  const canonicalName =
+    inventoryName || diagramName || norm || "Unknown system";
+
+  // Very simple heuristic for now – we can swap this to real AI later.
+  let confidencePct = 70;
+  let recommendedSource: "inventory" | "diagram" = "diagram";
+
+  if (inventoryName && diagramName) {
+    const invLower = inventoryName.toLowerCase();
+    const diaLower = diagramName.toLowerCase();
+
+    if (invLower === diaLower) {
+      confidencePct = 95;
+      recommendedSource = "diagram";
+    } else if (
+      invLower.includes(diaLower) ||
+      diaLower.includes(invLower) ||
+      norm === diaLower ||
+      norm === invLower
+    ) {
+      confidencePct = 90;
+      recommendedSource = "diagram";
+    } else {
+      confidencePct = 80;
+      recommendedSource = "diagram";
+    }
+  } else if (diagramName) {
+    confidencePct = 80;
+    recommendedSource = "diagram";
+  } else {
+    confidencePct = 75;
+    recommendedSource = "inventory";
+  }
+
+  let confidenceLabel: "High" | "Medium" | "Low" = "Medium";
+  if (confidencePct >= 90) confidenceLabel = "High";
+  else if (confidencePct < 75) confidenceLabel = "Low";
+
+  return {
+    canonicalName,
+    confidencePct,
+    confidenceLabel,
+    recommendedSource,
+  };
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => null);
+
+    const projectId =
+      (body && typeof body.projectId === "string" && body.projectId) || null;
+    const candidates: TruthPassCandidate[] = Array.isArray(body?.candidates)
+      ? body.candidates
+      : [];
+
+    if (!candidates.length) {
+      return NextResponse.json(
+        { ok: false, error: "No candidates provided.", results: [] },
+        { status: 400 },
+      );
+    }
+
+    const results: TruthPassResult[] = candidates.map((c, idx) => {
+      const norm = String(c.norm || "").trim();
+      const inventoryName =
+        typeof c.inventoryName === "string" && c.inventoryName.trim().length
+          ? c.inventoryName.trim()
+          : null;
+      const diagramName =
+        Array.isArray(c.diagramNames) && c.diagramNames.length > 0
+          ? String(c.diagramNames[0]).trim()
+          : null;
+
+      const {
+        canonicalName,
+        confidencePct,
+        confidenceLabel,
+        recommendedSource,
+      } = computeHeuristicConfidence(c);
+
+      return {
+        id: norm || `cand-${idx}`,
+        projectId,
+        norm,
+        inventoryName,
+        diagramName,
+        canonicalName,
+        confidencePct,
+        confidenceLabel,
+        recommendedSource,
+      };
+    });
+
+    console.log("[TRUTH-PASS] computed results", {
+      projectId,
+      count: results.length,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      projectId,
+      count: results.length,
+      results,
+    });
+  } catch (err: any) {
+    console.error("[TRUTH-PASS] API error", err);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: err?.message ?? "Truth pass failed.",
+        results: [],
+      },
+      { status: 500 },
+    );
+  }
+}

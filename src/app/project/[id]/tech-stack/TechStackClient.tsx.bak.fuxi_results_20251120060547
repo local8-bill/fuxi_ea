@@ -332,7 +332,7 @@ export function TechStackClient({ projectId }: Props) {
       }
 const newRows = json.rows;
 
-        const rows: TruthRow[] = json.rows.map((r: any) => ({
+        const rows: TruthRow[] = json.results.map((r: any) => ({
           norm: String(r.norm ?? ""),
           inventoryName:
             r.inventoryName === null || r.inventoryName === undefined

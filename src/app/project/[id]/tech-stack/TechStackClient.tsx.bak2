@@ -1,0 +1,862 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
+import { FileUploadPanel } from "@/components/panels/FileUploadPanel";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { Card } from "@/components/ui/Card";
+import {
+  uploadLucidCsv,
+  fetchDigitalEnterpriseStats,
+} from "@/lib/api/digitalEnterprise";
+import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
+import { normalizeSystemName } from "@/domain/services/systemNormalization";
+import { TruthPassPanel } from "@/components/tech-stack/TruthPassPanel";
+
+interface DigitalEnterpriseStats {
+  systemsFuture: number;
+  integrationsFuture: number;
+  domainsDetected?: number;
+}
+
+interface Props {
+  projectId: string;
+}
+
+interface InventoryStatsLocal {
+  projectId: string;
+  rowCount: number;
+  uniqueSystems: number;
+}
+
+interface DiagramSystem {
+  id: string;
+  name: string;
+  normalizedName: string;
+  integrationCount: number;
+}
+
+interface DiffStats {
+  inventoryCount: number;
+  diagramCount: number;
+  overlapCount: number;
+  inventoryOnlyNorms: string[];
+  diagramOnly: DiagramSystem[];
+  overlapSystems: DiagramSystem[];
+}
+
+interface TruthRow {
+  inventory: string;
+  diagram: string;
+  confidence: number;
+  confidenceLabel: string;
+}
+
+
+type TruthDecision = "keep" | "retire" | "noise";
+
+interface TruthDecisionState {
+  [candidateKey: string]: TruthDecision;
+}
+
+interface TruthCandidate {
+  key: string;
+  source: "inventory" | "diagram";
+  normalizedName: string;
+  displayName: string;
+}
+
+function formatNumber(n: number | undefined | null): string {
+  if (n == null || Number.isNaN(n)) return "0";
+  return n.toLocaleString();
+}
+
+export function TechStackClient({ projectId }: Props) {
+  // Inventory / artifacts
+  const [artifactCount, setArtifactCount] = useState<number>(0);
+  const [inventoryRows, setInventoryRows] = useState<number>(0);
+  const [normalizedApps, setNormalizedApps] = useState<number>(0);
+  const [invStats, setInvStats] = useState<InventoryStatsLocal | null>(null);
+  const [uploadingInv, setUploadingInv] = useState<boolean>(false);
+  const [invError, setInvError] = useState<string | null>(null);
+
+  // Digital Enterprise
+  const [deStats, setDeStats] = useState<DigitalEnterpriseStats | null>(null);
+  const [loadingDE, setLoadingDE] = useState<boolean>(true);
+  const [uploadingLucid, setUploadingLucid] = useState<boolean>(false);
+  const [deError, setDeError] = useState<string | null>(null);
+
+  // Diff plumbing
+  const [inventorySystemsNorm, setInventorySystemsNorm] = useState<string[]>([]);
+  const [inventoryDisplayByNorm, setInventoryDisplayByNorm] = useState<
+    Record<string, string>
+  >({});
+  const [diagramSystems, setDiagramSystems] = useState<DiagramSystem[]>([]);
+  const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
+  const [diffError, setDiffError] = useState<string | null>(null);
+
+  // Truth Pass state (client-side, per project via localStorage)
+  const [truthCandidates, setTruthCandidates] = useState<TruthCandidate[]>([]);
+  const [truthDecisions, setTruthDecisions] = useState<TruthDecisionState>({});
+
+  // Load Truth Pass decisions from localStorage when project changes
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(
+        `fuxi.truthpass.${projectId}`,
+      );
+      if (!raw) {
+        setTruthDecisions({});
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        setTruthDecisions(parsed as TruthDecisionState);
+      } else {
+        setTruthDecisions({});
+      }
+    } catch (err) {
+      console.error("[TRUTH-PASS] Failed to load decisions from localStorage", err);
+      setTruthDecisions({});
+    }
+  }, [projectId]);
+
+  function updateTruthDecision(key: string, decision: TruthDecision) {
+    setTruthDecisions((prev) => {
+      const next: TruthDecisionState = { ...prev, [key]: decision };
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(
+            `fuxi.truthpass.${projectId}`,
+            JSON.stringify(next),
+          );
+        }
+      } catch (err) {
+        console.error("[TRUTH-PASS] Failed to persist decision", err);
+      }
+      return next;
+    });
+  }
+
+  // Load DE stats and systems on mount / project change
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDEAndSystems() {
+      setLoadingDE(true);
+      setDeError(null);
+      setDiffError(null);
+
+      try {
+        const stats = await fetchDigitalEnterpriseStats(projectId);
+        if (cancelled) return;
+
+        if (stats) {
+          setDeStats(stats);
+        } else {
+          setDeStats(null);
+        }
+      } catch (err: any) {
+        console.error("[TECH-STACK] Error loading digital enterprise stats", err);
+        if (!cancelled) {
+          setDeError("Failed to load digital enterprise preview.");
+          setDeStats(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDE(false);
+        }
+      }
+
+      // Load diagram systems for diff view
+      try {
+        const res = await fetch(
+          `/api/digital-enterprise/systems?project=${encodeURIComponent(
+            projectId,
+          )}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          console.error(
+            "[TECH-STACK] Failed to load diagram systems for diff",
+            res.status,
+            text,
+          );
+          if (!cancelled) {
+            setDiffError("Failed to load diagram systems for diff view.");
+            setDiagramSystems([]);
+          }
+          return;
+        }
+        const json = await res.json();
+        if (cancelled) return;
+
+        if (json && Array.isArray(json.systems)) {
+          const systems: DiagramSystem[] = json.systems.map((s: any) => ({
+            id: String(s.id ?? s.name ?? s.normalizedName ?? "unknown"),
+            name: String(s.name ?? "Unknown"),
+            normalizedName: String(
+              s.normalizedName ?? normalizeSystemName(s.name),
+            ),
+            integrationCount: Number(s.integrationCount ?? 0),
+          }));
+          setDiagramSystems(systems);
+        } else {
+          setDiagramSystems([]);
+        }
+      } catch (err: any) {
+        console.error("[TECH-STACK] Error fetching diagram systems for diff", err);
+        if (!cancelled) {
+          setDiffError("Failed to load diagram systems for diff view.");
+          setDiagramSystems([]);
+        }
+      }
+    }
+
+    loadDEAndSystems();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  // Compute diff whenever inventory systems or diagram systems change
+  useEffect(() => {
+    const invNormSet = new Set(
+      (inventorySystemsNorm ?? []).filter((n) => n && n.trim().length > 0),
+    );
+    const diagNormSet = new Set(
+      (diagramSystems ?? [])
+        .map((s) => s.normalizedName)
+        .filter((n) => n && n.trim().length > 0),
+    );
+
+    if (invNormSet.size === 0 && diagNormSet.size === 0) {
+      setDiffStats(null);
+      return;
+    }
+
+    const inventoryOnlyNorms: string[] = [];
+    const overlapNorms = new Set<string>();
+
+    // Inventory-driven perspective
+    for (const norm of invNormSet) {
+      if (diagNormSet.has(norm)) {
+        overlapNorms.add(norm);
+      } else {
+        inventoryOnlyNorms.push(norm);
+      }
+    }
+
+    const diagramOnly: DiagramSystem[] = [];
+    const overlapSystems: DiagramSystem[] = [];
+
+    for (const s of diagramSystems) {
+      const norm = s.normalizedName;
+      if (!norm) continue;
+      if (invNormSet.has(norm)) {
+        overlapSystems.push(s);
+      } else {
+        diagramOnly.push(s);
+      }
+    }
+
+    const diff: DiffStats = {
+      inventoryCount: invNormSet.size,
+      diagramCount: diagNormSet.size,
+      overlapCount: overlapNorms.size,
+      inventoryOnlyNorms,
+      diagramOnly,
+      overlapSystems,
+    };
+
+    setDiffStats(diff);
+  }, [inventorySystemsNorm, diagramSystems]);
+
+  // Build Truth Pass candidates whenever diff stats change
+  useEffect(() => {
+    if (!diffStats) {
+      setTruthCandidates([]);
+      return;
+    }
+
+    const candidates: TruthCandidate[] = [];
+
+    for (const norm of diffStats.inventoryOnlyNorms ?? []) {
+      const display =
+        inventoryDisplayByNorm[norm] || norm || "(unknown)";
+      candidates.push({
+        key: `inv:${norm}`,
+        source: "inventory",
+        normalizedName: norm,
+        displayName: display,
+      });
+    }
+
+    for (const s of diffStats.diagramOnly ?? []) {
+      const norm = s.normalizedName || s.name || "";
+      if (!norm) continue;
+      candidates.push({
+        key: `dia:${norm}`,
+        source: "diagram",
+        normalizedName: norm,
+        displayName: s.name || norm || "(unknown)",
+      });
+    }
+
+    setTruthCandidates(candidates);
+  }, [diffStats, inventoryDisplayByNorm]);
+
+  async function handleInventoryUpload(file: File) {
+    setUploadingInv(true);
+    setInvError(null);
+
+    try {
+      console.log("[TECH-STACK] Inventory upload started", {
+        projectId,
+        fileName: file.name,
+      });
+
+      if (!file.name.toLowerCase().endsWith(".csv")) {
+        throw new Error(
+          "Unsupported file type. Please export your Excel inventory as CSV and upload the .csv file.",
+        );
+      }
+
+      const text = await file.text();
+      const parsed = parseInventoryCsv(text);
+
+      const stats: InventoryStatsLocal = {
+        projectId,
+        rowCount: parsed.rows.length,
+        uniqueSystems: parsed.uniqueSystems,
+      };
+
+      setInvStats(stats);
+      setInventoryRows(stats.rowCount);
+      setNormalizedApps(stats.uniqueSystems);
+
+      // Inventory upload counts as one artifact (for now)
+      setArtifactCount((prev) =>
+        stats.rowCount > 0 ? Math.max(prev, 1) : prev,
+      );
+
+      // Build normalized system set and display map for diff
+      const normSet = new Set<string>();
+      const displayMap: Record<string, string> = {};
+      for (const item of parsed.rows) {
+        const displayName = item.systemName || "";
+        const norm = normalizeSystemName(displayName);
+        if (!norm) continue;
+        normSet.add(norm);
+        if (!displayMap[norm] && displayName) {
+          displayMap[norm] = displayName;
+        }
+      }
+      setInventorySystemsNorm(Array.from(normSet));
+      setInventoryDisplayByNorm(displayMap);
+
+      console.log("[TECH-STACK] Inventory parsed locally", {
+        rowCount: stats.rowCount,
+        uniqueSystems: stats.uniqueSystems,
+      });
+    } catch (err: any) {
+      console.error("[TECH-STACK] Inventory upload failed (client parse)", err);
+      setInvError(err?.message ?? "Inventory upload failed.");
+      setInventorySystemsNorm([]);
+      setInventoryDisplayByNorm({});
+    } finally {
+      setUploadingInv(false);
+    }
+  }
+
+  async function handleLucidUpload(file: File) {
+    setUploadingLucid(true);
+    setDeError(null);
+    setDiffError(null);
+
+    try {
+      const resp = await uploadLucidCsv(projectId, file);
+      console.log("[TECH-STACK] Lucid upload success", resp);
+
+      // Refresh DE stats after a successful upload
+      const stats = await fetchDigitalEnterpriseStats(projectId);
+      if (stats) {
+        setDeStats(stats);
+      }
+
+      // Refresh diagram systems for diff view
+      try {
+        const res = await fetch(
+          `/api/digital-enterprise/systems?project=${encodeURIComponent(
+            projectId,
+          )}`,
+          { cache: "no-store" },
+        );
+        if (res.ok) {
+          const json = await res.json();
+          if (json && Array.isArray(json.systems)) {
+            const systems: DiagramSystem[] = json.systems.map((s: any) => ({
+              id: String(s.id ?? s.name ?? s.normalizedName ?? "unknown"),
+              name: String(s.name ?? "Unknown"),
+              normalizedName: String(
+                s.normalizedName ?? normalizeSystemName(s.name),
+              ),
+              integrationCount: Number(s.integrationCount ?? 0),
+            }));
+            setDiagramSystems(systems);
+          } else {
+            setDiagramSystems([]);
+          }
+        } else {
+          const text = await res.text().catch(() => "");
+          console.error(
+            "[TECH-STACK] Failed to refresh diagram systems after Lucid upload",
+            res.status,
+            text,
+          );
+        }
+      } catch (err: any) {
+        console.error(
+          "[TECH-STACK] Error refreshing diagram systems after Lucid upload",
+          err,
+        );
+      }
+
+      // Count Lucid as another artifact
+      setArtifactCount((prev) => Math.max(prev, 1));
+    } catch (err: any) {
+      console.error("[TECH-STACK] Lucid upload failed", err);
+      setDeError(err?.message ?? "Lucid upload failed.");
+    } finally {
+      setUploadingLucid(false);
+    }
+  }
+
+  const hasDE =
+    !!deStats &&
+    ((deStats.systemsFuture ?? 0) > 0 ||
+      (deStats.integrationsFuture ?? 0) > 0);
+
+  return (
+    <div className="px-8 py-10 max-w-6xl mx-auto">
+      <WorkspaceHeader
+        statusLabel="STATUS"
+        title="Tech Stack Workspace"
+        description="Upload inventories, diagrams, and Lucid exports to understand your applications, integrations, and dependencies."
+      />
+
+      {/* Inputs description */}
+      <Card className="mb-4">
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          INPUTS
+        </p>
+        <p className="text-xs text-gray-500">
+          Upload artifacts to build a live view of your digital enterprise for project{" "}
+          <span className="font-medium">{projectId}</span>.
+        </p>
+      </Card>
+
+      {/* Upload panels */}
+      <FileUploadPanel
+        title="UPLOAD INVENTORY SPREADSHEET"
+        helper="Export your technology inventory from Excel as CSV and upload it here. We'll parse systems and normalize them for comparison."
+        label={uploadingInv ? "Uploading..." : "Upload Inventory CSV"}
+        onFileSelected={handleInventoryUpload}
+        className="mb-4"
+      />
+
+      <FileUploadPanel
+        title="UPLOAD LUCID CSV"
+        helper="Upload a Lucid CSV export of your architecture diagram. We'll infer systems and integrations automatically and update the Digital Enterprise metrics."
+        label={uploadingLucid ? "Uploading..." : "Upload Lucid CSV"}
+        onFileSelected={handleLucidUpload}
+      />
+
+      {/* Inventory / artifact metrics */}
+      <div className="mb-8 grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+        <MetricCard
+          label="ARTIFACTS"
+          value={formatNumber(artifactCount)}
+          description="Inventory and diagram files in this project."
+        />
+        <MetricCard
+          label="INVENTORY ROWS"
+          value={formatNumber(inventoryRows)}
+          description="Application rows ingested from spreadsheets."
+        />
+        <MetricCard
+          label="NORMALIZED APPS"
+          value={formatNumber(normalizedApps)}
+          description="Systems clustered into canonical applications from inventory."
+        />
+      </div>
+
+      {invError && (
+        <div className="mb-4 text-xs text-red-500">{invError}</div>
+      )}
+
+      {/* Digital Enterprise preview */}
+      <Card className="mb-8">
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          DIGITAL ENTERPRISE PREVIEW
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          Derived from your Lucid architecture diagram. Systems and integrations
+          here represent the structural view of your ecosystem.
+        </p>
+        {loadingDE && (
+          <div className="text-sm text-gray-500">
+            Loading Digital Enterprise preview...
+          </div>
+        )}
+        {!loadingDE && deError && (
+          <div className="text-sm text-red-500">{deError}</div>
+        )}
+        {!loadingDE && !deError && hasDE && deStats && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <MetricCard
+              label="SYSTEMS"
+              value={formatNumber(deStats.systemsFuture)}
+              description="Unique labeled systems in this diagram."
+            />
+            <MetricCard
+              label="INTEGRATIONS"
+              value={formatNumber(deStats.integrationsFuture)}
+              description="System-to-system connections from Lucid connector lines."
+            />
+            <MetricCard
+              label="DOMAINS DETECTED"
+              value={formatNumber(deStats.domainsDetected ?? 0)}
+              description="Domain clustering will be introduced in a later iteration."
+            />
+          </div>
+        )}
+        {!loadingDE && !deError && !hasDE && (
+          <div className="text-sm text-gray-500">
+            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate this
+            preview.
+          </div>
+        )}
+      </Card>
+
+      {/* Modernization Diff */}
+      <Card>
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          MODERNIZATION DIFF
+
+      {/* TRUTH PASS (PREVIEW) */}
+      <Card className="mt-6">
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          TRUTH PASS (PREVIEW)
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          Fuxi's first pass at lining up your inventory systems with the Lucid diagram.
+          Use this as a sanity check before trusting the diff.
+        </p>
+
+        {truthRows.length > 0 && (
+          <div className="space-y-6">
+            {truthRows.map((row, i) => (
+              <div key={i} className="p-4 border border-gray-100 rounded-xl">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-[0.65rem] uppercase text-gray-500">Inventory says…</p>
+                    <p className="font-medium text-sm">{row.inventory}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-[0.65rem] uppercase text-gray-500">Diagram says…</p>
+                    <p className="font-medium text-sm">{row.diagram}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-[0.65rem] uppercase text-gray-500">Fuxi confidence</p>
+                    <span className="inline-flex text-xs px-2 py-1 mt-1 rounded-full bg-gray-100">
+                      {row.confidenceLabel} · {row.confidence}%
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-[0.65rem] text-gray-400 mt-2">(preview only — decisions not yet saved)</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          Compares your inventory spreadsheet against the Lucid architecture view to
+          highlight systems that are only in inventory, only in the diagram, or present
+          in both.
+        </p>
+
+        {diffError && (
+          <div className="mb-3 text-xs text-red-500">{diffError}</div>
+        )}
+
+        {diffStats ? (
+          <>
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <MetricCard
+                label="SYSTEMS IN INVENTORY"
+                value={formatNumber(diffStats.inventoryCount)}
+                description="Distinct systems from your inventory spreadsheet."
+              />
+              <MetricCard
+                label="SYSTEMS IN DIAGRAM"
+                value={formatNumber(diffStats.diagramCount)}
+                description="Distinct systems from the Lucid architecture view."
+              />
+              <MetricCard
+                label="MATCHED SYSTEMS"
+                value={formatNumber(diffStats.overlapCount)}
+                description="Systems that appear in both inventory and diagram."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Inventory-only */}
+              <div>
+                <p className="text-xs font-semibold mb-2">
+                  Inventory Only (candidate retirements or gaps in diagram)
+                </p>
+                {diffStats.inventoryOnlyNorms.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No inventory-only systems detected yet.
+                  </p>
+                ) : (
+                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
+                    {diffStats.inventoryOnlyNorms.map((norm) => {
+                      const display =
+                        inventoryDisplayByNorm[norm] || norm || "(unknown)";
+                      return (
+                        <li key={norm} className="px-3 py-2">
+                          {display}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {/* Diagram-only */}
+              <div>
+                <p className="text-xs font-semibold mb-2">
+                  Diagram Only (net-new or architectural additions)
+                </p>
+                {diffStats.diagramOnly.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No diagram-only systems detected yet.
+                  </p>
+                ) : (
+                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
+                    {diffStats.diagramOnly.map((s) => (
+                      <li
+                        key={s.id}
+                        className="px-3 py-2 flex items-center justify-between gap-2"
+                      >
+                        <span className="truncate">{s.name}</span>
+                        {s.integrationCount > 0 && (
+                          <span className="text-[0.65rem] text-gray-500 whitespace-nowrap">
+                            {formatNumber(s.integrationCount)} links
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-gray-500">
+            Upload an inventory CSV and a Lucid CSV for this project to see differences
+            between what you have in your spreadsheet and what appears in the
+            architecture diagram.
+          </p>
+        )}
+      </Card>
+
+      {/* Truth Pass (beta) */}
+      <Card className="mt-6">
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          TRUTH PASS (BETA)
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          First review of mismatches. Mark systems that only appear in inventory or only
+          in the diagram as intentional, retireable, or noise. Decisions are remembered
+          per project in your browser.
+        </p>
+
+        {!diffStats || truthCandidates.length === 0 ? (
+          <p className="text-xs text-gray-500">
+            Upload both an inventory CSV and a Lucid CSV, and ensure we detect at least
+            a few mismatches before running a Truth Pass.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="text-[0.65rem] uppercase tracking-[0.22em] text-gray-500">
+              Review candidates ({truthCandidates.length.toString()} items)
+            </div>
+            <div className="max-h-80 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
+              {truthCandidates.map((c) => {
+                const decision = truthDecisions[c.key];
+                return (
+                  <div
+                    key={c.key}
+                    className="px-3 py-2 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">
+                          {c.displayName}
+                        </span>
+                        <span
+                          className={`px-1.5 py-[2px] rounded-full text-[0.6rem] border ${
+                            c.source === "inventory"
+                              ? "border-emerald-400 text-emerald-600"
+                              : "border-sky-400 text-sky-600"
+                          }`}
+                        >
+                          {c.source === "inventory" ? "INVENTORY" : "DIAGRAM"}
+                        </span>
+                      </div>
+                      <div className="text-[0.65rem] text-gray-500">
+                        normalized: <span className="font-mono">{c.normalizedName}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => updateTruthDecision(c.key, "keep")}
+                        className={`px-2 py-1 rounded-full text-[0.65rem] border ${
+                          decision === "keep"
+                            ? "bg-slate-900 text-white border-slate-900"
+                            : "border-slate-300 text-slate-700"
+                        }`}
+                      >
+                        Keep
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateTruthDecision(c.key, "retire")}
+                        className={`px-2 py-1 rounded-full text-[0.65rem] border ${
+                          decision === "retire"
+                            ? "bg-amber-600 text-white border-amber-600"
+                            : "border-slate-300 text-slate-700"
+                        }`}
+                      >
+                        Retire
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateTruthDecision(c.key, "noise")}
+                        className={`px-2 py-1 rounded-full text-[0.65rem] border ${
+                          decision === "noise"
+                            ? "bg-gray-800 text-white border-gray-800"
+                            : "border-slate-300 text-slate-700"
+                        }`}
+                      >
+                        Ignore
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[0.65rem] text-gray-500">
+              These decisions aren&apos;t changing the math yet — they&apos;re your
+              first-pass truth layer so future analytics can distinguish intentional
+              architecture from inventory drift and diagram noise.
+            </p>
+          </div>
+        )}
+      </Card>
+
+      {/* Truth Pass – alignment preview */}
+      <TruthPassPanel
+        projectId={projectId}
+        inventorySystemsNorm={inventorySystemsNorm}
+        inventoryDisplayByNorm={inventoryDisplayByNorm}
+        diagramSystems={diagramSystems}
+      />
+
+      {/* MODERNIZATION DIFF VISUALIZATION */}
+      <Card className="mt-6">
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          DIFF VISUALIZATION
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          Quick view of how many systems exist only in inventory, only in the diagram, or in both.
+        </p>
+
+        {diffStats ? (
+          (() => {
+            const inv = diffStats.inventoryOnlyNorms.length;
+            const dia = diffStats.diagramOnly.length;
+            const match = diffStats.overlapSystems.length;
+            const total = inv + dia + match;
+
+            if (!total) {
+              return (
+                <p className="text-xs text-gray-500">
+                  Upload both an inventory CSV and a Lucid CSV for this project to enable the diff visualization.
+                </p>
+              );
+            }
+
+            const max = Math.max(inv, dia, match, 1);
+
+            const rows = [
+              {
+                key: "inventory",
+                label: "Inventory only",
+                value: inv,
+              },
+              {
+                key: "diagram",
+                label: "Diagram only",
+                value: dia,
+              },
+              {
+                key: "matched",
+                label: "Matched (in both)",
+                value: match,
+              },
+            ];
+
+            return (
+              <div className="space-y-3">
+                {rows.map((row) => {
+                  const pct = max ? (row.value / max) * 100 : 0;
+                  return (
+                    <div key={row.key} className="text-xs">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="text-gray-600">{row.label}</span>
+                        <span className="text-gray-500">{row.value}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-slate-900"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
+        ) : (
+          <p className="text-xs text-gray-500">
+            Upload both an inventory CSV and a Lucid CSV for this project to enable the diff visualization.
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+}

@@ -46,44 +46,16 @@ interface DiffStats {
 
 type TruthDecision = "keep" | "remove" | "ignore";
 
-interface TruthRow {
-  norm: string;
-  inventoryName: string | null;
-  diagramNames: string[];
-  recommended: string;
-  confidencePct: number;
-  rationale: string;
+interface TruthCandidate {
+  id: string;
+  source: "inventory" | "diagram";
+  displayName: string;
+  normalizedName: string;
 }
 
 function formatNumber(n: number | undefined | null): string {
   if (n == null || Number.isNaN(n)) return "0";
   return n.toLocaleString();
-}
-
-// Small, deterministic explanation if AI is unavailable (fallback)
-function localExplainTruthRow(row: TruthRow): string {
-  const { inventoryName, diagramNames } = row;
-  const hasInventory = !!inventoryName;
-  const hasDiagram = diagramNames.length > 0;
-
-  if (hasInventory && hasDiagram) {
-    const inventory = inventoryName!.trim().toLowerCase();
-    const diagram = diagramNames[0].trim().toLowerCase();
-    if (inventory === diagram) {
-      return "Inventory and diagram already use the same name.";
-    }
-    return "Names differ slightly; using the diagram label as the canonical name.";
-  }
-
-  if (hasInventory && !hasDiagram) {
-    return "Only appears in your inventory spreadsheet.";
-  }
-
-  if (!hasInventory && hasDiagram) {
-    return "Only appears in the Lucid diagram.";
-  }
-
-  return "Heuristic suggestion based on available names.";
 }
 
 export function TechStackClient({ projectId }: Props) {
@@ -110,10 +82,7 @@ export function TechStackClient({ projectId }: Props) {
   const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
 
-  // Truth-pass state (AI results + local decisions)
-  const [truthRows, setTruthRows] = useState<TruthRow[]>([]);
-  const [truthLoading, setTruthLoading] = useState<boolean>(false);
-  const [truthError, setTruthError] = useState<string | null>(null);
+  // Truth-pass state (placeholder for future persistence)
   const [truthDecisions, setTruthDecisions] = useState<
     Record<string, TruthDecision>
   >({});
@@ -126,7 +95,6 @@ export function TechStackClient({ projectId }: Props) {
       setLoadingDE(true);
       setDeError(null);
       setDiffError(null);
-      setTruthError(null);
 
       try {
         const stats = await fetchDigitalEnterpriseStats(projectId);
@@ -215,7 +183,6 @@ export function TechStackClient({ projectId }: Props) {
 
     if (invNormSet.size === 0 && diagNormSet.size === 0) {
       setDiffStats(null);
-      setTruthRows([]);
       return;
     }
 
@@ -255,148 +222,125 @@ export function TechStackClient({ projectId }: Props) {
     setDiffStats(diff);
   }, [inventorySystemsNorm, diagramSystems]);
 
-  // ---- Call AI Truth Pass whenever diff changes ----
-  useEffect(() => {
-    async function runTruthPass() {
-      if (!diffStats) {
-        setTruthRows([]);
-        setTruthError(null);
-        return;
-      }
+  // ---- Truth candidates (engine for future matching) ----
+  const truthCandidates: TruthCandidate[] = (() => {
+    if (!diffStats) return [];
 
-      const invNorms = new Set(
-        (inventorySystemsNorm ?? []).filter((n) => n && n.trim().length > 0),
-      );
-      const diagNorms = new Set(
-        (diagramSystems ?? [])
-          .map((s) => s.normalizedName)
-          .filter((n) => n && n.trim().length > 0),
-      );
+    const candidates: TruthCandidate[] = [];
 
-      const allNorms = new Set<string>();
-      invNorms.forEach((n) => allNorms.add(n));
-      diagNorms.forEach((n) => allNorms.add(n));
-
-      if (allNorms.size === 0) {
-        setTruthRows([]);
-        setTruthError(null);
-        return;
-      }
-
-      const candidates = Array.from(allNorms).map((norm) => {
-        const inventoryName = inventoryDisplayByNorm[norm] ?? null;
-        const diagramNames = diagramSystems
-          .filter((s) => s.normalizedName === norm)
-          .map((s) => s.name)
-          .filter((name, idx, arr) => name && arr.indexOf(name) === idx);
-
-        return {
-          norm,
-          inventoryName,
-          diagramNames,
-        };
+    for (const norm of diffStats.inventoryOnlyNorms) {
+      const display = inventoryDisplayByNorm[norm] || norm || "(unknown)";
+      candidates.push({
+        id: `inv:${norm}`,
+        source: "inventory",
+        displayName: display,
+        normalizedName: norm,
       });
-
-      setTruthLoading(true);
-      setTruthError(null);
-
-      try {
-        const res = await fetch("/api/truth-pass", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            projectId,
-            candidates,
-          }),
-        });
-
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          console.error("[TRUTH-PASS] API error", res.status, text);
-          setTruthError(
-            "AI suggestions are temporarily unavailable. Showing nothing for now.",
-          );
-          setTruthRows([]);
-          return;
-        }
-
-        const json = await res.json();
-        if (!json || !Array.isArray(json.rows)) {
-        console.error("[TRUTH-PASS] Unexpected response shape", json);
-        setTruthError(
-        "AI suggestions returned an unexpected format. Showing nothing for now.",
-      );
-      return;
-      }
-const newRows = json.rows;
-
-        const rows: TruthRow[] = json.rows.map((r: any) => ({
-          norm: String(r.norm ?? ""),
-          inventoryName:
-            r.inventoryName === null || r.inventoryName === undefined
-              ? null
-              : String(r.inventoryName),
-          diagramNames: Array.isArray(r.diagramNames)
-            ? r.diagramNames.map((d: any) => String(d))
-            : [],
-          recommended: String(r.recommended ?? r.norm ?? ""),
-          confidencePct: Number(r.confidencePct ?? 70),
-          rationale: String(
-            r.rationale ??
-              localExplainTruthRow({
-                norm: String(r.norm ?? ""),
-                inventoryName:
-                  r.inventoryName === null || r.inventoryName === undefined
-                    ? null
-                    : String(r.inventoryName),
-                diagramNames: Array.isArray(r.diagramNames)
-                  ? r.diagramNames.map((d: any) => String(d))
-                  : [],
-                recommended: String(r.recommended ?? r.norm ?? ""),
-                confidencePct: Number(r.confidencePct ?? 70),
-                rationale: "",
-              }),
-          ),
-        }));
-
-        // Simple sort: high confidence first
-        rows.sort((a, b) => {
-          if (b.confidencePct !== a.confidencePct) {
-            return b.confidencePct - a.confidencePct;
-          }
-          return a.recommended.localeCompare(b.recommended);
-        });
-
-        setTruthRows(rows.slice(0, 50));
-      } catch (err: any) {
-        console.error("[TRUTH-PASS] Failed to fetch AI suggestions", err);
-        setTruthError(
-          "AI suggestions failed to load. Check server logs or OpenAI configuration.",
-        );
-        setTruthRows([]);
-      } finally {
-        setTruthLoading(false);
-      }
     }
 
-    runTruthPass();
-  }, [
-    projectId,
-    diffStats,
-    inventorySystemsNorm,
-    inventoryDisplayByNorm,
-    diagramSystems,
-  ]);
+    for (const s of diffStats.diagramOnly) {
+      candidates.push({
+        id: `dia:${s.id}`,
+        source: "diagram",
+        displayName: s.name,
+        normalizedName: s.normalizedName,
+      });
+    }
 
-  // Placeholder for future persistence
+    return candidates.slice(0, 50);
+  })();
+
   function handleTruthDecision(id: string, decision: TruthDecision) {
     setTruthDecisions((prev) => ({
       ...prev,
       [id]: decision,
     }));
   }
+
+  function confidenceForCandidate(c: TruthCandidate): {
+    label: string;
+    pct: number;
+  } {
+    if (c.source === "diagram") {
+      return { label: "Medium", pct: 70 };
+    }
+    return { label: "High", pct: 90 };
+  }
+
+  // ---- Truth rows (REAL data: inventory + diagram overlap) ----
+  const truthRows: {
+    inventoryName: string;
+    diagramName: string;
+    normalizedName: string;
+    recommendedSide: "inventory" | "diagram";
+    confidencePct: number;
+  }[] = (() => {
+    if (!diffStats) return [];
+
+    // Pick a "best" diagram system per normalized name (highest integration count).
+    const bestDiagramByNorm = new Map<string, DiagramSystem>();
+
+    for (const s of diffStats.overlapSystems) {
+      const norm = s.normalizedName;
+      if (!norm) continue;
+      const existing = bestDiagramByNorm.get(norm);
+      if (!existing || s.integrationCount > existing.integrationCount) {
+        bestDiagramByNorm.set(norm, s);
+      }
+    }
+
+    const rows: {
+      inventoryName: string;
+      diagramName: string;
+      normalizedName: string;
+      recommendedSide: "inventory" | "diagram";
+      confidencePct: number;
+    }[] = [];
+
+    for (const [norm, diag] of bestDiagramByNorm.entries()) {
+      const inventoryName =
+        inventoryDisplayByNorm[norm] || norm || "(unknown)";
+      const diagramName = diag.name || norm;
+
+      const invClean = inventoryName.trim().toLowerCase();
+      const diaClean = diagramName.trim().toLowerCase();
+      const same = invClean === diaClean;
+
+      // For now we assume the diagram label is the recommended canonical name.
+      const recommendedSide: "inventory" | "diagram" =
+        diagramName && diagramName.trim().length > 0 ? "diagram" : "inventory";
+
+      // Very simple heuristic: exact match = higher confidence.
+      const confidencePct = same ? 96 : 88;
+
+      rows.push({
+        inventoryName,
+        diagramName,
+        normalizedName: norm,
+        recommendedSide,
+        confidencePct,
+      });
+    }
+
+    // Sort: mismatches first, then by confidence.
+    rows.sort((a, b) => {
+      const aMismatch =
+        a.inventoryName.trim().toLowerCase() ===
+        a.diagramName.trim().toLowerCase()
+          ? 0
+          : 1;
+      const bMismatch =
+        b.inventoryName.trim().toLowerCase() ===
+        b.diagramName.trim().toLowerCase()
+          ? 0
+          : 1;
+
+      if (bMismatch !== aMismatch) return bMismatch - aMismatch;
+      return b.confidencePct - a.confidencePct;
+    });
+
+    return rows.slice(0, 25);
+  })();
 
   // ---- Inventory upload ----
   async function handleInventoryUpload(file: File) {
@@ -465,7 +409,6 @@ const newRows = json.rows;
     setUploadingLucid(true);
     setDeError(null);
     setDiffError(null);
-    setTruthError(null);
 
     try {
       const resp = await uploadLucidCsv(projectId, file);
@@ -542,8 +485,8 @@ const newRows = json.rows;
           INPUTS
         </p>
         <p className="text-xs text-gray-500">
-          Upload artifacts to build a live view of your digital enterprise for project{" "}
-          <span className="font-medium">{projectId}</span>.
+          Upload artifacts to build a live view of your digital enterprise for
+          project <span className="font-medium">{projectId}</span>.
         </p>
       </Card>
 
@@ -624,163 +567,99 @@ const newRows = json.rows;
         )}
         {!loadingDE && !deError && !hasDE && (
           <div className="text-sm text-gray-500">
-            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate this
-            preview.
+            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate
+            this preview.
           </div>
         )}
       </Card>
 
-      {/* TRUTH PASS – AI suggestions made explicit */}
+      {/* TRUTH PASS (PREVIEW) – REAL data, Fuxi recommendation highlighted */}
       <Card className="mt-6">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 uppercase">
-            TRUTH PASS · AI SUGGESTIONS
-          </p>
-          <span className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-[0.65rem] font-medium text-white">
-            AI Powered
-          </span>
-        </div>
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          TRUTH PASS (PREVIEW)
+        </p>
         <p className="text-xs text-gray-500 mb-4">
-          Fuxi compares your inventory and Lucid diagram for project {projectId} and
-          suggests a canonical system name with a confidence rating. Use this as a
-          sanity check before you trust the diff.
+          Fuxi&apos;s first pass at lining up your inventory systems with the
+          Lucid diagram for project {projectId}. Use this as a sanity check
+          before trusting the diff.
         </p>
 
-        {truthLoading && (
-          <div className="mb-3 text-xs text-slate-500">
-            Running AI Truth Pass on your systems...
-          </div>
-        )}
-        {truthError && (
-          <div className="mb-3 text-xs text-red-500">{truthError}</div>
+        {diffError && (
+          <div className="mb-3 text-xs text-red-500">{diffError}</div>
         )}
 
-        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-          <div className="grid grid-cols-3 gap-4 px-4 py-2 text-[0.65rem] tracking-[0.22em] text-gray-500 uppercase bg-slate-50">
-            <span>Inventory</span>
-            <span>Diagram</span>
-            <span className="text-right">Action</span>
-          </div>
+        {truthRows.length === 0 ? (
+          <p className="text-xs text-gray-500">
+            Upload an inventory CSV and a Lucid CSV for this project to see
+            Fuxi&apos;s first-pass matches.
+          </p>
+        ) : (
+          <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+            <div className="grid grid-cols-3 gap-4 px-4 py-2 text-[0.65rem] tracking-[0.22em] text-gray-500 uppercase bg-slate-50">
+              <span>Inventory</span>
+              <span>Diagram</span>
+              <span className="text-right">Decision</span>
+            </div>
 
-          <div className="divide-y divide-gray-100">
-            {truthRows.length === 0 && !truthLoading ? (
-              <div className="px-4 py-3 text-xs text-slate-500">
-                Upload both an inventory CSV and a Lucid CSV for this project to see
-                AI Truth Pass suggestions.
-              </div>
-            ) : (
-              truthRows.map((row) => {
-                const {
-                  norm,
-                  inventoryName,
-                  diagramNames,
-                  recommended,
-                  confidencePct,
-                  rationale,
-                } = row;
+            <div className="divide-y divide-gray-100">
+              {truthRows.map((row, i) => {
+                const inventoryRecommended = row.recommendedSide === "inventory";
+                const diagramRecommended = row.recommendedSide === "diagram";
 
-                const hasInventory = !!inventoryName;
-                const hasDiagram = diagramNames.length > 0;
-
-                const inventoryMatches =
-                  hasInventory &&
-                  inventoryName!.trim().toLowerCase() ===
-                    recommended.trim().toLowerCase();
-
-                const diagramMain = hasDiagram ? diagramNames[0] : "";
-                const diagramRest = hasDiagram ? diagramNames.slice(1) : [];
-
-                const diagramMatches =
-                  hasDiagram &&
-                  diagramMain.trim().toLowerCase() ===
-                    recommended.trim().toLowerCase();
-
-                const inventoryClass = inventoryMatches
+                const inventoryClass = inventoryRecommended
                   ? "font-semibold text-slate-900"
-                  : hasInventory
-                  ? "text-slate-600"
-                  : "text-slate-400 italic";
-
-                const diagramMainClass = diagramMatches
+                  : "font-medium text-slate-500";
+                const diagramClass = diagramRecommended
                   ? "font-semibold text-slate-900"
-                  : hasDiagram
-                  ? "text-slate-600"
-                  : "text-slate-400 italic";
+                  : "font-medium text-slate-500";
 
                 return (
                   <div
-                    key={norm}
+                    key={row.normalizedName + ":" + i}
                     className="grid grid-cols-3 gap-4 px-4 py-3 text-sm items-center"
                   >
                     {/* Inventory name */}
-                    <div className="flex flex-col">
+                    <div className="flex items-center">
                       <span className={inventoryClass}>
-                        {hasInventory ? inventoryName : "Not in inventory"}
+                        {row.inventoryName}
                       </span>
                     </div>
 
-                    {/* Diagram names + Recommended pill */}
-                    <div className="flex flex-col">
-                      <span className={diagramMainClass}>
-                        {hasDiagram ? diagramMain : "Not in diagram"}
-                      </span>
-                      {diagramRest.length > 0 && (
-                        <span className="mt-0.5 text-[0.65rem] text-slate-400">
-                          Also: {diagramRest.join(", ")}
-                        </span>
-                      )}
-                      {(inventoryMatches || diagramMatches) && (
-                        <span className="mt-1 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[0.65rem] font-medium text-emerald-700">
+                    {/* Diagram / recommended name */}
+                    <div className="flex items-center gap-2">
+                      <span className={diagramClass}>{row.diagramName}</span>
+                      {diagramRecommended && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[0.65rem] font-medium text-emerald-700">
                           Recommended
                         </span>
                       )}
                     </div>
 
-                    {/* Confidence + actions + rationale */}
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="flex items-center justify-end gap-3">
-                        <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[0.7rem] font-medium text-white">
-                          {confidencePct}%
-                        </span>
-                        <button
-                          className="px-2.5 py-1 rounded-md bg-gray-100 text-[0.7rem] font-medium text-gray-700 hover:bg-gray-200"
-                          type="button"
-                          onClick={() => handleTruthDecision(norm, "keep")}
-                        >
-                          Keep
-                        </button>
-                        <button
-                          className="px-2.5 py-1 rounded-md bg-gray-100 text-[0.7rem] font-medium text-gray-700 hover:bg-gray-200"
-                          type="button"
-                          onClick={() => handleTruthDecision(norm, "ignore")}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="px-2.5 py-1 rounded-md bg-gray-100 text-[0.7rem] font-medium text-red-600 hover:bg-gray-200"
-                          type="button"
-                          onClick={() => handleTruthDecision(norm, "remove")}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                      <p className="text-[0.65rem] text-slate-400 text-right">
-                        AI: {rationale}
-                      </p>
+                    {/* Confidence + actions */}
+                    <div className="flex items-center justify-end gap-3">
+                      <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[0.7rem] font-medium text-white">
+                        {row.confidencePct}%
+                      </span>
+                      <button className="px-2.5 py-1 rounded-md bg-gray-100 text-[0.7rem] font-medium text-gray-700 hover:bg-gray-200">
+                        Keep
+                      </button>
+                      <button className="px-2.5 py-1 rounded-md bg-gray-100 text-[0.7rem] font-medium text-gray-700 hover:bg-gray-200">
+                        Edit
+                      </button>
+                      <button className="px-2.5 py-1 rounded-md bg-gray-100 text-[0.7rem] font-medium text-red-600 hover:bg-gray-200">
+                        Delete
+                      </button>
                     </div>
                   </div>
                 );
-              })
-            )}
-          </div>
+              })}
+            </div>
 
-          <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[0.7rem] text-slate-500 flex items-center justify-between">
-            <span>Preview only — AI suggestions and decisions are not yet saved.</span>
-            <span className="text-[0.65rem] uppercase tracking-[0.18em] text-slate-400">
-              Powered by AI
-            </span>
+            <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[0.7rem] text-slate-500">
+              Preview only — decisions not yet saved.
+            </div>
           </div>
-        </div>
+        )}
       </Card>
     </div>
   );

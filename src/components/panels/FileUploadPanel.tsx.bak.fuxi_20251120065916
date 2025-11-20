@@ -3,7 +3,7 @@
 import React from "react";
 import { FileUpload } from "@/components/shared/FileUpload";
 
-interface Props {
+interface FileUploadPanelProps {
   title: string;
   helper: string;
   label: string;
@@ -17,18 +17,18 @@ export function FileUploadPanel({
   label,
   onFileSelected,
   className = "",
-}: Props) {
+}: FileUploadPanelProps) {
   return (
     <div
-      className={`p-6 rounded-2xl border border-slate-200 bg-white ${className}`}
+      className={`rounded-2xl border border-slate-200 bg-white p-6 ${className}`}
     >
-      <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+      <p className="text-[0.65rem] uppercase tracking-[0.25em] text-gray-500">
         {title}
       </p>
 
-      <p className="text-xs text-gray-600 mb-4">{helper}</p>
+      <p className="text-xs text-gray-500 mt-1 mb-4">{helper}</p>
 
-      {/* ✔️ ONLY custom uploader — NO browser-native file input */}
+      {/* ⬇️ The ONLY upload control */}
       <FileUpload label={label} onFileSelected={onFileSelected} />
     </div>
   );

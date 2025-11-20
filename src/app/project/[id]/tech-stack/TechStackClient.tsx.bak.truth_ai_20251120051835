@@ -46,13 +46,19 @@ interface DiffStats {
 
 type TruthDecision = "keep" | "remove" | "ignore";
 
+interface TruthCandidate {
+  id: string;
+  source: "inventory" | "diagram";
+  displayName: string;
+  normalizedName: string;
+}
+
 interface TruthRow {
   norm: string;
   inventoryName: string | null;
   diagramNames: string[];
   recommended: string;
   confidencePct: number;
-  rationale: string;
 }
 
 function formatNumber(n: number | undefined | null): string {
@@ -60,8 +66,8 @@ function formatNumber(n: number | undefined | null): string {
   return n.toLocaleString();
 }
 
-// Small, deterministic explanation if AI is unavailable (fallback)
-function localExplainTruthRow(row: TruthRow): string {
+// Small, deterministic explanation to make the AI visible
+function explainTruthRow(row: TruthRow): string {
   const { inventoryName, diagramNames } = row;
   const hasInventory = !!inventoryName;
   const hasDiagram = diagramNames.length > 0;
@@ -110,10 +116,7 @@ export function TechStackClient({ projectId }: Props) {
   const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
 
-  // Truth-pass state (AI results + local decisions)
-  const [truthRows, setTruthRows] = useState<TruthRow[]>([]);
-  const [truthLoading, setTruthLoading] = useState<boolean>(false);
-  const [truthError, setTruthError] = useState<string | null>(null);
+  // Truth-pass state (placeholder for future persistence)
   const [truthDecisions, setTruthDecisions] = useState<
     Record<string, TruthDecision>
   >({});
@@ -126,7 +129,6 @@ export function TechStackClient({ projectId }: Props) {
       setLoadingDE(true);
       setDeError(null);
       setDiffError(null);
-      setTruthError(null);
 
       try {
         const stats = await fetchDigitalEnterpriseStats(projectId);
@@ -215,7 +217,6 @@ export function TechStackClient({ projectId }: Props) {
 
     if (invNormSet.size === 0 && diagNormSet.size === 0) {
       setDiffStats(null);
-      setTruthRows([]);
       return;
     }
 
@@ -255,140 +256,74 @@ export function TechStackClient({ projectId }: Props) {
     setDiffStats(diff);
   }, [inventorySystemsNorm, diagramSystems]);
 
-  // ---- Call AI Truth Pass whenever diff changes ----
-  useEffect(() => {
-    async function runTruthPass() {
-      if (!diffStats) {
-        setTruthRows([]);
-        setTruthError(null);
-        return;
-      }
+  // ---- Truth Pass rows: group by normalized name across both artifacts ----
+  const truthRows: TruthRow[] = (() => {
+    const rows: TruthRow[] = [];
 
-      const invNorms = new Set(
-        (inventorySystemsNorm ?? []).filter((n) => n && n.trim().length > 0),
-      );
-      const diagNorms = new Set(
-        (diagramSystems ?? [])
-          .map((s) => s.normalizedName)
-          .filter((n) => n && n.trim().length > 0),
-      );
+    const invNorms = new Set(
+      (inventorySystemsNorm ?? []).filter((n) => n && n.trim().length > 0),
+    );
+    const diagNorms = new Set(
+      (diagramSystems ?? [])
+        .map((s) => s.normalizedName)
+        .filter((n) => n && n.trim().length > 0),
+    );
 
-      const allNorms = new Set<string>();
-      invNorms.forEach((n) => allNorms.add(n));
-      diagNorms.forEach((n) => allNorms.add(n));
+    const allNorms = new Set<string>();
+    invNorms.forEach((n) => allNorms.add(n));
+    diagNorms.forEach((n) => allNorms.add(n));
 
-      if (allNorms.size === 0) {
-        setTruthRows([]);
-        setTruthError(null);
-        return;
-      }
+    if (allNorms.size === 0) return [];
 
-      const candidates = Array.from(allNorms).map((norm) => {
-        const inventoryName = inventoryDisplayByNorm[norm] ?? null;
-        const diagramNames = diagramSystems
-          .filter((s) => s.normalizedName === norm)
-          .map((s) => s.name)
-          .filter((name, idx, arr) => name && arr.indexOf(name) === idx);
+    for (const norm of allNorms) {
+      const inventoryName = inventoryDisplayByNorm[norm] ?? null;
 
-        return {
-          norm,
-          inventoryName,
-          diagramNames,
-        };
-      });
+      const diagramNames = diagramSystems
+        .filter((s) => s.normalizedName === norm)
+        .map((s) => s.name)
+        .filter((name, idx, arr) => name && arr.indexOf(name) === idx);
 
-      setTruthLoading(true);
-      setTruthError(null);
+      let recommended = inventoryName || diagramNames[0] || norm;
+      let confidencePct = 70;
 
-      try {
-        const res = await fetch("/api/truth-pass", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            projectId,
-            candidates,
-          }),
-        });
-
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          console.error("[TRUTH-PASS] API error", res.status, text);
-          setTruthError(
-            "AI suggestions are temporarily unavailable. Showing nothing for now.",
-          );
-          setTruthRows([]);
-          return;
+      if (inventoryName && diagramNames.length === 1) {
+        const diagName = diagramNames[0];
+        if (
+          inventoryName.trim().toLowerCase() ===
+          diagName.trim().toLowerCase()
+        ) {
+          recommended = diagName;
+          confidencePct = 95;
+        } else {
+          recommended = diagName;
+          confidencePct = 85;
         }
-
-        const json = await res.json();
-        if (!json || !Array.isArray(json.rows)) {
-        console.error("[TRUTH-PASS] Unexpected response shape", json);
-        setTruthError(
-        "AI suggestions returned an unexpected format. Showing nothing for now.",
-      );
-      return;
+      } else if (!inventoryName && diagramNames.length === 1) {
+        recommended = diagramNames[0];
+        confidencePct = 80;
+      } else if (inventoryName && diagramNames.length === 0) {
+        recommended = inventoryName;
+        confidencePct = 75;
       }
-const newRows = json.rows;
 
-        const rows: TruthRow[] = json.rows.map((r: any) => ({
-          norm: String(r.norm ?? ""),
-          inventoryName:
-            r.inventoryName === null || r.inventoryName === undefined
-              ? null
-              : String(r.inventoryName),
-          diagramNames: Array.isArray(r.diagramNames)
-            ? r.diagramNames.map((d: any) => String(d))
-            : [],
-          recommended: String(r.recommended ?? r.norm ?? ""),
-          confidencePct: Number(r.confidencePct ?? 70),
-          rationale: String(
-            r.rationale ??
-              localExplainTruthRow({
-                norm: String(r.norm ?? ""),
-                inventoryName:
-                  r.inventoryName === null || r.inventoryName === undefined
-                    ? null
-                    : String(r.inventoryName),
-                diagramNames: Array.isArray(r.diagramNames)
-                  ? r.diagramNames.map((d: any) => String(d))
-                  : [],
-                recommended: String(r.recommended ?? r.norm ?? ""),
-                confidencePct: Number(r.confidencePct ?? 70),
-                rationale: "",
-              }),
-          ),
-        }));
-
-        // Simple sort: high confidence first
-        rows.sort((a, b) => {
-          if (b.confidencePct !== a.confidencePct) {
-            return b.confidencePct - a.confidencePct;
-          }
-          return a.recommended.localeCompare(b.recommended);
-        });
-
-        setTruthRows(rows.slice(0, 50));
-      } catch (err: any) {
-        console.error("[TRUTH-PASS] Failed to fetch AI suggestions", err);
-        setTruthError(
-          "AI suggestions failed to load. Check server logs or OpenAI configuration.",
-        );
-        setTruthRows([]);
-      } finally {
-        setTruthLoading(false);
-      }
+      rows.push({
+        norm,
+        inventoryName,
+        diagramNames,
+        recommended,
+        confidencePct,
+      });
     }
 
-    runTruthPass();
-  }, [
-    projectId,
-    diffStats,
-    inventorySystemsNorm,
-    inventoryDisplayByNorm,
-    diagramSystems,
-  ]);
+    rows.sort((a, b) => {
+      if (b.confidencePct !== a.confidencePct) {
+        return b.confidencePct - a.confidencePct;
+      }
+      return a.recommended.localeCompare(b.recommended);
+    });
+
+    return rows.slice(0, 50);
+  })();
 
   // Placeholder for future persistence
   function handleTruthDecision(id: string, decision: TruthDecision) {
@@ -465,7 +400,6 @@ const newRows = json.rows;
     setUploadingLucid(true);
     setDeError(null);
     setDiffError(null);
-    setTruthError(null);
 
     try {
       const resp = await uploadLucidCsv(projectId, file);
@@ -630,30 +564,16 @@ const newRows = json.rows;
         )}
       </Card>
 
-      {/* TRUTH PASS – AI suggestions made explicit */}
+      {/* TRUTH PASS (PREVIEW) – AI suggestions made explicit */}
       <Card className="mt-6">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 uppercase">
-            TRUTH PASS · AI SUGGESTIONS
-          </p>
-          <span className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-[0.65rem] font-medium text-white">
-            AI Powered
-          </span>
-        </div>
-        <p className="text-xs text-gray-500 mb-4">
-          Fuxi compares your inventory and Lucid diagram for project {projectId} and
-          suggests a canonical system name with a confidence rating. Use this as a
-          sanity check before you trust the diff.
+        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
+          TRUTH PASS · AI SUGGESTIONS
         </p>
-
-        {truthLoading && (
-          <div className="mb-3 text-xs text-slate-500">
-            Running AI Truth Pass on your systems...
-          </div>
-        )}
-        {truthError && (
-          <div className="mb-3 text-xs text-red-500">{truthError}</div>
-        )}
+        <p className="text-xs text-gray-500 mb-4">
+          Fuxi uses simple heuristics to propose a canonical system name from your
+          inventory and Lucid diagram for project {projectId}. Review the suggestions
+          before you trust the diff.
+        </p>
 
         <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
           <div className="grid grid-cols-3 gap-4 px-4 py-2 text-[0.65rem] tracking-[0.22em] text-gray-500 uppercase bg-slate-50">
@@ -663,10 +583,10 @@ const newRows = json.rows;
           </div>
 
           <div className="divide-y divide-gray-100">
-            {truthRows.length === 0 && !truthLoading ? (
+            {truthRows.length === 0 ? (
               <div className="px-4 py-3 text-xs text-slate-500">
                 Upload both an inventory CSV and a Lucid CSV for this project to see
-                AI Truth Pass suggestions.
+                Truth Pass suggestions.
               </div>
             ) : (
               truthRows.map((row) => {
@@ -676,36 +596,38 @@ const newRows = json.rows;
                   diagramNames,
                   recommended,
                   confidencePct,
-                  rationale,
                 } = row;
 
                 const hasInventory = !!inventoryName;
                 const hasDiagram = diagramNames.length > 0;
 
-                const inventoryMatches =
+                const invRecommended =
                   hasInventory &&
                   inventoryName!.trim().toLowerCase() ===
                     recommended.trim().toLowerCase();
 
-                const diagramMain = hasDiagram ? diagramNames[0] : "";
-                const diagramRest = hasDiagram ? diagramNames.slice(1) : [];
-
-                const diagramMatches =
+                const diagRecommended =
+                  !invRecommended &&
                   hasDiagram &&
-                  diagramMain.trim().toLowerCase() ===
+                  diagramNames[0].trim().toLowerCase() ===
                     recommended.trim().toLowerCase();
 
-                const inventoryClass = inventoryMatches
+                const inventoryClass = invRecommended
                   ? "font-semibold text-slate-900"
                   : hasInventory
                   ? "text-slate-600"
                   : "text-slate-400 italic";
 
-                const diagramMainClass = diagramMatches
+                const diagramMain = hasDiagram ? diagramNames[0] : "";
+                const diagramRest = hasDiagram ? diagramNames.slice(1) : [];
+
+                const diagramMainClass = diagRecommended
                   ? "font-semibold text-slate-900"
                   : hasDiagram
                   ? "text-slate-600"
                   : "text-slate-400 italic";
+
+                const explanation = explainTruthRow(row);
 
                 return (
                   <div
@@ -729,14 +651,14 @@ const newRows = json.rows;
                           Also: {diagramRest.join(", ")}
                         </span>
                       )}
-                      {(inventoryMatches || diagramMatches) && (
+                      {(invRecommended || diagRecommended) && (
                         <span className="mt-1 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[0.65rem] font-medium text-emerald-700">
                           Recommended
                         </span>
                       )}
                     </div>
 
-                    {/* Confidence + actions + rationale */}
+                    {/* Confidence + actions + explanation */}
                     <div className="flex flex-col items-end gap-1">
                       <div className="flex items-center justify-end gap-3">
                         <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[0.7rem] font-medium text-white">
@@ -765,7 +687,7 @@ const newRows = json.rows;
                         </button>
                       </div>
                       <p className="text-[0.65rem] text-slate-400 text-right">
-                        AI: {rationale}
+                        {explanation}
                       </p>
                     </div>
                   </div>
@@ -774,11 +696,8 @@ const newRows = json.rows;
             )}
           </div>
 
-          <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[0.7rem] text-slate-500 flex items-center justify-between">
-            <span>Preview only — AI suggestions and decisions are not yet saved.</span>
-            <span className="text-[0.65rem] uppercase tracking-[0.18em] text-slate-400">
-              Powered by AI
-            </span>
+          <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[0.7rem] text-slate-500">
+            Preview only — AI suggestions and decisions are not yet saved.
           </div>
         </div>
       </Card>
