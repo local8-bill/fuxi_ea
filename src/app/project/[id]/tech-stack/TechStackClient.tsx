@@ -98,9 +98,23 @@ function loadProjectIntake(projectId: string): ProjectIntake | null {
 
 export function TechStackClient({ projectId }: Props) {
   // Inventory / artifacts
-  const [artifactCount, setArtifactCount] = useState<number>(0);
+  const [inventoryFileName, setInventoryFileName] = useState<string | null>(null);
+  const [lucidFileName, setLucidFileName] = useState<string | null>(null);
   const [inventoryRows, setInventoryRows] = useState<number>(0);
   const [normalizedApps, setNormalizedApps] = useState<number>(0);
+
+  const artifactCount =
+    (inventoryFileName ? 1 : 0) + (lucidFileName ? 1 : 0);
+
+  const artifactDescription = (() => {
+    const parts: string[] = [];
+    if (inventoryFileName) parts.push(`Inventory: ${inventoryFileName}`);
+    if (lucidFileName) parts.push(`Lucid: ${lucidFileName}`);
+    if (parts.length === 0) {
+      return "Inventory and diagram files in this project.";
+    }
+    return parts.join(" • ");
+  })();
   const [invStats, setInvStats] = useState<InventoryStatsLocal | null>(null);
   const [uploadingInv, setUploadingInv] = useState<boolean>(false);
   const [invError, setInvError] = useState<string | null>(null);
@@ -383,6 +397,7 @@ export function TechStackClient({ projectId }: Props) {
 
   // Inventory upload
   async function handleInventoryUpload(file: File) {
+    setInventoryFileName(file.name);
     setUploadingInv(true);
     setInvError(null);
 
@@ -411,9 +426,6 @@ export function TechStackClient({ projectId }: Props) {
       setInventoryRows(stats.rowCount);
       setNormalizedApps(stats.uniqueSystems);
 
-      setArtifactCount((prev) =>
-        stats.rowCount > 0 ? Math.max(prev, 1) : prev,
-      );
 
       const normSet = new Set<string>();
       const displayMap: Record<string, string> = {};
@@ -445,6 +457,7 @@ export function TechStackClient({ projectId }: Props) {
 
   // Lucid upload
   async function handleLucidUpload(file: File) {
+    setLucidFileName(file.name);
     setUploadingLucid(true);
     setDeError(null);
     setDiffError(null);
@@ -495,7 +508,7 @@ export function TechStackClient({ projectId }: Props) {
         );
       }
 
-      setArtifactCount((prev) => Math.max(prev, 1));
+      // setArtifactCount REMOVED((prev) => Math.max(prev, 1));
     } catch (err: any) {
       console.error("[TECH-STACK] Lucid upload failed", err);
       setDeError(err?.message ?? "Lucid upload failed.");
@@ -550,7 +563,7 @@ export function TechStackClient({ projectId }: Props) {
         <MetricCard
           label="ARTIFACTS"
           value={formatNumber(artifactCount)}
-          description="Inventory and diagram files in this project."
+          description={artifactDescription}
         />
         <MetricCard
           label="INVENTORY ROWS"
@@ -569,222 +582,8 @@ export function TechStackClient({ projectId }: Props) {
       )}
 
       {/* Digital Enterprise preview */}
-      <Card className="mb-8">
-        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-          DIGITAL ENTERPRISE PREVIEW
-        </p>
-        <p className="text-xs text-gray-500 mb-4">
-          Derived from your Lucid architecture diagram. Systems and integrations
-          here represent the structural view of your ecosystem.
-        </p>
-        {loadingDE && (
-          <div className="text-sm text-gray-500">
-            Loading Digital Enterprise preview...
-          </div>
-        )}
-        {!loadingDE && deError && (
-          <div className="text-sm text-red-500">{deError}</div>
-        )}
-        {!loadingDE && !deError && hasDE && deStats && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MetricCard
-              label="SYSTEMS"
-              value={formatNumber(deStats.systemsFuture)}
-              description="Unique labeled systems in this diagram."
-            />
-            <MetricCard
-              label="INTEGRATIONS"
-              value={formatNumber(deStats.integrationsFuture)}
-              description="System-to-system connections from Lucid connector lines."
-            />
-            <MetricCard
-              label="DOMAINS DETECTED"
-              value={formatNumber(deStats.domainsDetected ?? 0)}
-              description="Domain clustering will be introduced in a later iteration."
-            />
-          </div>
-        )}
-        {!loadingDE && !deError && !hasDE && (
-          <div className="text-sm text-gray-500">
-            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate this
-            preview.
-          </div>
-        )}
-      </Card>
 
       {/* Modernization Diff */}
-      <Card>
-        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-          MODERNIZATION DIFF
-        </p>
-        <p className="text-xs text-gray-500 mb-4">
-          Compares your inventory spreadsheet against the Lucid architecture view to
-          highlight systems that are only in inventory, only in the diagram, or
-          present in both.
-        </p>
-
-        {diffError && (
-          <div className="mb-3 text-xs text-red-500">{diffError}</div>
-        )}
-
-        {diffStats ? (
-          <>
-            <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <MetricCard
-                label="SYSTEMS IN INVENTORY"
-                value={formatNumber(diffStats.inventoryCount)}
-                description="Distinct systems from your inventory spreadsheet."
-              />
-              <MetricCard
-                label="SYSTEMS IN DIAGRAM"
-                value={formatNumber(diffStats.diagramCount)}
-                description="Distinct systems from the Lucid architecture view."
-              />
-              <MetricCard
-                label="MATCHED SYSTEMS"
-                value={formatNumber(diffStats.overlapCount)}
-                description="Systems that appear in both inventory and diagram."
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Inventory-only */}
-              <div>
-                <p className="text-xs font-semibold mb-2">
-                  Inventory Only (candidate removals or gaps in diagram)
-                </p>
-                {diffStats.inventoryOnlyNorms.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    No inventory-only systems detected yet.
-                  </p>
-                ) : (
-                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
-                    {diffStats.inventoryOnlyNorms.map((norm) => {
-                      const display =
-                        inventoryDisplayByNorm[norm] || norm || "(unknown)";
-                      return (
-                        <li key={norm} className="px-3 py-2">
-                          {display}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              {/* Diagram-only */}
-              <div>
-                <p className="text-xs font-semibold mb-2">
-                  Diagram Only (net-new or architectural additions)
-                </p>
-                {diffStats.diagramOnly.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    No diagram-only systems detected yet.
-                  </p>
-                ) : (
-                  <ul className="text-xs max-h-72 overflow-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
-                    {diffStats.diagramOnly.map((s) => (
-                      <li
-                        key={s.id}
-                        className="px-3 py-2 flex items-center justify-between gap-2"
-                      >
-                        <span className="truncate">{s.name}</span>
-                        {s.integrationCount > 0 && (
-                          <span className="text-[0.65rem] text-gray-500 whitespace-nowrap">
-                            {formatNumber(s.integrationCount)} links
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <p className="text-xs text-gray-500">
-            Upload an inventory CSV and a Lucid CSV for this project to see
-            differences between what you have in your spreadsheet and what appears in
-            the architecture diagram.
-          </p>
-        )}
-      </Card>
-
-      {/* DIFF VISUALIZATION */}
-      <Card className="mt-6">
-        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-          DIFF VISUALIZATION
-        </p>
-        <p className="text-xs text-gray-500 mb-4">
-          Quick view of how many systems exist only in inventory, only in the diagram,
-          or in both.
-        </p>
-
-        {diffStats ? (
-          (() => {
-            const inv = diffStats.inventoryOnlyNorms?.length ?? 0;
-            const dia = diffStats.diagramOnly?.length ?? 0;
-            const match = diffStats.overlapSystems?.length ?? 0;
-            const total = inv + dia + match;
-
-            if (!total) {
-              return (
-                <p className="text-xs text-gray-500">
-                  Upload both an inventory CSV and a Lucid CSV for this project to
-                  enable the diff visualization.
-                </p>
-              );
-            }
-
-            const max = Math.max(inv, dia, match, 1);
-
-            const rows = [
-              {
-                key: "inventory",
-                label: "Inventory only",
-                value: inv,
-              },
-              {
-                key: "diagram",
-                label: "Diagram only",
-                value: dia,
-              },
-              {
-                key: "matched",
-                label: "Matched (in both)",
-                value: match,
-              },
-            ];
-
-            return (
-              <div className="space-y-3">
-                {rows.map((row) => {
-                  const pct = max ? (row.value / max) * 100 : 0;
-                  return (
-                    <div key={row.key} className="text-xs">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className="text-gray-600">{row.label}</span>
-                        <span className="text-gray-500">{row.value}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-slate-900"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()
-        ) : (
-          <p className="text-xs text-gray-500">
-            Upload both an inventory CSV and a Lucid CSV for this project to enable
-            the diff visualization.
-          </p>
-        )}
-      </Card>
 
       {/* TRUTH PASS – AI suggestions */}
       <Card className="mt-6">
@@ -841,11 +640,11 @@ export function TechStackClient({ projectId }: Props) {
             <div className="divide-y divide-gray-100">
               {truthRows.map((row, i) => {
                 const inventoryLabel =
-                  row.inventoryName && row.inventoryName.trim().length > 0
+                  row.inventoryName && (typeof row.inventoryName === "string" ? row.inventoryName.trim() : "").length > 0
                     ? row.inventoryName
                     : "Not in inventory";
                 const diagramLabel =
-                  row.diagramName && row.diagramName.trim().length > 0
+                  row.diagramName && (typeof row.diagramName === "string" ? row.diagramName.trim() : "").length > 0
                     ? row.diagramName
                     : "Not in diagram";
                 const recommendedName =

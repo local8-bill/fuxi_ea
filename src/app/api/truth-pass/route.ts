@@ -1,184 +1,162 @@
+"use server";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
+const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export const runtime = "nodejs";
-
 type TruthPassCandidate = {
-  norm: string;
-  inventoryName?: string | null;
-  diagramNames?: string[];
-};
-
-type TruthPassRow = {
   norm: string;
   inventoryName: string | null;
   diagramNames: string[];
-  recommended: string;
-  confidence: number;
-  reason: string;
 };
 
-export async function POST(req: NextRequest) {
+interface TruthPassRequestBody {
+  projectId?: string;
+  candidates?: TruthPassCandidate[];
+}
+
+type TruthRow = {
+  id: string;
+  norm: string;
+  inventoryName: string | null;
+  diagramName: string | null;
+  recommended: string;
+  confidence: number;
+  note: string;
+};
+
+export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => null);
+    const body = (await req.json()) as TruthPassRequestBody;
+    const candidates = Array.isArray(body.candidates) ? body.candidates : [];
 
-    const candidates: TruthPassCandidate[] = Array.isArray(body?.candidates)
-      ? body.candidates
-      : [];
-
-    if (!candidates.length) {
-      return NextResponse.json(
-        {
-          ok: true,
-          rows: [],
-        },
-        { status: 200 }
-      );
+    if (candidates.length === 0) {
+      return NextResponse.json({ ok: true, rows: [] });
     }
 
-    console.log("[TRUTH-PASS] Incoming candidates", {
-      count: candidates.length,
-    });
+    const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
-    // If no API key is configured, fall back to a simple heuristic
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn(
-        "[TRUTH-PASS] No OPENAI_API_KEY set – using heuristic fallback"
-      );
-      const fallbackRows: TruthPassRow[] = candidates.map((c) => {
-        const inventoryName = (c.inventoryName ?? "").trim() || null;
-        const diagramNames = (c.diagramNames ?? []).map((d) => d.trim());
-        const firstDiagram = diagramNames[0] ?? "";
+    const systemPrompt = `
+You are Fuxi, an enterprise architecture assistant.
 
-        let recommended = firstDiagram || inventoryName || c.norm;
-        let confidence = firstDiagram && inventoryName ? 85 : 70;
-        let reason =
-          firstDiagram && inventoryName
-            ? "Diagram and inventory both provide plausible names; preferring diagram as canonical."
-            : "No AI available; using best-effort heuristic from provided names.";
+You receive a list of technology "candidates" that come from:
+- an application inventory spreadsheet, and
+- a Lucid architecture diagram.
 
-        return {
-          norm: c.norm,
-          inventoryName,
-          diagramNames,
-          recommended,
-          confidence,
-          reason,
-        };
-      });
+Each candidate has:
+- norm: normalized key (string)
+- inventoryName: name from inventory (string or null)
+- diagramNames: array of names from diagram (strings, possibly empty)
 
-      return NextResponse.json(
-        {
-          ok: true,
-          rows: fallbackRows,
-        },
-        { status: 200 }
-      );
-    }
+For each candidate, you must decide a canonical "recommended" system name and confidence.
 
-  const intakeSummary = intake ? `Industry: ${intake.industry}. Drivers: ${intake.drivers?.join(", ")}. Aggression: ${intake.aggression}. Change absorption: ${intake.changeAbsorption}.` : "No intake provided.";
-  
-    const systemPrompt = [
-      "You are helping an enterprise architect reconcile system names",
-      "between an inventory spreadsheet and an architecture diagram.",
-      "",
-      "You will receive JSON with a list of candidates:",
-      "{",
-      '  \"candidates\": [',
-      '    { \"norm\": string, \"inventoryName\": string | null, \"diagramNames\": string[] }',
-      "  ]",
-      "}",
-      "",
-      "For each candidate you must decide a single canonical system name.",
-      "",
-      "Rules:",
-      "- Prefer official product names (e.g. 'Oracle E-Business Suite' over 'Oracle EBS')",
-      "- If inventory and diagram clearly refer to the same thing, pick the most precise / canonical label",
-      "- If only one side is populated, use that name as recommended",
-      "- Confidence is a number 0-100",
-      "- Reason is a short, single-sentence explanation",
-      "",
-      "Return ONLY valid JSON in this exact shape:",
-      "{",
-      '  \"rows\": [',
-      "    {",
-      '      \"norm\": string,',
-      '      \"inventoryName\": string | null,',
-      '      \"diagramNames\": string[],',
-      '      \"recommended\": string,',
-      '      \"confidence\": number,',
-      '      \"reason\": string',
-      "    }",
-      "  ]",
-      "}",
-    ].join("\n");
+Return a JSON object with:
 
-    const userPayload = {
-      candidates: candidates.map((c) => ({
-        norm: c.norm,
-        inventoryName: c.inventoryName ?? null,
-        diagramNames: c.diagramNames ?? [],
-      })),
-    };
+{
+  "rows": [
+    {
+      "id": string,                // stable row id, you can synthesize
+      "norm": string,              // copy of the candidate norm
+      "inventoryName": string|null,
+      "diagramName": string|null,  // pick the best diagram name or null
+      "recommended": string,       // canonical label
+      "confidence": number,        // integer 0-100
+      "note": string               // short 1-sentence explanation
+    },
+    ...
+  ]
+}
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      response_format: { type: "json_object" },
+Rules:
+- Prefer clear product / platform names (e.g., "Oracle E-Business Suite", "SAP ECC").
+- If only inventoryName exists, recommended usually equals inventoryName.
+- If only diagramNames exist, recommended usually matches the clearest diagram name.
+- If both exist but differ, choose the one that feels like the real product name and explain why.
+- Always return valid JSON only, no extra commentary.
+`.trim();
+
+    const userContent = JSON.stringify({ candidates });
+
+    const completion = await client.chat.completions.create({
+      model,
       messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: JSON.stringify(userPayload),
-        },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
       ],
+      response_format: { type: "json_object" },
     });
 
-    const content = completion.choices[0]?.message?.content ?? "";
+    const raw = completion.choices[0]?.message?.content ?? "{}";
 
-    let parsed: any;
+    let parsed: { rows?: TruthRow[] };
     try {
-      parsed = JSON.parse(content);
+      parsed = JSON.parse(raw);
     } catch (err) {
-      console.error("[TRUTH-PASS] AI returned non-JSON", err, content);
+      console.error("[TRUTH-PASS] JSON parse error from model", err, raw);
       return NextResponse.json(
         {
           ok: false,
           error: "AI returned non-JSON",
           rows: [],
-          raw: content,
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     const rows = Array.isArray(parsed.rows) ? parsed.rows : [];
 
-    console.log("[TRUTH-PASS] AI rows", { count: rows.length });
+    const safeRows: TruthRow[] = rows.map((r, idx) => {
+      const candidate = candidates[idx];
+      const fallbackNorm = candidate?.norm ?? r.norm ?? "";
+      const fallbackInventory =
+        r.inventoryName ??
+        candidate?.inventoryName ??
+        null;
+      const fallbackDiagram =
+        r.diagramName ??
+        (candidate?.diagramNames?.[0] ?? null);
 
-    return NextResponse.json(
-      {
-        ok: true,
-        rows,
-      },
-      { status: 200 }
-    );
+      let recommended =
+        r.recommended ??
+        fallbackInventory ??
+        fallbackDiagram ??
+        fallbackNorm;
+
+      if (!recommended || typeof recommended !== "string") {
+        recommended = fallbackNorm || "Unknown system";
+      }
+
+      const confidence =
+        typeof r.confidence === "number"
+          ? Math.max(0, Math.min(100, Math.round(r.confidence)))
+          : 70;
+
+      return {
+        id: r.id ?? `row-${idx}`,
+        norm: fallbackNorm,
+        inventoryName: fallbackInventory,
+        diagramName: fallbackDiagram,
+        recommended,
+        confidence,
+        note:
+          r.note ??
+          "Suggestion based on inventory and diagram names.",
+      };
+    });
+
+    return NextResponse.json({ ok: true, rows: safeRows });
   } catch (err: any) {
-    console.error("[TRUTH-PASS] Unhandled error", err);
+    console.error("[TRUTH-PASS] API error", err);
     return NextResponse.json(
       {
         ok: false,
-        error: err?.message ?? "Truth pass failed",
+        error: String(err?.message ?? err ?? "Unknown error"),
         rows: [],
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
