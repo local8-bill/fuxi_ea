@@ -1,267 +1,197 @@
-export type AggressionLevel = "low" | "medium" | "high" | null;
+// Fuxi Portfolio Engine
+// Turns intake answers (+ optional tech stats) into a portfolio-level narrative.
 
 export interface ProjectIntake {
   projectId: string;
   industry: string | null;
-  drivers: string[];         // e.g. ["simplify", "modernize", "grow"]
-  aggression: AggressionLevel;
-  constraints: string[];     // free-form constraints from intake
-  untouchables: string[];    // systems / platforms that cannot move
-  notes?: string | null;
+  drivers: string[];          // e.g. ["cost", "growth", "experience"]
+  aggression: string | null;  // e.g. "conservative" | "balanced" | "aggressive"
+  constraints: string[];      // e.g. ["limited-budget", "hiring-freeze"]
+  untouchables: string[];     // e.g. ["SAP", "Oracle EBS"]
+  notes: string | null;
 }
 
 export interface PortfolioSignals {
-  projectId: string;
-
-  // High-level summary
   goalSummary: string;
   changePosture: string;
-
-  // Where to focus vs where to be careful
+  suggestedThemes: string[];
   focusAreas: string[];
   guardrails: string[];
-
-  // How we will talk about the portfolio play
-  suggestedThemes: string[]; // e.g. ["Simplification", "Modernization"]
-
-  // Narrative bullets we can surface in the UI / AI copy
   commentary: string[];
 }
 
-/**
- * Small helper to normalize driver strings.
- */
-function normalizeDriver(raw: string): string {
-  return raw.trim().toLowerCase();
+function hasDriver(intake: ProjectIntake | null, key: string): boolean {
+  if (!intake || !Array.isArray(intake.drivers)) return false;
+  return intake.drivers.some((d) => d.toLowerCase() === key.toLowerCase());
 }
 
-/**
- * Build a human-readable summary of the primary goals.
- */
-function deriveGoalSummary(intake: ProjectIntake | null): string {
-  if (!intake || !intake.drivers || intake.drivers.length === 0) {
-    return "No primary portfolio goals captured yet.";
-  }
-
-  const normalized = Array.from(
-    new Set(intake.drivers.map(normalizeDriver))
-  );
-
-  const labels: string[] = [];
-
-  if (normalized.includes("simplify") || normalized.includes("rationalize")) {
-    labels.push("simplify the technology portfolio");
-  }
-  if (normalized.includes("modernize") || normalized.includes("transform")) {
-    labels.push("modernize core platforms and capabilities");
-  }
-  if (
-    normalized.includes("grow") ||
-    normalized.includes("revenue") ||
-    normalized.includes("scale")
-  ) {
-    labels.push("drive revenue and growth through technology");
-  }
-
-  if (labels.length === 0) {
-    return "Portfolio goals captured, but not yet mapped to simplification, modernization or growth.";
-  }
-
-  if (labels.length === 1) {
-    return `Primary goal is to ${labels[0]}.`;
-  }
-
-  const last = labels.pop();
-  return `Primary goals are to ${labels.join(", ")} and ${last}.`;
+function joinList(items: string[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
 }
 
-/**
- * Translate aggression level + constraints into a posture sentence.
- */
-function deriveChangePosture(intake: ProjectIntake | null): string {
-  const level = intake?.aggression ?? null;
-  const hasConstraints = (intake?.constraints?.length ?? 0) > 0;
-  const hasUntouchables = (intake?.untouchables?.length ?? 0) > 0;
-
-  if (!level && !hasConstraints && !hasUntouchables) {
-    return "Change posture is not yet defined — treat this portfolio as neutral until guided otherwise.";
-  }
-
-  if (level === "low") {
-    if (hasUntouchables) {
-      return "Low appetite for change with several untouchable platforms — favor incremental moves and guard critical systems carefully.";
-    }
-    return "Low appetite for change — prioritize incremental simplification and risk reduction over big bets.";
-  }
-
-  if (level === "medium") {
-    if (hasUntouchables) {
-      return "Balanced appetite for change with some untouchable platforms — modernize around the edges while keeping the core stable.";
-    }
-    return "Balanced appetite for change — room for meaningful modernization as long as risk is controlled.";
-  }
-
-  if (level === "high") {
-    if (hasUntouchables) {
-      return "High appetite for change, but with sacred platforms in place — push hard on everything except the untouchables.";
-    }
-    return "High appetite for change — portfolio is a candidate for aggressive simplification and modernization moves.";
-  }
-
-  // fallback
-  return "Change posture is mixed — use simplification and modernization recommendations as a starting point, but validate with stakeholders.";
-}
-
-/**
- * Determine focus areas from drivers + industry.
- */
-function deriveFocusAreas(intake: ProjectIntake | null): string[] {
-  if (!intake) return ["Capture more intake detail to sharpen where to focus."];
-
-  const drivers = new Set((intake.drivers ?? []).map(normalizeDriver));
-  const out: string[] = [];
-
-  if (drivers.has("simplify") || drivers.has("rationalize")) {
-    out.push("application and vendor overlap");
-  }
-
-  if (drivers.has("modernize") || drivers.has("transform")) {
-    out.push("core platforms and integration backbone");
-  }
-
-  if (drivers.has("grow") || drivers.has("revenue") || drivers.has("scale")) {
-    out.push("digital revenue engines (commerce, data, personalization)");
-  }
-
-  const industry = (intake.industry ?? "").toLowerCase();
-  if (industry.includes("retail") || industry.includes("commerce")) {
-    out.push("commerce, supply chain, and customer experience platforms");
-  } else if (industry.includes("manufacturing")) {
-    out.push("planning, supply chain visibility, and shop-floor systems");
-  }
-
-  if (out.length === 0) {
-    out.push("clarify portfolio goals to identify priority focus areas.");
-  }
-
-  return out;
-}
-
-/**
- * Guardrails come primarily from constraints + untouchables.
- */
-function deriveGuardrails(intake: ProjectIntake | null): string[] {
-  if (!intake) {
-    return ["Do not propose moves that conflict with regulatory or contractual obligations."];
-  }
-
-  const result: string[] = [];
-
-  if (intake.untouchables.length > 0) {
-    const sample = intake.untouchables.slice(0, 5).join(", ");
-    result.push(
-      `Treat the following as untouchable or near-untouchable platforms in the near term: ${sample}.`
-    );
-  }
-
-  if (intake.constraints.length > 0) {
-    result.push(
-      "Respect the stated financial, regulatory, and resource constraints when suggesting any large platform move."
-    );
-  }
-
-  if (result.length === 0) {
-    result.push("No hard guardrails captured yet — validate appetite for major moves before committing a roadmap.");
-  }
-
-  return result;
-}
-
-/**
- * Turn drivers into high-level "themes" we can show as chips / badges.
- */
-function deriveThemes(intake: ProjectIntake | null): string[] {
-  if (!intake) return [];
-
-  const drivers = new Set((intake.drivers ?? []).map(normalizeDriver));
-  const themes: string[] = [];
-
-  if (drivers.has("simplify") || drivers.has("rationalize")) {
-    themes.push("Simplification");
-  }
-  if (drivers.has("modernize") || drivers.has("transform")) {
-    themes.push("Modernization");
-  }
-  if (drivers.has("grow") || drivers.has("revenue") || drivers.has("scale")) {
-    themes.push("Growth");
-  }
-
-  // Always keep them stable and de-duplicated
-  return Array.from(new Set(themes));
-}
-
-/**
- * Commentary bullets – this is what we’ll eventually feed into AI to expand.
- */
-function deriveCommentary(intake: ProjectIntake | null): string[] {
-  const bullets: string[] = [];
-
-  if (!intake) {
-    bullets.push(
-      "Intake details are incomplete — capture industry, portfolio goals, and change appetite to unlock more targeted recommendations."
-    );
-    return bullets;
-  }
-
-  bullets.push(
-    "Use this view as a portfolio-level conversation starter with business leadership, not just an architecture artifact."
-  );
-
-  if (intake.drivers.length > 0) {
-    bullets.push(
-      "Align the next 12–18 months of investment to the stated portfolio drivers rather than opportunistic project requests."
-    );
-  }
-
-  if (intake.untouchables.length > 0) {
-    bullets.push(
-      "Design modernization and simplification moves around the untouchable platforms rather than fighting them head-on."
-    );
-  }
-
-  if (intake.aggression === "high") {
-    bullets.push(
-      "Given the high appetite for change, prioritize bold moves that consolidate platforms and remove legacy anchors."
-    );
-  } else if (intake.aggression === "low") {
-    bullets.push(
-      "Given the low appetite for change, focus first on reducing overlap and operational drag before large-scale replatforming."
-    );
-  }
-
-  if (intake.notes && intake.notes.trim().length > 0) {
-    bullets.push("There are additional context notes captured in intake — review them before finalizing key moves.");
-  }
-
-  return bullets;
-}
-
-/**
- * Main entry point: given the current intake snapshot,
- * derive the portfolio signals that the UI / AI can use.
- */
 export function buildPortfolioSignalsFromIntake(
-  intake: ProjectIntake | null
+  intake: ProjectIntake | null,
 ): PortfolioSignals {
-  const projectId = intake?.projectId ?? "unknown";
+  if (!intake) {
+    return {
+      goalSummary: "No primary portfolio goals captured yet.",
+      changePosture:
+        "Change posture not set — assume neutral until intake is completed.",
+      suggestedThemes: [],
+      focusAreas: [],
+      guardrails: [],
+      commentary: [],
+    };
+  }
+
+  const { industry, aggression, constraints, untouchables, notes } = intake;
+  const drivers = intake.drivers || [];
+
+  // --- Goal summary ---
+  const mainGoals: string[] = [];
+  if (hasDriver(intake, "cost")) mainGoals.push("reduce structural tech cost");
+  if (hasDriver(intake, "growth")) mainGoals.push("unlock revenue and growth");
+  if (hasDriver(intake, "experience"))
+    mainGoals.push("improve customer and partner experience");
+  if (hasDriver(intake, "resilience"))
+    mainGoals.push("improve resilience and reliability");
+  if (mainGoals.length === 0) mainGoals.push("stabilise and clean up the stack");
+
+  const industryPhrase = industry
+    ? `For a ${industry.toLowerCase()} business, `
+    : "";
+
+  const goalSummary = `${industryPhrase}the portfolio should ${joinList(
+    mainGoals,
+  )}.`;
+
+  // --- Change posture ---
+  let changePosture = "Default to a balanced pace of change.";
+  if (aggression === "conservative") {
+    changePosture =
+      "Operate with a conservative change posture — protect stability, sequence moves carefully, and avoid simultaneous high-risk bets.";
+  } else if (aggression === "balanced") {
+    changePosture =
+      "Run a balanced change posture — mix foundation work with a few visible bets, but keep overall risk controlled.";
+  } else if (aggression === "aggressive") {
+    changePosture =
+      "Lean into an aggressive posture — prioritize visible portfolio moves and be willing to refactor more of the stack than usual.";
+  }
+
+  // --- Themes ---
+  const suggestedThemes: string[] = [];
+
+  if (hasDriver(intake, "cost")) {
+    suggestedThemes.push("Portfolio simplification & vendor rationalization");
+  }
+  if (hasDriver(intake, "growth")) {
+    suggestedThemes.push("Digital growth & new revenue enablement");
+  }
+  if (hasDriver(intake, "experience")) {
+    suggestedThemes.push("Customer & associate experience modernization");
+  }
+  if (hasDriver(intake, "resilience")) {
+    suggestedThemes.push("Resilience, observability, and risk reduction");
+  }
+  if (suggestedThemes.length === 0) {
+    suggestedThemes.push("Stabilize core platforms and reduce noise");
+  }
+
+  // --- Focus areas ---
+  const focusAreas: string[] = [];
+
+  if (hasDriver(intake, "experience")) {
+    focusAreas.push(
+      "Tighten the front-door stack (web, mobile, commerce) so journeys feel coherent.",
+    );
+  }
+  if (hasDriver(intake, "growth")) {
+    focusAreas.push(
+      "Invest in data, experimentation, and personalization capabilities that directly support revenue.",
+    );
+  }
+  if (hasDriver(intake, "cost")) {
+    focusAreas.push(
+      "Target overlapping platforms and redundant vendors for rationalization.",
+    );
+  }
+  if (hasDriver(intake, "resilience")) {
+    focusAreas.push(
+      "Strengthen integration patterns, error handling, and observability around critical flows.",
+    );
+  }
+  if (focusAreas.length === 0) {
+    focusAreas.push(
+      "Clarify a small number of visible portfolio moves that leadership can rally around.",
+    );
+  }
+
+  // --- Guardrails ---
+  const guardrails: string[] = [];
+
+  if (constraints && constraints.length > 0) {
+    guardrails.push(
+      `Respect constraints called out in intake: ${joinList(constraints)}.`,
+    );
+  }
+
+  if (untouchables && untouchables.length > 0) {
+    guardrails.push(
+      `Treat ${joinList(
+        untouchables,
+      )} as structural platforms — design around them rather than assuming replacement.`,
+    );
+  }
+
+  if (guardrails.length === 0) {
+    guardrails.push(
+      "Agree explicit guardrails (budget envelope, change windows, and untouchable platforms) before committing to aggressive portfolio moves.",
+    );
+  }
+
+  // --- Commentary / talk track ---
+  const commentary: string[] = [];
+
+  commentary.push(
+    "Anchor the portfolio conversation in business outcomes, not tools — start with goals, then show how the stack helps or hurts.",
+  );
+
+  if (hasDriver(intake, "cost")) {
+    commentary.push(
+      "Quantify simplification opportunities by showing where multiple platforms compete in the same lane and sizing the potential savings.",
+    );
+  }
+  if (hasDriver(intake, "growth")) {
+    commentary.push(
+      "Make sure at least one portfolio theme is explicitly tied to unlocking new revenue or channels.",
+    );
+  }
+  if (hasDriver(intake, "experience")) {
+    commentary.push(
+      "Frame front-door changes in terms of customer and associate journeys rather than just UI rewrites.",
+    );
+  }
+  if (hasDriver(intake, "resilience")) {
+    commentary.push(
+      "Highlight resilience work where outages, incident noise, or brittle integrations are already burning the team.",
+    );
+  }
+
+  if (notes && notes.trim().length > 0) {
+    commentary.push(
+      `Incorporate the following client context into the narrative: ${notes.trim()}`,
+    );
+  }
 
   return {
-    projectId,
-    goalSummary: deriveGoalSummary(intake),
-    changePosture: deriveChangePosture(intake),
-    focusAreas: deriveFocusAreas(intake),
-    guardrails: deriveGuardrails(intake),
-    suggestedThemes: deriveThemes(intake),
-    commentary: deriveCommentary(intake),
+    goalSummary,
+    changePosture,
+    suggestedThemes,
+    focusAreas,
+    guardrails,
+    commentary,
   };
 }

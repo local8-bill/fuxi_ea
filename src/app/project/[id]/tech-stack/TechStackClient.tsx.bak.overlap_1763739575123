@@ -49,9 +49,6 @@ interface ProjectIntake {
   industry: string | null;
   drivers: string[];
   aggression: string | null;
-  constraints?: string[];
-  untouchables?: string[];
-  notes?: string | null;
 }
 
 interface TruthRow {
@@ -69,11 +66,6 @@ interface TruthCandidate {
   diagramNames: string[];
 }
 
-interface OverlapCluster {
-  label: string;
-  systems: string[];
-}
-
 function formatNumber(n: number | undefined | null): string {
   if (n == null || Number.isNaN(n)) return "0";
   return n.toLocaleString();
@@ -83,100 +75,6 @@ function normalizeForCompare(value: string | null | undefined): string {
   return (value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function categorizeSystem(name: string): string {
-  const n = (name || "").toLowerCase();
-  if (!n) return "Other / uncategorized";
-
-  // Commerce / customer-facing
-  if (
-    n.includes("commerce") ||
-    n.includes("ecom") ||
-    n.includes("shopify") ||
-    n.includes("salesforce commerce") ||
-    n.includes("storefront")
-  ) {
-    return "Commerce & transactions";
-  }
-
-  // Product information / content
-  if (
-    n.includes("pim") ||
-    n.includes("product information") ||
-    n.includes("catalog") ||
-    n.includes("pdp") ||
-    n.includes("salsify")
-  ) {
-    return "Product information & content";
-  }
-
-  // Content & experience platforms
-  if (
-    n.includes("cms") ||
-    n.includes("content") ||
-    n.includes("coremedia") ||
-    n.includes("sitecore") ||
-    n.includes("contentful") ||
-    n.includes("experience") ||
-    n.includes("dxp")
-  ) {
-    return "Content & experience";
-  }
-
-  // Customer data / CDP / analytics
-  if (
-    n.includes("amperity") ||
-    n.includes("segmentation") ||
-    n.includes("cdp") ||
-    n.includes("customer data") ||
-    n.includes("profile") ||
-    n.includes("audience") ||
-    n.includes("analytics")
-  ) {
-    return "Customer data & insights";
-  }
-
-  // Messaging / martech
-  if (
-    n.includes("mailgun") ||
-    n.includes("sendgrid") ||
-    n.includes("twilio") ||
-    n.includes("sms") ||
-    n.includes("email") ||
-    n.includes("attentive") ||
-    n.includes("braze") ||
-    n.includes("campaign") ||
-    n.includes("journey")
-  ) {
-    return "Messaging & engagement";
-  }
-
-  // Integration / middleware
-  if (
-    n.includes("mulesoft") ||
-    n.includes("boomi") ||
-    n.includes("workato") ||
-    n.includes("integration") ||
-    n.includes("api gateway") ||
-    n.includes("golden gate")
-  ) {
-    return "Integration / middleware";
-  }
-
-  // Data / warehouse / BI
-  if (
-    n.includes("snowflake") ||
-    n.includes("redshift") ||
-    n.includes("bigquery") ||
-    n.includes("tableau") ||
-    n.includes("powerbi") ||
-    n.includes("lookr")
-  ) {
-    return "Data & BI";
-  }
-
-  return "Other / uncategorized";
-}
-
 function loadProjectIntake(projectId: string): ProjectIntake | null {
   if (typeof window === "undefined") return null;
   try {
@@ -184,7 +82,6 @@ function loadProjectIntake(projectId: string): ProjectIntake | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
-
     return {
       projectId: String(parsed.projectId ?? projectId),
       industry: parsed.industry ?? null,
@@ -192,13 +89,6 @@ function loadProjectIntake(projectId: string): ProjectIntake | null {
         ? parsed.drivers.map((d: unknown) => String(d))
         : [],
       aggression: parsed.aggression ?? null,
-      constraints: Array.isArray(parsed.constraints)
-        ? parsed.constraints.map((c: unknown) => String(c))
-        : [],
-      untouchables: Array.isArray(parsed.untouchables)
-        ? parsed.untouchables.map((u: unknown) => String(u))
-        : [],
-      notes: parsed.notes ?? null,
     };
   } catch (err) {
     console.warn("[TECH-STACK] Failed to load intake context", err);
@@ -212,9 +102,6 @@ export function TechStackClient({ projectId }: Props) {
   const [lucidFileName, setLucidFileName] = useState<string | null>(null);
   const [inventoryRows, setInventoryRows] = useState<number>(0);
   const [normalizedApps, setNormalizedApps] = useState<number>(0);
-  const [invStats, setInvStats] = useState<InventoryStatsLocal | null>(null);
-  const [uploadingInv, setUploadingInv] = useState<boolean>(false);
-  const [invError, setInvError] = useState<string | null>(null);
 
   const artifactCount =
     (inventoryFileName ? 1 : 0) + (lucidFileName ? 1 : 0);
@@ -228,6 +115,9 @@ export function TechStackClient({ projectId }: Props) {
     }
     return parts.join(" • ");
   })();
+  const [invStats, setInvStats] = useState<InventoryStatsLocal | null>(null);
+  const [uploadingInv, setUploadingInv] = useState<boolean>(false);
+  const [invError, setInvError] = useState<string | null>(null);
 
   // Digital Enterprise
   const [deStats, setDeStats] = useState<DigitalEnterpriseStats | null>(null);
@@ -252,8 +142,8 @@ export function TechStackClient({ projectId }: Props) {
   const [truthLoading, setTruthLoading] = useState<boolean>(false);
   const [truthError, setTruthError] = useState<string | null>(null);
 
-  // Load intake + DE stats + diagram systems
   useEffect(() => {
+    // Load intake context from localStorage on project change
     const ctx = loadProjectIntake(projectId);
     setIntakeContext(ctx);
 
@@ -396,7 +286,7 @@ export function TechStackClient({ projectId }: Props) {
     const candidates: TruthCandidate[] = [];
     const seen = new Set<string>();
 
-    // Overlap norms (present in both)
+    // Overlap norms
     if (diffStats.overlapSystems.length > 0) {
       const byNorm = new Map<
         string,
@@ -424,7 +314,7 @@ export function TechStackClient({ projectId }: Props) {
       }
     }
 
-    // Inventory-only also through AI pass
+    // A few inventory-only through AI as well
     for (const norm of diffStats.inventoryOnlyNorms) {
       if (seen.has(norm)) continue;
       candidates.push({
@@ -505,43 +395,6 @@ export function TechStackClient({ projectId }: Props) {
     void runTruthPass(candidates);
   }, [diffStats, inventoryDisplayByNorm, diagramSystems, projectId, intakeContext]);
 
-  // Overlap clusters derived from Truth Pass
-  const overlapClusters: OverlapCluster[] = (() => {
-    if (!truthRows || truthRows.length === 0) return [];
-
-    const buckets = new Map<string, Set<string>>();
-
-    for (const row of truthRows) {
-      const names: string[] = [];
-      if (row.inventoryName && row.inventoryName.trim().length > 0) {
-        names.push(row.inventoryName.trim());
-      }
-      if (row.diagramName && row.diagramName.trim().length > 0) {
-        names.push(row.diagramName.trim());
-      }
-      if (!names.length && row.recommended && row.recommended.trim().length > 0) {
-        names.push(row.recommended.trim());
-      }
-      if (!names.length && row.norm) {
-        names.push(row.norm);
-      }
-
-      for (const name of names) {
-        const lane = categorizeSystem(name);
-        const set = buckets.get(lane) ?? new Set<string>();
-        set.add(name);
-        buckets.set(lane, set);
-      }
-    }
-
-    return Array.from(buckets.entries())
-      .map(([label, set]) => ({
-        label,
-        systems: Array.from(set).sort(),
-      }))
-      .filter((cluster) => cluster.systems.length > 1);
-  })();
-
   // Inventory upload
   async function handleInventoryUpload(file: File) {
     setInventoryFileName(file.name);
@@ -572,6 +425,7 @@ export function TechStackClient({ projectId }: Props) {
       setInvStats(stats);
       setInventoryRows(stats.rowCount);
       setNormalizedApps(stats.uniqueSystems);
+
 
       const normSet = new Set<string>();
       const displayMap: Record<string, string> = {};
@@ -653,6 +507,8 @@ export function TechStackClient({ projectId }: Props) {
           err,
         );
       }
+
+      // setArtifactCount REMOVED((prev) => Math.max(prev, 1));
     } catch (err: any) {
       console.error("[TECH-STACK] Lucid upload failed", err);
       setDeError(err?.message ?? "Lucid upload failed.");
@@ -665,11 +521,6 @@ export function TechStackClient({ projectId }: Props) {
     !!deStats &&
     ((deStats.systemsFuture ?? 0) > 0 ||
       (deStats.integrationsFuture ?? 0) > 0);
-
-
-  const visibleOverlapClusters = overlapClusters.filter(
-    (c) => c.label !== "Other / uncategorized"
-  );
 
   return (
     <div className="px-8 py-10 max-w-6xl mx-auto">
@@ -689,63 +540,6 @@ export function TechStackClient({ projectId }: Props) {
           project{" "}
           <span className="font-medium">{projectId}</span>.
         </p>
-      </Card>
-
-      {/* Project context / navigation – pulled from Intake */}
-      <Card className="mb-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-              PROJECT CONTEXT
-            </p>
-            {intakeContext ? (
-              <p className="text-xs text-gray-600">
-                <span className="font-medium">
-                  {intakeContext.industry || "Industry not set"}
-                </span>{" "}
-                · Goal:{" "}
-                <span className="font-medium">
-                  {intakeContext.drivers.length
-                    ? intakeContext.drivers.join(", ")
-                    : "No primary drivers yet"}
-                </span>{" "}
-                · Posture:{" "}
-                <span className="font-medium">
-                  {intakeContext.aggression || "Not set"}
-                </span>
-              </p>
-            ) : (
-              <p className="text-xs text-gray-500">
-                No intake answers loaded yet. Start in the Intake workspace to
-                set goals and constraints for this project.
-              </p>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.location.href = `/project/${projectId}/intake`;
-                }
-              }}
-              className="rounded-full border border-slate-200 px-3 py-1.5 text-[0.7rem] font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Intake
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.location.href = `/project/${projectId}/portfolio`;
-                }
-              }}
-              className="rounded-full bg-slate-900 px-3 py-1.5 text-[0.7rem] font-semibold text-white hover:bg-slate-800"
-            >
-              Portfolio view
-            </button>
-          </div>
-        </div>
       </Card>
 
       {/* Upload panels */}
@@ -788,48 +582,8 @@ export function TechStackClient({ projectId }: Props) {
       )}
 
       {/* Digital Enterprise preview */}
-      <Card className="mb-8">
-        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 mb-1 uppercase">
-          DIGITAL ENTERPRISE PREVIEW
-        </p>
-        <p className="text-xs text-gray-500 mb-4">
-          Derived from your Lucid architecture diagram. Systems and integrations
-          here represent the structural view of your ecosystem.
-        </p>
-        {loadingDE && (
-          <div className="text-sm text-gray-500">
-            Loading Digital Enterprise preview...
-          </div>
-        )}
-        {!loadingDE && deError && (
-          <div className="text-sm text-red-500">{deError}</div>
-        )}
-        {!loadingDE && !deError && hasDE && deStats && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MetricCard
-              label="SYSTEMS"
-              value={formatNumber(deStats.systemsFuture)}
-              description="Unique labeled systems in this diagram."
-            />
-            <MetricCard
-              label="INTEGRATIONS"
-              value={formatNumber(deStats.integrationsFuture)}
-              description="System-to-system connections from Lucid connector lines."
-            />
-            <MetricCard
-              label="DOMAINS DETECTED"
-              value={formatNumber(deStats.domainsDetected ?? 0)}
-              description="Domain clustering will be introduced in a later iteration."
-            />
-          </div>
-        )}
-        {!loadingDE && !deError && !hasDE && (
-          <div className="text-sm text-gray-500">
-            No Digital Enterprise metrics yet. Upload a Lucid CSV to populate this
-            preview.
-          </div>
-        )}
-      </Card>
+
+      {/* Modernization Diff */}
 
       {/* TRUTH PASS – AI suggestions */}
       <Card className="mt-6">
@@ -886,11 +640,11 @@ export function TechStackClient({ projectId }: Props) {
             <div className="divide-y divide-gray-100">
               {truthRows.map((row, i) => {
                 const inventoryLabel =
-                  row.inventoryName && typeof row.inventoryName === "string" && row.inventoryName.trim().length > 0
+                  row.inventoryName && (typeof row.inventoryName === "string" ? row.inventoryName.trim() : "").length > 0
                     ? row.inventoryName
                     : "Not in inventory";
                 const diagramLabel =
-                  row.diagramName && typeof row.diagramName === "string" && row.diagramName.trim().length > 0
+                  row.diagramName && (typeof row.diagramName === "string" ? row.diagramName.trim() : "").length > 0
                     ? row.diagramName
                     : "Not in diagram";
                 const recommendedName =
@@ -986,68 +740,6 @@ export function TechStackClient({ projectId }: Props) {
             <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[0.7rem] text-slate-500">
               Preview only — AI suggestions and decisions are not yet saved.
             </div>
-          </div>
-        )}
-      </Card>
-
-      {/* OVERLAP LENS – where you have multiple tools in the same lane */}
-      <Card className="mt-6">
-        <div className="mb-1 flex items-center justify-between">
-          <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 uppercase">
-            OVERLAP LENS
-          </p>
-          {truthLoading ? (
-            <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-[0.7rem] font-semibold text-amber-800">
-              Updating with latest AI pass…
-            </span>
-          ) : (
-            <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[0.7rem] font-semibold text-slate-50">
-              {visibleOverlapClusters.length > 0
-                ? `${visibleOverlapClusters.length} overlap areas`
-                : "No clear overlaps yet"}
-            </span>
-          )}
-        </div>
-
-        <p className="text-xs text-gray-500 mb-3">
-          Fuxi looks at your Truth Pass matches and highlights areas where you are
-          running multiple tools in the same lane. Use this as a starting point
-          for portfolio simplification, not a mandate.
-        </p>
-
-        {truthError && (
-          <p className="mb-2 text-[0.75rem] text-red-500">
-            {truthError}
-          </p>
-        )}
-
-        {!truthLoading && visibleOverlapClusters.length === 0 && !truthError && (
-          <p className="text-xs text-gray-500">
-            Once you have a few Truth Pass rows, Fuxi will surface overlapping
-            areas here.
-          </p>
-        )}
-
-        {visibleOverlapClusters.length > 0 && (
-          <div className="space-y-3">
-            {visibleOverlapClusters.map((cluster, idx) => (
-              <div
-                key={cluster.label + idx}
-                className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
-              >
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <p className="text-[0.75rem] font-semibold text-slate-800">
-                    {cluster.label}
-                  </p>
-                  <span className="text-[0.65rem] text-slate-500">
-                    {cluster.systems.length} systems
-                  </span>
-                </div>
-                <p className="text-[0.7rem] text-slate-600">
-                  {cluster.systems.join(" · ")}
-                </p>
-              </div>
-            ))}
           </div>
         )}
       </Card>

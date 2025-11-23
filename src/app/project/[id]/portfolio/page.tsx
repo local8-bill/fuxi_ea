@@ -20,7 +20,6 @@ function loadProjectIntakeFromLocalStorage(
     if (!raw) return null;
 
     const parsed = JSON.parse(raw);
-
     if (!parsed || typeof parsed !== "object") return null;
 
     return {
