@@ -4,6 +4,7 @@ import React from "react";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { DashboardSection } from "./components/DashboardSection";
 import { DigitalEnterpriseChart } from "./components/charts/DigitalEnterpriseChart";
+import { TopSystemsBarChart } from "./components/charts/TopSystemsBarChart";
 import { MetricCard } from "@/components/ui/MetricCard";
 import {
   digitalEnterpriseMetrics,
@@ -12,6 +13,8 @@ import {
 } from "@/mock/dashboardData";
 
 export default function DashboardPage() {
+  const [systemsView, setSystemsView] = React.useState<"radial" | "bar">("radial");
+
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-6xl px-4 py-8 space-y-8">
@@ -26,9 +29,33 @@ export default function DashboardPage() {
           title="Digital Enterprise Overview"
           subtitle="Lucid-derived systems and integrations."
           action={
-            <button className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400">
-              Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+                <button
+                  onClick={() => setSystemsView("radial")}
+                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                    systemsView === "radial"
+                      ? "bg-slate-900 text-white"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  Radial
+                </button>
+                <button
+                  onClick={() => setSystemsView("bar")}
+                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                    systemsView === "bar"
+                      ? "bg-slate-900 text-white"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  Bar
+                </button>
+              </div>
+              <button className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400">
+                Refresh
+              </button>
+            </div>
           }
         >
           <div className="grid gap-4 lg:grid-cols-4">
@@ -60,7 +87,11 @@ export default function DashboardPage() {
               <p className="text-xs uppercase tracking-[0.25em] text-slate-500 mb-2">
                 Top Systems by Integrations
               </p>
-              <DigitalEnterpriseChart data={digitalEnterpriseSystems} />
+              {systemsView === "radial" ? (
+                <DigitalEnterpriseChart data={digitalEnterpriseSystems} />
+              ) : (
+                <TopSystemsBarChart data={digitalEnterpriseSystems} />
+              )}
             </div>
             <div className="rounded-2xl border border-slate-200 p-3 shadow-sm">
               <p className="text-xs uppercase tracking-[0.25em] text-slate-500 mb-2">
