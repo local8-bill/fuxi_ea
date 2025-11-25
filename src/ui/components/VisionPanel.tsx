@@ -6,6 +6,10 @@ import type { Capability } from "@/domain/model/capability";
 import type { ReasoningAlignResult } from "@/domain/ports/reasoning";
 import { alignViaApi } from "@/adapters/reasoning/client";
 
+const clientAuthHeader = process.env.NEXT_PUBLIC_FUXI_API_TOKEN
+  ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_FUXI_API_TOKEN}` }
+  : undefined;
+
 /** Rows the Vision API returns */
 type VisionRow = {
   name: string;
@@ -51,6 +55,7 @@ export function VisionPanel({
       const res = await fetch("/api/vision/analyze", {
         method: "POST",
         body: fd,
+        headers: clientAuthHeader ?? undefined,
       });
 
       if (!res.ok) {

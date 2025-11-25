@@ -15,20 +15,16 @@ import type {
 
 // Default model for cheap-ish alignment
 const DEFAULT_MODEL = process.env.OPENAI_REASONING_MODEL ?? "gpt-4o-mini";
-console.log("[OpenAIReasoning] env snapshot:", {
-  keyPrefix: process.env.OPENAI_API_KEY?.slice(0, 12),
-  keyLength: process.env.OPENAI_API_KEY?.length,
-  org: process.env.OPENAI_ORG_ID,
-  project: process.env.OPENAI_PROJECT_ID,
-  mode: process.env.REASONING_MODE,
-});
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
-// Keep a single client per process
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-  organization: process.env.OPENAI_ORG_ID,
-  project: process.env.OPENAI_PROJECT_ID,
-});
+// Keep a single client per process (if configured)
+const client = OPENAI_KEY
+  ? new OpenAI({
+      apiKey: OPENAI_KEY,
+      organization: process.env.OPENAI_ORG_ID,
+      project: process.env.OPENAI_PROJECT_ID,
+    })
+  : null;
 
 export function makeOpenAIReasoning(): ReasoningPort {
   // If key is missing, we STILL return a ReasoningPort,
@@ -37,7 +33,7 @@ export function makeOpenAIReasoning(): ReasoningPort {
 
   return {
     async align(input: ReasoningAlignInput): Promise<ReasoningAlignResult> {
-      if (!process.env.OPENAI_API_KEY) {
+      if (!client) {
         console.warn("[Reasoning/OpenAI] OPENAI_API_KEY not set – using local fallback.");
         return localFallback.align(input);
       }
@@ -87,13 +83,6 @@ No markdown, no prose outside JSON.
 Imported capability rows (trimmed):
 ${JSON.stringify(payload, null, 2)}
 `.trim();
-console.log("[Reasoning/OpenAI] mode=", process.env.REASONING_MODE);
-console.log(
-  "[Reasoning/OpenAI] key prefix=",
-  (process.env.OPENAI_API_KEY || "").slice(0, 8),
-  "project=",
-  process.env.OPENAI_PROJECT_ID,
-);
 
       try {
         // Option 1 (modern): responses API with JSON schema.

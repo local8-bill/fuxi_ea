@@ -2,16 +2,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { parseInventoryExcel } from "@/domain/services/ingestion";
+import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 
 export const runtime = "nodejs";
 
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5MB inventory file ceiling
+const rateLimit = createRateLimiter({ windowMs: 60_000, max: 10, name: "inventory-upload" });
+
 export async function POST(req: NextRequest) {
+  const auth = requireAuth(req);
+  if (auth) return auth;
+
+  const limited = rateLimit(req);
+  if (limited) return limited;
+
   try {
     const formData = await req.formData();
     const file = formData.get("file");
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: "Missing file" }, { status: 400 });
+      return jsonError(400, "Missing file");
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return jsonError(413, "Upload too large");
     }
 
     const projectId = (formData.get("projectId") as string) ?? "temp";

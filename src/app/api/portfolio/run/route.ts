@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 
 interface DiagramSystem {
   id: string;
@@ -66,17 +67,22 @@ function categorizeSystem(name: string): string {
   return "Other / uncategorized";
 }
 
-export async function POST(req: Request) {
+const rateLimit = createRateLimiter({ windowMs: 60_000, max: 20, name: "portfolio-run" });
+
+export async function POST(req: NextRequest) {
+  const auth = requireAuth(req);
+  if (auth) return auth;
+
+  const limited = rateLimit(req);
+  if (limited) return limited;
+
   try {
     const body = await req.json().catch(() => ({}));
     const projectId = body.projectId as string | undefined;
     const intakeContext = (body.intakeContext ?? null) as IntakeContext | null;
 
     if (!projectId || typeof projectId !== "string") {
-      return NextResponse.json(
-        { ok: false, error: "Missing projectId" },
-        { status: 400 },
-      );
+      return jsonError(400, "Missing projectId");
     }
 
     // Pull diagram systems
@@ -85,21 +91,19 @@ export async function POST(req: Request) {
       req.url,
     );
 
+    const forwardedAuth = req.headers.get("authorization") || "";
     const systemsRes = await fetch(systemsUrl.toString(), {
       cache: "no-store",
+      headers: forwardedAuth ? { authorization: forwardedAuth } : undefined,
     });
 
     if (!systemsRes.ok) {
       const text = await systemsRes.text().catch(() => "");
       console.error("[PORTFOLIO] Failed to load diagram systems", systemsRes.status, text);
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Failed to load diagram systems for portfolio optimizer.",
-          status: "error",
-          message: "Diagram systems could not be loaded.",
-        },
-        { status: 500 },
+      return jsonError(
+        500,
+        "Failed to load diagram systems for portfolio optimizer.",
+        "Diagram systems could not be loaded.",
       );
     }
 
@@ -194,13 +198,6 @@ export async function POST(req: Request) {
     return NextResponse.json(response);
   } catch (err: any) {
     console.error("[PORTFOLIO RUN] Error:", err);
-    return NextResponse.json(
-      {
-        ok: false,
-        status: "error",
-        error: err?.message ?? "Failed to run optimizer.",
-      },
-      { status: 500 },
-    );
+    return jsonError(500, "Failed to run optimizer.", err?.message);
   }
 }

@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStatsForProject } from "@/domain/services/digitalEnterpriseStore";
+import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 
 export const runtime = "nodejs";
 
+const rateLimit = createRateLimiter({ windowMs: 60_000, max: 60, name: "de-stats" });
+
 export async function GET(req: NextRequest) {
+  const auth = requireAuth(req);
+  if (auth) return auth;
+
+  const limited = rateLimit(req);
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const projectId = url.searchParams.get("project") ?? "default";
 
   console.log("[DE-STATS] GET start", { projectId });
 
   try {
-    // CRITICAL: await the async stats function
     const stats = await getStatsForProject(projectId);
 
     console.log("[DE-STATS] GET success", {
@@ -28,12 +36,10 @@ export async function GET(req: NextRequest) {
       stack: err?.stack,
     });
 
-    return NextResponse.json(
-      {
-        error: "Failed to compute digital enterprise stats",
-        detail: err?.message ?? "Unknown error",
-      },
-      { status: 500 }
+    return jsonError(
+      500,
+      "Failed to compute digital enterprise stats",
+      err?.message ?? "Unknown error",
     );
   }
 }

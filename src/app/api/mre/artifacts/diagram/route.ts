@@ -1,19 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { extractArchitectureBoxes } from "@/domain/services/mre";
+import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 
 export const runtime = "nodejs";
 
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const rateLimit = createRateLimiter({ windowMs: 60_000, max: 10, name: "diagram-upload" });
+
 export async function POST(req: NextRequest) {
+  const auth = requireAuth(req);
+  if (auth) return auth;
+
+  const limited = rateLimit(req);
+  if (limited) return limited;
+
   const formData = await req.formData();
   const file = formData.get("file");
   const kind = formData.get("kind");
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Missing file" }, { status: 400 });
+    return jsonError(400, "Missing file");
+  }
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return jsonError(413, "Upload too large");
   }
 
   if (kind !== "architecture_current" && kind !== "architecture_future") {
-    return NextResponse.json({ error: "Bad 'kind' parameter" }, { status: 400 });
+    return jsonError(400, "Bad 'kind' parameter");
   }
 
   const projectId = (formData.get("projectId") as string) ?? "temp";
@@ -24,7 +39,7 @@ export async function POST(req: NextRequest) {
   const boxes = await extractArchitectureBoxes(buffer);
 
   const artifact = {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     projectId,
     kind,
     filename: file.name,

@@ -4,16 +4,31 @@ import {
   saveDigitalEnterpriseView,
   getStatsForProject,
 } from "@/domain/services/digitalEnterpriseStore";
+import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 
 export const runtime = "nodejs";
 
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5MB ceiling for CSV
+const rateLimit = createRateLimiter({ windowMs: 60_000, max: 12, name: "de-lucid" });
+
 export async function POST(req: NextRequest) {
+  const auth = requireAuth(req);
+  if (auth) return auth;
+
+  const limited = rateLimit(req);
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const projectId = url.searchParams.get("project") ?? "default";
 
   console.log("[DE-LUCID] POST start", { projectId });
 
   try {
+    const contentLength = Number(req.headers.get("content-length") || "0");
+    if (contentLength > MAX_UPLOAD_BYTES) {
+      return jsonError(413, "Upload too large");
+    }
+
     const formData = await req.formData();
     const keys = Array.from(formData.keys());
     console.log("[DE-LUCID] formData keys", { keys });
@@ -29,10 +44,11 @@ export async function POST(req: NextRequest) {
 
     if (!file) {
       console.error("[DE-LUCID] No file found in formData");
-      return NextResponse.json(
-        { ok: false, error: "No file uploaded" },
-        { status: 400 }
-      );
+      return jsonError(400, "No file uploaded");
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return jsonError(413, "Upload too large");
     }
 
     const text = await file.text();
