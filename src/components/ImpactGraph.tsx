@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -14,6 +14,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 
 import type { ImpactGraphData } from "@/types/impactGraph";
+import { applyDagreLayout } from "@/lib/graph/layout";
 
 type ImpactGraphProps = {
   graph: ImpactGraphData;
@@ -21,6 +22,7 @@ type ImpactGraphProps = {
   colorMode?: "domain" | "impact";
   showEdgeLabels?: boolean;
   weightEdges?: boolean;
+  layout?: "flow" | "dagre";
 };
 
 const NODE_COLORS = ["#2563eb", "#9333ea", "#0ea5e9", "#1e293b", "#334155", "#64748b"];
@@ -54,6 +56,7 @@ export function ImpactGraph({
   colorMode = "domain",
   showEdgeLabels = false,
   weightEdges = true,
+  layout = "flow",
 }: ImpactGraphProps) {
   if (!graph.nodes.length) {
     return (
@@ -63,7 +66,7 @@ export function ImpactGraph({
     );
   }
 
-  const initialNodes: Node[] = graph.nodes.map((n, idx) => ({
+  const baseNodes: Node[] = graph.nodes.map((n, idx) => ({
     id: n.id,
     data: {
       label: n.label,
@@ -86,7 +89,7 @@ export function ImpactGraph({
     },
   }));
 
-  const initialEdges: Edge[] = graph.edges.map((e, idx) => ({
+  const baseEdges: Edge[] = graph.edges.map((e, idx) => ({
     id: e.id,
     source: e.source,
     target: e.target,
@@ -99,8 +102,16 @@ export function ImpactGraph({
     type: "default",
   }));
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(baseNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(baseEdges);
+
+  const laidOutNodes = useMemo(() => {
+    if (layout === "dagre") {
+      const result = applyDagreLayout(nodes, edges);
+      return result.nodes;
+    }
+    return nodes;
+  }, [layout, nodes, edges]);
 
   const coloredNodes = nodes.map((n) => {
     const base = graph.nodes.find((gn) => gn.id === n.id);
@@ -121,7 +132,16 @@ export function ImpactGraph({
   return (
     <div className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ height }}>
       <ReactFlow
-        nodes={coloredNodes}
+        nodes={
+          layout === "dagre"
+            ? coloredNodes.map((n, i) => ({
+                ...n,
+                position: laidOutNodes[i]?.position ?? n.position,
+                sourcePosition: (laidOutNodes[i]?.sourcePosition as any) ?? n.sourcePosition,
+                targetPosition: (laidOutNodes[i]?.targetPosition as any) ?? n.targetPosition,
+              }))
+            : coloredNodes
+        }
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

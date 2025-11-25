@@ -74,6 +74,10 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const graph = useImpactGraph();
   const [graphView, setGraphView] = useState<"flow" | "bar">("flow");
+  const [layoutMode, setLayoutMode] = useState<"flow" | "dagre">("flow");
+  const [colorMode, setColorMode] = useState<"domain" | "impact">("domain");
+  const [showEdgeLabels, setShowEdgeLabels] = useState(false);
+  const [weightEdges, setWeightEdges] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -238,9 +242,84 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                   Bar
                 </button>
               </div>
+              {graphView === "flow" && (
+                <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+                  <button
+                    onClick={() => setLayoutMode("flow")}
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      layoutMode === "flow"
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Free
+                  </button>
+                  <button
+                    onClick={() => setLayoutMode("dagre")}
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      layoutMode === "dagre"
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Dagre
+                  </button>
+                </div>
+              )}
+              {graphView === "flow" && (
+                <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+                  <button
+                    onClick={() => setColorMode("domain")}
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      colorMode === "domain"
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Domain
+                  </button>
+                  <button
+                    onClick={() => setColorMode("impact")}
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      colorMode === "impact"
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Impact
+                  </button>
+                </div>
+              )}
+              {graphView === "flow" && (
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                  <label className="inline-flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showEdgeLabels}
+                      onChange={(e) => setShowEdgeLabels(e.target.checked)}
+                    />
+                    Labels
+                  </label>
+                  <label className="inline-flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={weightEdges}
+                      onChange={(e) => setWeightEdges(e.target.checked)}
+                    />
+                    Weight
+                  </label>
+                </div>
+              )}
             </div>
             {graphView === "flow" ? (
-              <ImpactGraph graph={graph} height={520} />
+              <ImpactGraph
+                graph={graph}
+                height={520}
+                layout={layoutMode}
+                colorMode={colorMode}
+                showEdgeLabels={showEdgeLabels}
+                weightEdges={weightEdges}
+              />
             ) : topSystemsChartData.length > 0 ? (
               <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" style={{ height: 520 }}>
                 <ResponsiveContainer width="100%" height="100%">
