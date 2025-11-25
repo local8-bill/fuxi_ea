@@ -12,6 +12,7 @@ import ReactFlow, {
   Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import "./ImpactGraph.css";
 
 import type { ImpactGraphData } from "@/types/impactGraph";
 import { applyDagreLayout } from "@/lib/graph/layout";
