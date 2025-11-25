@@ -7,6 +7,8 @@ import {
   SystemImpactPanel,
   type SystemImpact,
 } from "@/components/digital-enterprise/SystemImpactPanel";
+import { ImpactGraph } from "@/components/ImpactGraph";
+import { useImpactGraph } from "@/hooks/useImpactGraph";
 
 interface TopSystemRaw {
   systemId?: string;
@@ -61,6 +63,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
+  const graph = useImpactGraph();
 
   useEffect(() => {
     let cancelled = false;
@@ -185,6 +188,15 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               value={formatNumber(stats.domainsDetected ?? 0)}
               description="Domain / ecosystem clustering will evolve in a later pass."
             />
+          </section>
+
+          {/* Top systems table */}
+          <section className="mt-12">
+            <h2 className="text-sm font-semibold mb-1">IMPACT GRAPH (BETA)</h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Interactive upstream/downstream view (mock data until graph ingestion is wired).
+            </p>
+            <ImpactGraph graph={graph} height={520} />
           </section>
 
           {/* Top systems table */}

@@ -1,0 +1,8 @@
+{
+  "directive": "0004_reactflow_impact_engine",
+  "status": "completed_mock",
+  "notes": "React Flow (open-source) integrated into Digital Enterprise page with mock graph data. No Pro APIs used. Next step: wire to real digital-enterprise ingestion data.",
+  "build": "npm run build",
+  "auth": "disabled (default)",
+  "timestamp": "2025-11-25T00:00:00Z"
+}
