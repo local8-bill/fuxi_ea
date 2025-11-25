@@ -4,7 +4,6 @@ import React, { useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
-  MiniMap,
   Node,
   Edge,
   useNodesState,
@@ -53,7 +52,7 @@ function hashString(s: string) {
 
 export function ImpactGraph({
   graph,
-  height = 520,
+  height = 600,
   colorMode = "domain",
   showEdgeLabels = false,
   weightEdges = true,
@@ -148,16 +147,6 @@ export function ImpactGraph({
         onEdgesChange={onEdgesChange}
         fitView
       >
-        <MiniMap
-          nodeStrokeColor={(n) => {
-            const idx = nodes.findIndex((x) => x.id === n.id);
-            return NODE_COLORS[idx % NODE_COLORS.length];
-          }}
-          nodeColor={(n) => {
-            const idx = nodes.findIndex((x) => x.id === n.id);
-            return NODE_COLORS[idx % NODE_COLORS.length];
-          }}
-        />
         <Controls />
         <Background gap={16} color="#e2e8f0" />
       </ReactFlow>
