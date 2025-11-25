@@ -52,7 +52,7 @@ function hashString(s: string) {
 
 export function ImpactGraph({
   graph,
-  height = 600,
+  height = 720,
   colorMode = "domain",
   showEdgeLabels = false,
   weightEdges = true,
