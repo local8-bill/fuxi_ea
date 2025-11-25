@@ -12,12 +12,14 @@ type UseImpactGraphResult = ImpactGraphData & { error?: string | null };
  */
 export function useImpactGraph(): UseImpactGraphResult {
   // Mock nodes from existing dashboard data
+  const domains = ["Core Ops", "Experience", "Data", "Commerce"];
   const nodes: SystemNode[] = digitalEnterpriseSystems.map((s, idx) => ({
     id: `sys-${idx}`,
     label: s.name,
     impactScore: s.criticality * 100,
     readiness: 50 + idx * 5,
     integrationCount: s.integrations,
+    domain: domains[idx % domains.length],
   }));
 
   // Simple fan-out edges to simulate dependencies
