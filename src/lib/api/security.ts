@@ -5,9 +5,12 @@ const AUTH_TOKEN =
   process.env.MESH_AUTH_TOKEN ??
   process.env.API_TOKEN;
 
-const AUTH_OPTIONAL =
-  process.env.FUXI_AUTH_OPTIONAL === "1" ||
-  process.env.FUXI_AUTH_OPTIONAL === "true";
+const AUTH_OPTIONAL = (() => {
+  const raw = process.env.FUXI_AUTH_OPTIONAL;
+  if (raw == null) return true; // default to optional for local/dev
+  const val = raw.toLowerCase();
+  return val === "1" || val === "true";
+})();
 
 export function requireAuth(req: NextRequest): NextResponse | null {
   // Allow opt-out for local/dev when explicitly configured
