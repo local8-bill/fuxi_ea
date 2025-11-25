@@ -4,10 +4,8 @@ import React from "react";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { DashboardSection } from "./components/DashboardSection";
 import { DigitalEnterpriseChart } from "./components/charts/DigitalEnterpriseChart";
-import { AIUtilizationChart } from "./components/charts/AIUtilizationChart";
 import { MetricCard } from "@/components/ui/MetricCard";
 import {
-  aiUtilization,
   digitalEnterpriseMetrics,
   digitalEnterpriseSystems,
   insightFeed,
@@ -85,19 +83,6 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-        </DashboardSection>
-
-        {/* AI Utilization */}
-        <DashboardSection
-          title="AI Utilization"
-          subtitle="Token trends and reasoning cycles."
-          action={
-            <button className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400">
-              Export
-            </button>
-          }
-        >
-          <AIUtilizationChart tokens={aiUtilization.tokens} cycles={aiUtilization.cycles} />
         </DashboardSection>
 
         {/* Insight Feed */}
