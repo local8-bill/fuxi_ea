@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import type { ArtifactKind } from "@/domain/model/modernization";
 
 type Artifact = {
   id: string;
@@ -17,21 +18,25 @@ type NormalizedApp = {
   normalizedName: string;
 };
 
-type Summary = {
+type Props = {
+  projectId: string;
   artifacts: Artifact[];
   inventoryRows: InventoryRow[];
   normalizedApps: NormalizedApp[];
-};
-
-type Props = {
-  projectId: string;
-  summary: Summary;
+  busy?: boolean;
+  error?: string | null;
+  onUploadInventory?: (file: File) => Promise<void>;
+  onUploadDiagram?: (file: File, kind: ArtifactKind) => Promise<void>;
   onUploadLucid: (file: File) => Promise<void>;
 };
 
 export function ModernizationImportPanel({
   projectId,
-  summary,
+  artifacts,
+  inventoryRows,
+  normalizedApps,
+  busy = false,
+  error,
   onUploadLucid,
 }: Props) {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -68,9 +73,9 @@ export function ModernizationImportPanel({
     }
   };
 
-  const artifactsCount = summary.artifacts?.length ?? 0;
-  const inventoryCount = summary.inventoryRows?.length ?? 0;
-  const normalizedCount = summary.normalizedApps?.length ?? 0;
+  const artifactsCount = artifacts?.length ?? 0;
+  const inventoryCount = inventoryRows?.length ?? 0;
+  const normalizedCount = normalizedApps?.length ?? 0;
 
   return (
     <section className="card border border-slate-200 p-4 space-y-4">
@@ -103,8 +108,8 @@ export function ModernizationImportPanel({
         </div>
       </div>
 
-      {uploadError && (
-        <p className="text-xs text-red-500">{uploadError}</p>
+      {(uploadError || error) && (
+        <p className="text-xs text-red-500">{uploadError ?? error}</p>
       )}
 
       {/* Simple summary row so the panel still feels anchored in the workspace */}

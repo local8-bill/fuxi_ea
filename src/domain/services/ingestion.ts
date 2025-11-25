@@ -1,6 +1,6 @@
 // src/domain/services/ingestion.ts
 import { read, utils } from "xlsx";
-import type { InventoryRow } from "@/domain/model/tech-stack";
+import type { InventoryRow } from "@/domain/model/modernization";
 
 /**
  * Best-effort CSV parser — used for .csv/.txt or XLSX fallback.

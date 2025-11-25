@@ -52,7 +52,7 @@ type RateEntry = {
 
 function clientKey(req: NextRequest): string {
   const forwarded = req.headers.get("x-forwarded-for");
-  const ip = forwarded?.split(",")[0]?.trim() || req.ip || "unknown";
+  const ip = forwarded?.split(",")[0]?.trim() || "unknown";
   const token = req.headers.get("authorization")?.slice(0, 32) || "";
   return `${ip}|${token}`;
 }
