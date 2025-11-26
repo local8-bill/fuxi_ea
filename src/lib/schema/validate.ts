@@ -8,6 +8,9 @@ import {
   KPI,
   ROIResult,
   System,
+  RiskEntity,
+  AIRecommendationSet,
+  DataSourceRegistry,
 } from "./entities";
 
 type DatasetName =
@@ -18,7 +21,10 @@ type DatasetName =
   | "roi"
   | "ai"
   | "events"
-  | "kpis";
+  | "kpis"
+  | "risk"
+  | "aiRecommendations"
+  | "dataSources";
 
 type Summary = {
   name: DatasetName;
@@ -54,6 +60,24 @@ function freshnessWarnings<T extends { lastUpdated?: string; source?: string }>(
   return warnings;
 }
 
+function timestampQualityWarnings<T extends { lastUpdated?: string }>(items: T[], label: string): string[] {
+  const warnings: string[] = [];
+  let lastTime: number | null = null;
+  items.forEach((item, idx) => {
+    if (!item.lastUpdated) return;
+    const ts = Date.parse(item.lastUpdated);
+    if (Number.isNaN(ts)) {
+      warnings.push(`${label} index ${idx} has invalid lastUpdated format`);
+      return;
+    }
+    if (lastTime != null && ts < lastTime) {
+      warnings.push(`${label} index ${idx} lastUpdated regresses (potential overwrite)`);
+    }
+    lastTime = ts;
+  });
+  return warnings;
+}
+
 export async function validateAll(): Promise<Summary[]> {
   const results: Summary[] = [];
 
@@ -66,7 +90,11 @@ export async function validateAll(): Promise<Summary[]> {
     "systems",
     systemsRes.data.length,
     systemsRes.errors,
-    [...duplicateWarnings(systemsRes.data, "system"), ...freshnessWarnings(systemsRes.data, "system")]
+    [
+      ...duplicateWarnings(systemsRes.data, "system"),
+      ...freshnessWarnings(systemsRes.data, "system"),
+      ...timestampQualityWarnings(systemsRes.data, "system"),
+    ]
   );
 
   const integrationsRes = await loadValidated<Integration>("integrations");
@@ -77,6 +105,7 @@ export async function validateAll(): Promise<Summary[]> {
     [
       ...duplicateWarnings(integrationsRes.data, "integration"),
       ...freshnessWarnings(integrationsRes.data, "integration"),
+      ...timestampQualityWarnings(integrationsRes.data, "integration"),
     ]
   );
 
@@ -88,6 +117,7 @@ export async function validateAll(): Promise<Summary[]> {
     [
       ...duplicateWarnings(domainsRes.data, "domain"),
       ...freshnessWarnings(domainsRes.data, "domain"),
+      ...timestampQualityWarnings(domainsRes.data, "domain"),
     ]
   );
 
@@ -99,6 +129,7 @@ export async function validateAll(): Promise<Summary[]> {
     [
       ...duplicateWarnings(capsRes.data, "capability"),
       ...freshnessWarnings(capsRes.data, "capability"),
+      ...timestampQualityWarnings(capsRes.data, "capability"),
     ]
   );
 
@@ -107,7 +138,11 @@ export async function validateAll(): Promise<Summary[]> {
     "roi",
     roiRes.data.length,
     roiRes.errors,
-    [...duplicateWarnings(roiRes.data, "roi"), ...freshnessWarnings(roiRes.data, "roi")]
+    [
+      ...duplicateWarnings(roiRes.data, "roi"),
+      ...freshnessWarnings(roiRes.data, "roi"),
+      ...timestampQualityWarnings(roiRes.data, "roi"),
+    ]
   );
 
   const aiRes = await loadValidated<AIInsight>("ai");
@@ -115,7 +150,11 @@ export async function validateAll(): Promise<Summary[]> {
     "ai",
     aiRes.data.length,
     aiRes.errors,
-    [...duplicateWarnings(aiRes.data, "ai"), ...freshnessWarnings(aiRes.data, "ai")]
+    [
+      ...duplicateWarnings(aiRes.data, "ai"),
+      ...freshnessWarnings(aiRes.data, "ai"),
+      ...timestampQualityWarnings(aiRes.data, "ai"),
+    ]
   );
 
   const eventRes = await loadValidated<Event>("events");
@@ -123,7 +162,11 @@ export async function validateAll(): Promise<Summary[]> {
     "events",
     eventRes.data.length,
     eventRes.errors,
-    [...duplicateWarnings(eventRes.data, "event"), ...freshnessWarnings(eventRes.data, "event")]
+    [
+      ...duplicateWarnings(eventRes.data, "event"),
+      ...freshnessWarnings(eventRes.data, "event"),
+      ...timestampQualityWarnings(eventRes.data, "event"),
+    ]
   );
 
   const kpiRes = await loadValidated<KPI>("kpis");
@@ -131,7 +174,47 @@ export async function validateAll(): Promise<Summary[]> {
     "kpis",
     kpiRes.data.length,
     kpiRes.errors,
-    [...duplicateWarnings(kpiRes.data, "kpi"), ...freshnessWarnings(kpiRes.data, "kpi")]
+    [
+      ...duplicateWarnings(kpiRes.data, "kpi"),
+      ...freshnessWarnings(kpiRes.data, "kpi"),
+      ...timestampQualityWarnings(kpiRes.data, "kpi"),
+    ]
+  );
+
+  const riskRes = await loadValidated<RiskEntity>("risk");
+  push(
+    "risk",
+    riskRes.data.length,
+    riskRes.errors,
+    [
+      ...duplicateWarnings(riskRes.data, "risk"),
+      ...freshnessWarnings(riskRes.data, "risk"),
+      ...timestampQualityWarnings(riskRes.data, "risk"),
+    ]
+  );
+
+  const aiRecRes = await loadValidated<AIRecommendationSet>("aiRecommendations");
+  push(
+    "aiRecommendations",
+    aiRecRes.data.length,
+    aiRecRes.errors,
+    [
+      ...duplicateWarnings(aiRecRes.data, "ai recommendation"),
+      ...freshnessWarnings(aiRecRes.data, "ai recommendation"),
+      ...timestampQualityWarnings(aiRecRes.data, "ai recommendation"),
+    ]
+  );
+
+  const dsRes = await loadValidated<DataSourceRegistry>("dataSources");
+  push(
+    "dataSources",
+    dsRes.data.length,
+    dsRes.errors,
+    [
+      ...duplicateWarnings(dsRes.data, "data source"),
+      ...freshnessWarnings(dsRes.data, "data source"),
+      ...timestampQualityWarnings(dsRes.data, "data source"),
+    ]
   );
 
   return results;

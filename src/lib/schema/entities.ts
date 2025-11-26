@@ -112,3 +112,50 @@ export type ROIResult = z.infer<typeof ROIResultSchema>;
 export type AIInsight = z.infer<typeof AIInsightSchema>;
 export type Event = z.infer<typeof EventSchema>;
 export type KPI = z.infer<typeof KPISchema>;
+
+export const RiskEntitySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  systemId: z.string().optional(),
+  domainId: z.string().optional(),
+  type: z.string().optional(),
+  severity: z.enum(["low", "medium", "high", "critical"]).optional(),
+  probability: z.number().min(0).max(1).optional(),
+  impact: z.string().optional(),
+  lastUpdated: z.string().optional(),
+  source: z.string().optional(),
+});
+
+export const AIRecommendationSetSchema = z.object({
+  id: z.string().min(1),
+  systemId: z.string().optional(),
+  domainId: z.string().optional(),
+  recommendations: z
+    .array(
+      z.object({
+        action: z.string(),
+        description: z.string().optional(),
+        impact: z.number().min(0).max(100).optional(),
+        effort: z.number().min(0).max(100).optional(),
+        owner: z.string().optional(),
+      }),
+    )
+    .optional(),
+  lastUpdated: z.string().optional(),
+  source: z.string().optional(),
+});
+
+export const DataSourceRegistrySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  connector: z.string().optional(),
+  type: z.string().optional(),
+  status: z.enum(["healthy", "degraded", "down"]).optional(),
+  lastRefreshed: z.string().optional(),
+  lastUpdated: z.string().optional(),
+  source: z.string().optional(),
+});
+
+export type RiskEntity = z.infer<typeof RiskEntitySchema>;
+export type AIRecommendationSet = z.infer<typeof AIRecommendationSetSchema>;
+export type DataSourceRegistry = z.infer<typeof DataSourceRegistrySchema>;

@@ -10,6 +10,9 @@ import {
   KPISchema,
   ROIResultSchema,
   SystemSchema,
+  RiskEntitySchema,
+  AIRecommendationSetSchema,
+  DataSourceRegistrySchema,
 } from "./entities";
 
 type SchemaName =
@@ -20,7 +23,10 @@ type SchemaName =
   | "roi"
   | "ai"
   | "events"
-  | "kpis";
+  | "kpis"
+  | "risk"
+  | "aiRecommendations"
+  | "dataSources";
 
 const schemaMap: Record<SchemaName, ZodArray<ZodTypeAny>> = {
   systems: z.array(SystemSchema),
@@ -31,6 +37,9 @@ const schemaMap: Record<SchemaName, ZodArray<ZodTypeAny>> = {
   ai: z.array(AIInsightSchema),
   events: z.array(EventSchema),
   kpis: z.array(KPISchema),
+  risk: z.array(RiskEntitySchema),
+  aiRecommendations: z.array(AIRecommendationSetSchema),
+  dataSources: z.array(DataSourceRegistrySchema),
 };
 
 const defaultCandidates: Record<SchemaName, string[]> = {
@@ -42,6 +51,9 @@ const defaultCandidates: Record<SchemaName, string[]> = {
   ai: [".fuxi/data/insights/ai_insights.json", ".fuxi/data/digital-enterprise/insights.json"],
   events: [".fuxi/data/events.json"],
   kpis: [".fuxi/data/kpis.json"],
+  risk: [".fuxi/data/risk.json"],
+  aiRecommendations: [".fuxi/data/ai_recommendations.json"],
+  dataSources: [".fuxi/data/data_sources.json"],
 };
 
 export async function loadValidated<T = any>(
