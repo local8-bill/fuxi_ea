@@ -10,7 +10,7 @@ Unify and standardize data models and validation across Fuxi EA so capabilities,
 | --- | --- | --- | --- | --- |
 | Entity Definitions | Core entities defined (system, integration, domain, capability, ROI, AI, event, KPI) | ☑ | Codex | 2025-11-26T05:22Z |
 | Validation Rules | Zod validation + API exposure | ☑ | Codex | 2025-11-26T05:22Z |
-| Lineage Rules | lastUpdated/source warnings, append-only policy enforcement | ☑ (warnings) | Codex | 2025-11-26T05:30Z |
+| Lineage Rules | lastUpdated/source warnings, append-only policy enforcement | ☑ (warnings + hash/ts check) | Codex | 2025-11-26T05:30Z |
 | Integration Map | Modules consume validated data consistently | ☑ (DE stats uses validated systems/integrations when present) | Codex | 2025-11-26T05:38Z |
 | Extensions Plan | Risk/AIRecommendation/DataSource registry scoped | ☑ | Codex | 2025-11-26T05:30Z |
 
