@@ -5,6 +5,7 @@ import type {
   LucidEdge,
   LucidParseResult,
 } from "./lucidIngestion";
+import { loadValidated } from "@/lib/schema/loaders";
 
 interface StoredDigitalEnterpriseView extends LucidParseResult {
   uploadedAt: string;
@@ -182,6 +183,48 @@ export async function getDigitalEnterpriseView(
 export async function getStatsForProject(
   projectId: string
 ): Promise<DigitalEnterpriseStats> {
+  // Prefer validated `.fuxi/data` artifacts when available
+  const validatedSystems = await loadValidated<any>("systems");
+  const validatedIntegrations = await loadValidated<any>("integrations");
+
+  if (validatedSystems.data.length && validatedIntegrations.data.length) {
+    const degreeBySystem = new Map<string, number>();
+    validatedSystems.data.forEach((s: any) => degreeBySystem.set(s.id, 0));
+    validatedIntegrations.data.forEach((e: any) => {
+      if (e.sourceSystemId) {
+        degreeBySystem.set(e.sourceSystemId, (degreeBySystem.get(e.sourceSystemId) ?? 0) + 1);
+      }
+      if (e.targetSystemId) {
+        degreeBySystem.set(e.targetSystemId, (degreeBySystem.get(e.targetSystemId) ?? 0) + 1);
+      }
+    });
+
+    const topSystems = validatedSystems.data
+      .map((s: any) => {
+        const degree = degreeBySystem.get(s.id) ?? 0;
+        return {
+          systemId: s.id,
+          id: s.id,
+          systemName: s.name,
+          name: s.name,
+          label: s.name,
+          integrationCount: degree,
+          integrations: degree,
+          degree,
+          domain: s.domainId ?? null,
+        } as TopSystemStat;
+      })
+      .sort((a, b) => b.degree - a.degree)
+      .slice(0, 10);
+
+    return {
+      systemsFuture: validatedSystems.data.length,
+      integrationsFuture: validatedIntegrations.data.length,
+      domainsDetected: 0,
+      topSystems,
+    };
+  }
+
   const view = await getDigitalEnterpriseView(safeProjectId(projectId));
 
   if (!view || !Array.isArray(view.nodes) || !Array.isArray(view.edges)) {
