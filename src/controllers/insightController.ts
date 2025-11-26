@@ -43,9 +43,7 @@ export function computeInsights(
     return opp;
   });
 
-  // Persistence intentionally disabled in this client-safe controller.
-  // For server-side use, add a separate writer that runs in a Node context.
-
+  // Optional persistence for server-side use only (handled in server controller)
   return results;
 }
 

@@ -2,13 +2,34 @@
 
 import React from "react";
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
-import { getMockInsights, listPrimitives, listIndustryCases } from "@/controllers/insightController";
+import { listPrimitives, listIndustryCases } from "@/controllers/insightController";
 import type { Opportunity } from "@/domain/knowledge";
 
 const COLORS = ["#2563eb", "#9333ea", "#0ea5e9", "#1e293b", "#334155", "#64748b"];
 
 export default function InsightsPage() {
-  const opportunities = React.useMemo(() => getMockInsights(), []);
+  const [opportunities, setOpportunities] = React.useState<Opportunity[]>([]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/insights", { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load insights");
+        const data = await res.json();
+        if (!cancelled) {
+          setOpportunities(data.opportunities ?? []);
+        }
+      } catch {
+        // fallback to client-side mock
+        const { getMockInsights } = await import("@/controllers/insightController");
+        if (!cancelled) setOpportunities(getMockInsights());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const primitives = listPrimitives();
   const cases = listIndustryCases();
 
