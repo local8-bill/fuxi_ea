@@ -57,7 +57,7 @@ export default function ScoringPage() {
   const [aiTargetId, setAiTargetId] = React.useState<string | null>(null);
   const [undoStack, setUndoStack] = React.useState<any[]>([]);
   const [redoStack, setRedoStack] = React.useState<any[]>([]);
-  const aiEnabled = aiScoringEnabled();
+  const [aiEnabled, setAiEnabled] = React.useState(aiScoringEnabled());
 
   const domains = React.useMemo(
     () => Array.from(new Set(items.map((x) => x.domain ?? "Unassigned"))).sort(),
@@ -233,6 +233,13 @@ export default function ScoringPage() {
           </button>
           <button className="btn" onClick={redo} disabled={!canRedo} aria-label="Redo change">
             Redo
+          </button>
+          <button
+            className={`btn ${aiEnabled ? "btn-primary" : ""}`}
+            onClick={() => setAiEnabled((v) => !v)}
+            aria-label="Toggle AI Assist"
+          >
+            {aiEnabled ? "AI Assist: On" : "AI Assist: Off"}
           </button>
         </div>
       </section>
