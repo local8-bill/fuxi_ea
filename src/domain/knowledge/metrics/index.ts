@@ -9,6 +9,29 @@ export function aiOpportunityIndex(score: ImpactEffortResult): number {
   return Math.round(value);
 }
 
+/** Simple readiness calculator; averages normalized inputs. */
+export function aiReadinessScore(inputs: { data: number; governance: number; architecture: number; talent: number }): number {
+  const vals = [inputs.data, inputs.governance, inputs.architecture, inputs.talent].map(clamp);
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  return Math.round(avg);
+}
+
+/** Redundancy index: proportion of overlapping systems within a domain (0-100, higher = more redundancy). */
+export function redundancyIndex(overlapCount: number, totalSystems: number): number {
+  if (totalSystems <= 0) return 0;
+  const ratio = Math.max(0, Math.min(1, overlapCount / totalSystems));
+  return Math.round(ratio * 100);
+}
+
+/** ROI uplift: (benefit - cost) / max(cost, epsilon) mapped to 0-100. Negative values clamp to 0. */
+export function roiScore(benefit: number, cost: number): number {
+  const denom = Math.max(cost, 0.01);
+  const raw = (benefit - cost) / denom;
+  if (!Number.isFinite(raw)) return 0;
+  const pct = raw * 100;
+  return Math.round(Math.max(0, Math.min(150, pct))); // cap to 150 for display
+}
+
 function clamp(v: number) {
   return Math.max(0, Math.min(100, v));
 }
