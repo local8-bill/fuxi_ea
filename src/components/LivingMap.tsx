@@ -257,8 +257,8 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-800">Domains</span>
             {[...domainColors.entries()].map(([name, c]) => (
-              <span key={name} className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
-                <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: c }} />
+              <span key={name} className="fx-pill">
+                <span className="fx-legend-dot" style={{ backgroundColor: c }} />
                 {name}
               </span>
             ))}
@@ -273,8 +273,8 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
               ["replace", "Replace"],
               ["retire", "Retire"],
             ] as const).map(([k, labelText]) => (
-              <span key={k} className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
-                <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: COLORS.disposition[k] }} />
+              <span key={k} className="fx-pill">
+                <span className="fx-legend-dot" style={{ backgroundColor: COLORS.disposition[k] }} />
                 {labelText}
               </span>
             ))}
@@ -283,16 +283,16 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
         {layer === "roi" && (
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-800">Heatmap</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
-              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#a855f7" }} />
+            <span className="fx-pill">
+              <span className="fx-legend-dot" style={{ backgroundColor: "#a855f7" }} />
               Low readiness
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
-              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#eab308" }} />
+            <span className="fx-pill">
+              <span className="fx-legend-dot" style={{ backgroundColor: "#eab308" }} />
               Mid readiness
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
-              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#22c55e" }} />
+            <span className="fx-pill">
+              <span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />
               High readiness
             </span>
           </div>
@@ -300,16 +300,16 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
         {layer === "ai" && (
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-800">AI Opportunity</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
-              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#a855f7" }} />
+            <span className="fx-pill">
+              <span className="fx-legend-dot" style={{ backgroundColor: "#a855f7" }} />
               Low readiness
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
-              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#eab308" }} />
+            <span className="fx-pill">
+              <span className="fx-legend-dot" style={{ backgroundColor: "#eab308" }} />
               Mid readiness
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
-              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#22c55e" }} />
+            <span className="fx-pill">
+              <span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />
               High readiness
             </span>
           </div>
