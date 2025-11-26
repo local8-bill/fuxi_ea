@@ -10,6 +10,9 @@ import {
 import { useImpactGraph } from "@/hooks/useImpactGraph";
 import { LivingMap } from "@/components/LivingMap";
 import type { LivingMapData } from "@/types/livingMap";
+import { useROISimulation } from "@/hooks/useROISimulation";
+import { ROIChart } from "@/components/ROIChart";
+import { EventLogPanel } from "@/components/EventLogPanel";
 
 interface TopSystemRaw {
   systemId?: string;
@@ -83,6 +86,8 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       kind: "api",
     })),
   }), [graph]);
+
+  const roiSim = useROISimulation();
 
   useEffect(() => {
     let cancelled = false;
@@ -216,6 +221,16 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
             </p>
             <LivingMap data={livingMapData} height={720} />
+          </section>
+
+          {/* ROI + Events */}
+          <section className="mt-12 grid gap-4 lg:grid-cols-[2fr,1fr]">
+            <ROIChart
+              data={roiSim.timeline}
+              breakEvenMonth={roiSim.breakEvenMonth}
+              currentMonth={roiSim.month}
+            />
+            <EventLogPanel events={roiSim.events} />
           </section>
 
           {/* Top systems table */}

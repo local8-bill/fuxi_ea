@@ -31,3 +31,13 @@ export type SimulationState = {
   mode: SimulationMode;
   disabledNodes: Set<string>;
 };
+
+export type SimulationEvent = {
+  id: string;
+  timestamp: string;
+  type: "system_decommissioned" | "integration_relinked" | "system_golive" | "domain_modernized";
+  title: string;
+  detail: string;
+  domain?: string;
+  severity?: "info" | "warning" | "critical";
+};
