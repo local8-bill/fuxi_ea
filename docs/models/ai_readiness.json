@@ -1,0 +1,21 @@
+{
+  "modelName": "AI_Readiness_v0.9",
+  "modelType": "Qualitative",
+  "purpose": "Assesses AI adoption readiness across data, governance, and capability maturity.",
+  "inputs": [
+    "Data_Quality",
+    "Governance_Coverage",
+    "Architecture_Modularity",
+    "Talent_Score"
+  ],
+  "formulaSummary": "Readiness = weighted average of inputs (equal weights until calibrated) mapped to 0-1.",
+  "assumptions": [
+    "Equal weights until domain-specific calibration is supplied",
+    "Talent score is self-reported unless validated",
+    "Governance coverage treated as binary/ordinal input"
+  ],
+  "confidenceLevel": "Experimental",
+  "referenceDocs": "/docs/features/directive_0003_insight_ai_opportunity_engine.md",
+  "author": "Fuxi",
+  "lastUpdated": "2025-11-26"
+}

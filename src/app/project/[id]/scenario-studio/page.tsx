@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { ResponsiveContainer, ComposedChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ReferenceLine } from "recharts";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { Card } from "@/components/ui/Card";
+import { ModelBasisPanel } from "@/components/ui/ModelBasisPanel";
 import {
   baselineScenario,
   scenarios,
@@ -45,6 +46,9 @@ export default function ScenarioStudioPage() {
         <p className="text-xs text-gray-500 mt-2">
           Project: {id} · Auth optional (labs) · Baseline is always present for comparison. Data currently uses mock Deckers-inspired values until D010 validation wiring lands.
         </p>
+        <div className="mt-2">
+          <ModelBasisPanel modelName="roi_calculation" triggerLabel="Model basis: ROI & volatility" />
+        </div>
       </WorkspaceHeader>
 
       {/* Controls */}
