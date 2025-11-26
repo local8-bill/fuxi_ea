@@ -1,11 +1,15 @@
 "use server";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+const rateLimit = createRateLimiter({ windowMs: 60_000, max: 10, name: "truth-pass" });
+const MAX_CANDIDATES = 400;
 
 type TruthPassCandidate = {
   norm: string;
@@ -28,13 +32,27 @@ type TruthRow = {
   note: string;
 };
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = requireAuth(req);
+  if (auth) return auth;
+
+  const limited = rateLimit(req);
+  if (limited) return limited;
+
+  if (!process.env.OPENAI_API_KEY) {
+    return jsonError(500, "OPENAI_API_KEY not configured");
+  }
+
   try {
     const body = (await req.json()) as TruthPassRequestBody;
     const candidates = Array.isArray(body.candidates) ? body.candidates : [];
 
     if (candidates.length === 0) {
       return NextResponse.json({ ok: true, rows: [] });
+    }
+
+    if (candidates.length > MAX_CANDIDATES) {
+      return jsonError(400, `Too many candidates (max ${MAX_CANDIDATES})`);
     }
 
     const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";

@@ -1,0 +1,50 @@
+{
+  "title": "First 100 Days Executive Survey",
+  "version": "1.0.0",
+  "questions": [
+    {
+      "id": "q1",
+      "type": "rank",
+      "prompt": "Which decisions are hardest in your first 100 days?",
+      "options": ["Priorities", "Org design", "Vendor choices", "Platform direction", "Budget allocation"]
+    },
+    {
+      "id": "q2",
+      "type": "multi-select",
+      "prompt": "Which data sources do you trust most today?",
+      "options": ["Financials", "Product analytics", "CS ops", "Architecture diagrams", "External benchmarks"],
+      "allowOther": true
+    },
+    {
+      "id": "q3",
+      "type": "multi-select",
+      "prompt": "Which conversations consume most of your early bandwidth?",
+      "options": ["Exec reviews", "Board updates", "Architecture reviews", "Budget gates", "Firefighting"],
+      "allowOther": true
+    },
+    {
+      "id": "q4",
+      "type": "text",
+      "prompt": "Where do you see recurring risk vs. opportunity?"
+    },
+    {
+      "id": "q5",
+      "type": "likert",
+      "prompt": "Would live visualization change your confidence in decisions?",
+      "scale": 5,
+      "followup": "How?"
+    },
+    {
+      "id": "q6",
+      "type": "multi-select",
+      "prompt": "How do you measure a 'good decision'?",
+      "options": ["Intuition", "Consensus", "Data-backed", "Speed"],
+      "allowOther": true
+    },
+    {
+      "id": "q7",
+      "type": "text",
+      "prompt": "What blocks actionable tech strategy?"
+    }
+  ]
+}

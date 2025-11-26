@@ -55,6 +55,8 @@ npm-debug.log*
 
 # env/build artifacts
 .env*
+.fuxi/
+.fuxi/data/
 public/test.css
 .next/tw-test.css
 
@@ -64,5 +66,7 @@ src_backup_*/
 src_broken_*/
 src_clean*/
 
-# local app data/cache
-.fuxi/data/
+# shell/profile secrets
+.zshrc
+.zshenv
+.config/*.env

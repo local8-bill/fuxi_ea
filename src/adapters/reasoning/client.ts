@@ -7,6 +7,10 @@ import type {
 } from "@/domain/ports/reasoning";
 import type { Capability } from "@/domain/model/capability";
 
+const clientAuthHeader = process.env.NEXT_PUBLIC_FUXI_API_TOKEN
+  ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_FUXI_API_TOKEN}` }
+  : undefined;
+
 /** simple normalizer + token overlap score */
 function norm(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
 function score(a: string, b: string) {
@@ -71,7 +75,10 @@ export async function alignViaApi(
 ): Promise<ReasoningAlignResult> {
   const res = await fetch("/api/reasoning/align", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(clientAuthHeader ?? {}),
+    },
     body: JSON.stringify({ rows, existingL1 }),
   });
 

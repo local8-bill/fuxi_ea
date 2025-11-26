@@ -10,6 +10,19 @@ import { WeightsDrawer } from "@/ui/components/WeightsDrawer";
 import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
 import { defaultWeights } from "@/domain/services/scoring";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
+import { aiScoringEnabled } from "@/lib/featureFlags";
+import { AiAssistDrawer } from "@/components/capabilities/AiAssistDrawer";
+import { DndProvider, useDrag, useDrop } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +40,14 @@ export default function ScoringPage() {
     compositeFor,
     addL1,
     reload,
+    updateCapability,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    moveL1,
+    moveChild,
+    snapshotUndo,
   } = useScoringPage(id, localStorageAdapter);
 
   // Feature flags (flip to false for prod if you want)
@@ -38,6 +59,10 @@ export default function ScoringPage() {
   const [weightsOpen, setWeightsOpen] = React.useState(false);
   const [showAddL1, setShowAddL1] = React.useState(false);
   const [showVision, setShowVision] = React.useState(false);
+  const [aiTargetId, setAiTargetId] = React.useState<string | null>(null);
+  const [undoStack, setUndoStack] = React.useState<any[]>([]);
+  const [redoStack, setRedoStack] = React.useState<any[]>([]);
+  const [aiEnabled, setAiEnabled] = React.useState(aiScoringEnabled());
 
   const domains = React.useMemo(
     () => Array.from(new Set(items.map((x) => x.domain ?? "Unassigned"))).sort(),
@@ -77,6 +102,23 @@ export default function ScoringPage() {
 
   const existingL1 = React.useMemo(() => items.map((i) => i.name), [items]);
 
+  const importRef = React.useRef<HTMLDivElement | null>(null);
+  const scoreRef = React.useRef<HTMLDivElement | null>(null);
+  const vizRef = React.useRef<HTMLDivElement | null>(null);
+
+  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
+    if (ref.current) {
+      ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const aiTargetName = React.useMemo(() => {
+    if (!aiTargetId) return undefined;
+    const direct = items.find((i) => i.id === aiTargetId)?.name;
+    if (direct) return direct;
+    return aiTargetId;
+  }, [aiTargetId, items]);
+
   // Show a super-light loading placeholder (avoids flicker)
   if (loading) {
     return (
@@ -86,25 +128,88 @@ export default function ScoringPage() {
     );
   }
 
+  const step = sorted.length === 0 ? "Import" : showVision ? "Visualize" : "Score";
+  const scoreData = sorted.slice(0, 12).map((s) => ({ name: s.name, score: Number(s.score ?? 0) }));
+  const domainStats = grouped?.map(([domain, caps]) => {
+    const avg = caps.reduce((sum, c) => sum + c.score, 0) / Math.max(1, caps.length);
+    return { domain, avg: Number(avg.toFixed(1)), count: caps.length };
+  });
+  const totalCaps = items.length;
+  const totalDomains = domains.length;
+  const avgScore =
+    totalCaps === 0 ? 0 : Number((items.reduce((sum, c) => sum + c.score, 0) / totalCaps).toFixed(1));
+  const emptyState = sorted.length === 0;
+  const emptyTitle = "No capabilities yet";
+  const emptyBody = "Import a capability map or add an L1 to begin scoring.";
+
+  const openImportPicker = () => {
+    const input = importRef.current?.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input) {
+      input.click();
+    } else {
+      scrollToRef(importRef);
+    }
+  };
+
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 space-y-6">
-      {/* Header to match Tech Stack look */}
-      <header className="space-y-1">
+    <DndProvider backend={HTML5Backend}>
+    <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+      {/* Header */}
+      <header className="space-y-2">
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
           Project: {id}
         </p>
-        <h1 className="text-2xl font-semibold text-slate-900">
-          Capability Scoring Workspace
-        </h1>
-        <p className="text-sm text-slate-500">
-          Score business capabilities, compare domains, and explore AI-assisted insights for this
-          project.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">Capability Workspace</h1>
+            <p className="text-sm text-slate-500">
+              Import capability maps, score them, and visualize readiness per domain.
+            </p>
+            {aiEnabled && (
+              <p className="text-xs text-green-700 mt-1">
+                AI-assisted scoring is enabled (Labs). Use AI Assist drawers to propose scores.
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {(["Import", "Score", "Visualize"] as const).map((label) => {
+              const target = label === "Import" ? importRef : label === "Score" ? scoreRef : vizRef;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => scrollToRef(target)}
+                  className={`fx-pill ${step === label ? "active" : ""}`}
+                  aria-label={`Jump to ${label}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </header>
 
-      {/* Controls card (filters, sort, actions) */}
-      <section className="card border border-gray-100 p-4 space-y-3 rounded-2xl">
-        <div className="flex flex-wrap gap-3 items-center">
+      <section className="card border border-slate-200 p-4 rounded-2xl">
+        <div className="grid gap-2 sm:grid-cols-3 text-sm text-slate-700">
+          <span className="fx-pill justify-between w-full" aria-label="Total capabilities">
+            <span>Capabilities</span>
+            <strong>{totalCaps}</strong>
+          </span>
+          <span className="fx-pill justify-between w-full" aria-label="Total domains">
+            <span>Domains</span>
+            <strong>{totalDomains}</strong>
+          </span>
+          <span className="fx-pill justify-between w-full" aria-label="Average score">
+            <span>Avg Score</span>
+            <strong>{avgScore}</strong>
+          </span>
+        </div>
+      </section>
+
+      {/* Scope / filters */}
+      <section className="card border border-slate-200 p-4 rounded-2xl space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             className="select"
             value={domainFilter}
@@ -125,93 +230,198 @@ export default function ScoringPage() {
             <option value="score">Sort: Score</option>
           </select>
 
-          <button className="btn" onClick={() => setShowAddL1(true)}>
-            Add L1
+          <button className="btn" onClick={() => setShowAddL1(true)} aria-label="Add new L1 capability">
+            Add Capability (L1)
           </button>
 
           {LABS_VISION && (
-            <button className="btn" onClick={() => setShowVision((v) => !v)}>
-              {showVision ? "Hide Vision" : "Vision (Labs)"}
+            <button className="btn" onClick={() => setShowVision((v) => !v)} aria-label="Toggle visualize view">
+              {showVision ? "Hide Visualize" : "Visualize"}
             </button>
           )}
 
-          <button className="btn ml-auto" onClick={() => setWeightsOpen(true)}>
+          <button className="btn ml-auto" onClick={() => setWeightsOpen(true)} aria-label="Adjust scoring weights">
             Weights
+          </button>
+          <button className="btn" onClick={undo} disabled={!canUndo} aria-label="Undo last change">
+            Undo
+          </button>
+          <button className="btn" onClick={redo} disabled={!canRedo} aria-label="Redo change">
+            Redo
+          </button>
+          <button
+            className={`btn ${aiEnabled ? "btn-primary" : ""}`}
+            onClick={() => setAiEnabled((v) => !v)}
+            aria-label="Toggle AI Assist"
+          >
+            {aiEnabled ? "AI Assist: On" : "AI Assist: Off"}
           </button>
         </div>
       </section>
 
-      {/* Labs panels */}
-      {LABS_IMPORT && (
-        <ImportPanel
-          projectId={id}
-          storage={localStorageAdapter}
-          existingL1={existingL1}
-          defaultOpen={false}
-          onApplied={() => reload()}
-        />
-      )}
+      {/* Scoring */}
+      <section ref={scoreRef} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Score</div>
+            <div className="text-xs text-slate-500">
+              Inline scoring for each capability; adjust weights and filters as you go.
+            </div>
+          </div>
+          <div className="flex gap-2 text-xs text-slate-600">
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#ef4444" }} /> Gap</span>
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#eab308" }} /> Neutral</span>
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} /> Strong</span>
+          </div>
+        </div>
 
-      {LABS_VISION && showVision && (
-        <VisionPanel
-          projectId={id}
-          storage={localStorageAdapter}
-          defaultOpen={true}
-          onApplied={() => reload()}
-        />
-      )}
-
-      {/* Main content */}
-      {sorted.length === 0 ? (
-        <section className="card rounded-2xl border border-slate-200 p-4 mt-2">
-          <div className="font-medium mb-2">No capabilities yet</div>
-          <p className="text-sm opacity-70 mb-3">
-            Start by adding an L1 capability or importing a capability map.
-          </p>
-          <button className="btn btn-primary" onClick={() => setShowAddL1(true)}>
-            Add L1
-          </button>
+        <section
+          ref={importRef}
+          className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Import</div>
+              <div className="text-xs text-slate-500">
+                Upload capability CSV/JSON; preview and validate before scoring.
+              </div>
+            </div>
+            <span className="fx-pill text-xs">Supported: CSV, JSON</span>
+          </div>
+          <ImportPanel
+            embed
+            defaultOpen={emptyState}
+            projectId={id}
+            storage={localStorageAdapter}
+            existingL1={existingL1}
+            onBeforeApply={snapshotUndo}
+            onApplied={reload}
+          />
         </section>
-      ) : domainFilter === "All Domains" && grouped ? (
-        // Grouped by Domain
-        <>
-          {grouped.map(([domain, caps]) => (
-            <section key={domain} className="space-y-3">
-              <h2 className="text-base font-semibold">{domain}</h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {caps.map((x) => (
-                  <CapabilityAccordionCard
-                    key={x.id}
-                    cap={x.raw}
-                    l1Score={x.score}
-                    weights={weights}
-                    expanded={!!expandedL1[x.id]}
-                    onToggle={() => toggleExpanded(x.id)}
-                    onOpen={(cid) => setOpenId(cid)}
-                    compositeFor={compositeFor}
-                  />
+
+        {emptyState ? (
+          <div className="card rounded-xl border border-slate-200 p-6 flex flex-col items-start gap-3 bg-slate-50">
+            <div className="text-sm font-semibold">{emptyTitle}</div>
+            <p className="text-sm text-slate-600">{emptyBody}</p>
+            <div className="flex gap-2">
+              <button className="btn btn-primary" onClick={() => setShowAddL1(true)}>
+                Add L1 Capability
+              </button>
+              <button
+                className="btn"
+                onClick={() => openImportPicker()}
+              >
+                Import CSV/JSON
+              </button>
+            </div>
+          </div>
+        ) : domainFilter === "All Domains" && grouped ? (
+          <>
+            {grouped.map(([domain, caps]) => (
+              <section key={domain} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-semibold">{domain}</h2>
+                  {domainStats && (
+                    <span className="fx-pill text-xs">
+                      Avg: {domainStats.find((d) => d.domain === domain)?.avg ?? 0} ·{" "}
+                      {domainStats.find((d) => d.domain === domain)?.count ?? 0} caps
+                    </span>
+                  )}
+                </div>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {caps.map((x, idx) => (
+                    <DraggableCard
+                      key={x.id}
+                      id={x.id}
+                      index={idx}
+                      onMove={(from, to) => moveL1(from, to)}
+                    >
+                      <CapabilityAccordionCard
+                        cap={x.raw}
+                        l1Score={x.score}
+                        weights={weights}
+                        expanded={!!expandedL1[x.id]}
+                        onToggle={() => toggleExpanded(x.id)}
+                        onOpen={(cid) => setOpenId(cid)}
+                        compositeFor={compositeFor}
+                      aiEnabled={aiEnabled}
+                      onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
+                      onInlineEdit={updateCapability}
+                      onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
+                      onMoveL2={moveChild}
+                    />
+                  </DraggableCard>
                 ))}
               </div>
             </section>
-          ))}
-        </>
-      ) : (
-        // Ungrouped grid
-        <section className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((x) => (
-            <CapabilityAccordionCard
-              key={x.id}
-              cap={x.raw}
-              l1Score={x.score}
-              weights={weights}
-              expanded={!!expandedL1[x.id]}
-              onToggle={() => toggleExpanded(x.id)}
-              onOpen={(cid) => setOpenId(cid)}
-              compositeFor={compositeFor}
-            />
+            ))}
+          </>
+        ) : (
+          <section className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sorted.map((x, idx) => (
+              <DraggableCard
+                key={x.id}
+                id={x.id}
+                index={idx}
+                onMove={(from, to) => moveL1(from, to)}
+              >
+                <CapabilityAccordionCard
+                  cap={x.raw}
+                  l1Score={x.score}
+                  weights={weights}
+                  expanded={!!expandedL1[x.id]}
+                  onToggle={() => toggleExpanded(x.id)}
+                  onOpen={(cid) => setOpenId(cid)}
+                  compositeFor={compositeFor}
+                aiEnabled={aiEnabled}
+                onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
+                onInlineEdit={updateCapability}
+                onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
+                onMoveL2={moveChild}
+              />
+            </DraggableCard>
           ))}
         </section>
       )}
+      </section>
+
+      {/* Visualization */}
+      <section ref={vizRef} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Visualize</div>
+            <div className="text-xs text-slate-500">Domain averages and top capability scores.</div>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+            <div className="text-xs font-semibold text-slate-700 mb-2">Top Capabilities</div>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={scoreData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip />
+                  <Bar dataKey="score" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+            <div className="text-xs font-semibold text-slate-700 mb-2">Domain Summary</div>
+            <div className="space-y-2 text-sm text-slate-800">
+              {(domainStats ?? []).map((d) => (
+                <div key={d.domain} className="flex items-center justify-between rounded-md bg-white px-3 py-2 border border-slate-100">
+                  <span className="font-semibold">{d.domain}</span>
+                  <span className="text-xs text-slate-600">Avg {d.avg} · {d.count} caps</span>
+                </div>
+              ))}
+              {!domainStats?.length && <div className="text-xs text-slate-500">No domain data yet.</div>}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Drawers & Dialogs */}
       <ScoringDrawer
@@ -236,6 +446,61 @@ export default function ScoringPage() {
         onCreate={(name, domain) => addL1(name, domain)}
         domainSuggestions={domains}
       />
+
+      {aiEnabled && (
+        <AiAssistDrawer
+          open={!!aiTargetId}
+          name={aiTargetName}
+          onClose={() => setAiTargetId(null)}
+          onAccept={(score, rationale, meta) => {
+            if (!aiTargetId) return;
+            const val = Math.max(0, Math.min(100, score)) / 100;
+            updateScores(aiTargetId, { maturity: val, opportunity: val, techFit: val });
+            updateCapability(aiTargetId, {
+              ai_rationale: rationale,
+              confidence: meta?.confidence,
+              last_assessed: meta?.last_assessed,
+              assessment_mode: meta?.assessment_mode as any,
+            });
+          }}
+        />
+      )}
     </main>
+    </DndProvider>
+  );
+}
+
+type DragItem = { id: string; index: number; type: "L1" };
+
+function DraggableCard({
+  id,
+  index,
+  onMove,
+  children,
+}: {
+  id: string;
+  index: number;
+  onMove: (dragId: string, hoverId: string) => void;
+  children: React.ReactNode;
+}) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const [, drop] = useDrop<DragItem>({
+    accept: "L1",
+    hover(item) {
+      if (!ref.current || item.id === id) return;
+      onMove(item.id, id);
+      item.index = index;
+    },
+  });
+  const [{ isDragging }, drag] = useDrag({
+    type: "L1",
+    item: { id, index, type: "L1" },
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+  drag(drop(ref));
+  return (
+    <div ref={ref} style={{ opacity: isDragging ? 0.6 : 1 }}>
+      {children}
+    </div>
   );
 }

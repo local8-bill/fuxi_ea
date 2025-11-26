@@ -7,6 +7,10 @@ export type ClientRow = {
   parent?: string;
 };
 
+const clientAuthHeader = process.env.NEXT_PUBLIC_FUXI_API_TOKEN
+  ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_FUXI_API_TOKEN}` }
+  : undefined;
+
 export async function analyzeImageViaApi(file: File): Promise<ClientRow[]> {
   const form = new FormData();
   form.append("file", file);
@@ -14,6 +18,7 @@ export async function analyzeImageViaApi(file: File): Promise<ClientRow[]> {
   const res = await fetch("/api/vision/analyze", {
     method: "POST",
     body: form,
+    headers: clientAuthHeader ?? undefined,
   });
 
   if (!res.ok) {

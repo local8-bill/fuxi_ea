@@ -1,12 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import {
   SystemImpactPanel,
   type SystemImpact,
 } from "@/components/digital-enterprise/SystemImpactPanel";
+import { useImpactGraph } from "@/hooks/useImpactGraph";
+import { LivingMap } from "@/components/LivingMap";
+import type { LivingMapData } from "@/types/livingMap";
+import { useROISimulation } from "@/hooks/useROISimulation";
+import { ROIChart } from "@/components/ROIChart";
+import { EventLogPanel } from "@/components/EventLogPanel";
+import { useAIInsights } from "@/hooks/useAIInsights";
+import { NodeInsightPanel } from "@/components/NodeInsightPanel";
+import { ScenarioComparePanel } from "@/components/ScenarioComparePanel";
 
 interface TopSystemRaw {
   systemId?: string;
@@ -61,6 +70,44 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const graph = useImpactGraph();
+  const aiInsights = useAIInsights(graph.nodes);
+  const livingMapData: LivingMapData = useMemo(() => {
+    const dispositions: Array<NonNullable<LivingMapData["nodes"][number]["disposition"]>> = [
+      "keep",
+      "modernize",
+      "replace",
+      "retire",
+    ];
+    return {
+      nodes: graph.nodes.map((n, idx) => {
+        const insight = aiInsights.insights[n.id];
+        return {
+          id: n.id,
+          label: n.label,
+          domain: insight?.domain ?? n.domain,
+          health: 60 + Math.random() * 30,
+          aiReadiness: insight?.aiReadiness ?? 50 + Math.random() * 40,
+          opportunityScore: insight?.opportunityScore,
+          riskScore: insight?.riskScore,
+          roiScore: 40 + Math.random() * 50,
+          aiSummary: insight?.summary,
+          disposition: (insight?.disposition as any) ?? dispositions[idx % dispositions.length],
+          integrationCount: insight?.integrationCount ?? n.integrationCount,
+        };
+      }),
+      edges: graph.edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        weight: e.weight,
+        kind: "api",
+      })),
+    };
+  }, [graph]);
+
+  const roiSim = useROISimulation();
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +170,11 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     ((stats.systemsFuture ?? 0) > 0 ||
       (stats.integrationsFuture ?? 0) > 0);
 
+  const selectedNode = useMemo(
+    () => livingMapData.nodes.find((n) => n.id === selectedNodeId) ?? null,
+    [livingMapData.nodes, selectedNodeId]
+  );
+
   function handleSelectSystem(name: string, degree: number) {
     // For now, we mock upstream/downstream split.
     // Backend traversal will replace this logic later.
@@ -184,6 +236,59 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               label="DOMAINS DETECTED"
               value={formatNumber(stats.domainsDetected ?? 0)}
               description="Domain / ecosystem clustering will evolve in a later pass."
+            />
+          </section>
+
+          {/* Top systems table */}
+          <section className="mt-12">
+            <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
+            </p>
+            <LivingMap
+              data={livingMapData}
+              height={720}
+              selectedNodeId={selectedNodeId ?? undefined}
+              onSelectNode={setSelectedNodeId}
+            />
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex items-center gap-3 text-xs text-slate-600">
+                <label className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-800">Timeline (months)</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={24}
+                    value={roiSim.month}
+                    onChange={(e) => roiSim.setMonth(Number(e.target.value))}
+                  />
+                  <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                    {roiSim.month}
+                  </span>
+                </label>
+              </div>
+              <NodeInsightPanel node={selectedNode} />
+            </div>
+          </section>
+
+          {/* ROI + Events */}
+          <section className="mt-12 grid gap-4 lg:grid-cols-[2fr,1fr]">
+            <ROIChart
+              data={roiSim.timeline}
+              breakEvenMonth={roiSim.breakEvenMonth}
+              currentMonth={roiSim.month}
+            />
+            <EventLogPanel events={roiSim.filteredEvents} />
+          </section>
+
+          {/* Scenario Compare (beta) */}
+          <section className="mt-12">
+            <ScenarioComparePanel
+              baseline={{
+                systems: stats.systemsFuture ?? 0,
+                integrations: stats.integrationsFuture ?? 0,
+              }}
+              roiSignal={roiSim.breakEvenMonth}
             />
           </section>
 

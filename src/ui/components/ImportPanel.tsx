@@ -11,6 +11,8 @@ type Props = {
   existingL1: string[];
   defaultOpen?: boolean;
   onApplied?: () => void; // refresh callback (e.g., reload grid)
+  onBeforeApply?: () => void;
+  embed?: boolean; // if true, don't render outer card/header chrome
 };
 
 export function ImportPanel({
@@ -19,6 +21,8 @@ export function ImportPanel({
   existingL1,
   defaultOpen = false,
   onApplied,
+  onBeforeApply,
+  embed = false,
 }: Props) {
   const [open, setOpen] = React.useState(defaultOpen);
   const [kind, setKind] = React.useState<"csv" | "json">("csv");
@@ -68,6 +72,7 @@ export function ImportPanel({
 
   const onApply = async () => {
     try {
+      onBeforeApply?.();
       await applyToProject(projectId, storage);
       onApplied?.();
     } finally {
@@ -135,14 +140,16 @@ export function ImportPanel({
     | { sourceName: string; action: string; targetId?: string; reason?: string }[]
     | undefined;
 
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="font-semibold">Import (CSV / JSON) — Labs</div>
-        <button className="btn" onClick={() => setOpen((v) => !v)}>
-          {open ? "Hide" : "Show"}
-        </button>
-      </div>
+  const content = (
+    <>
+      {!embed && (
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-semibold">Import (CSV / JSON) — Labs</div>
+          <button className="btn" onClick={() => setOpen((v) => !v)}>
+            {open ? "Hide" : "Show"}
+          </button>
+        </div>
+      )}
 
       {open && (
         <>
@@ -261,6 +268,16 @@ export function ImportPanel({
           )}
         </>
       )}
+    </>
+  );
+
+  if (embed) {
+    return <div className="space-y-2">{content}</div>;
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      {content}
     </div>
   );
 }

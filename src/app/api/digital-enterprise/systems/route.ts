@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStatsForProject } from "@/domain/services/digitalEnterpriseStore";
 import { normalizeSystemName } from "@/domain/services/systemNormalization";
+import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 
 export const runtime = "nodejs";
 
+const rateLimit = createRateLimiter({ windowMs: 60_000, max: 60, name: "de-systems" });
+
 export async function GET(req: NextRequest) {
+  const auth = requireAuth(req);
+  if (auth) return auth;
+
+  const limited = rateLimit(req);
+  if (limited) return limited;
+
   try {
     const url = new URL(req.url);
     const projectId = url.searchParams.get("project") ?? "";
 
     if (!projectId) {
-      return NextResponse.json(
-        { ok: false, error: "Missing project param", systems: [] },
-        { status: 400 },
-      );
+      return jsonError(400, "Missing project param");
     }
 
     // ✅ THIS WAS THE BUG: we need to await

@@ -30,6 +30,7 @@ export default function ModernizationPage() {
         </p>
       </section>
       <ModernizationImportPanel
+        projectId={params.id}
         artifacts={artifacts}
         inventoryRows={inventoryRows}
         normalizedApps={normalizedApps}

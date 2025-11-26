@@ -4,6 +4,10 @@
  */
 
 export async function uploadLucidCsv(projectId: string, file: File) {
+  const authHeader = process.env.NEXT_PUBLIC_FUXI_API_TOKEN
+    ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_FUXI_API_TOKEN}` }
+    : undefined;
+
   const formData = new FormData();
   formData.append("file", file);
 
@@ -12,6 +16,7 @@ export async function uploadLucidCsv(projectId: string, file: File) {
     {
       method: "POST",
       body: formData,
+      headers: authHeader,
     }
   );
 
@@ -25,10 +30,15 @@ export async function uploadLucidCsv(projectId: string, file: File) {
 }
 
 export async function fetchDigitalEnterpriseStats(projectId: string) {
+  const authHeader = process.env.NEXT_PUBLIC_FUXI_API_TOKEN
+    ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_FUXI_API_TOKEN}` }
+    : undefined;
+
   const res = await fetch(
     `/api/digital-enterprise/stats?project=${encodeURIComponent(projectId)}`,
     {
       cache: "no-store",
+      headers: authHeader,
     }
   );
 

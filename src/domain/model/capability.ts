@@ -17,4 +17,8 @@ export type Capability = {
   scores?: Partial<Scores>;
   children?: Capability[];   // NEW: nested L2/L3
   attributes?: Record<string, unknown>;
+  ai_rationale?: string;
+  confidence?: number;
+  last_assessed?: string;
+  assessment_mode?: "manual" | "ai_conversational" | "ai_batch";
 };

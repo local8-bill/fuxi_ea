@@ -1,0 +1,7 @@
+{
+  "directive": "0006_predictive_impact_roi_engine",
+  "status": "mock_ui_ready",
+  "build": "npm run build",
+  "notes": "Added Living Map ROI/Simulation UI with timeline slider placeholder, ROI chart, and event log using mock data. Simulation logic is client-side only; ready to wire real DE/ROI data.",
+  "timestamp": "2025-11-25T00:00:00Z"
+}

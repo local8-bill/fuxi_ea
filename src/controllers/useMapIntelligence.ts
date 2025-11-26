@@ -8,6 +8,10 @@ import { alignViaApi } from "@/adapters/reasoning/client";
 import type { ReasoningAlignResult, ReasoningAlignRow } from "@/domain/ports/reasoning";
 import { localHeuristicAi, type Suggestion } from "@/domain/services/aiMapping";
 
+const clientAuthHeader = process.env.NEXT_PUBLIC_FUXI_API_TOKEN
+  ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_FUXI_API_TOKEN}` }
+  : undefined;
+
 type ImportKind = "csv" | "json";
 type Row = {
   id?: string;
@@ -135,7 +139,11 @@ function parseJson(input: string): Row[] {
 export async function extractFromVision(file: File): Promise<Row[]> {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch("/api/vision", { method: "POST", body: fd });
+  const res = await fetch("/api/vision", {
+    method: "POST",
+    body: fd,
+    headers: clientAuthHeader ?? undefined,
+  });
   if (!res.ok) throw new Error(`vision: ${res.status}`);
   const data = await res.json();
   const rows = Array.isArray(data?.rows) ? data.rows : [];
