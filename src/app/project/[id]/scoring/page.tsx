@@ -142,6 +142,15 @@ export default function ScoringPage() {
   const emptyTitle = "No capabilities yet";
   const emptyBody = "Import a capability map or add an L1 to begin scoring.";
 
+  const openImportPicker = () => {
+    const input = importRef.current?.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input) {
+      input.click();
+    } else {
+      scrollToRef(importRef);
+    }
+  };
+
   return (
     <DndProvider backend={HTML5Backend}>
     <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
@@ -250,32 +259,6 @@ export default function ScoringPage() {
         </div>
       </section>
 
-      {/* Import */}
-      <section ref={importRef} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">Import</div>
-            <div className="text-xs text-slate-500">
-              Upload capability CSV/JSON; preview and validate before scoring.
-            </div>
-          </div>
-          <span className="fx-pill">Supported: CSV, JSON</span>
-        </div>
-        {LABS_IMPORT && (
-          <div className="mt-3">
-            <ImportPanel
-              projectId={id}
-              storage={localStorageAdapter}
-              existingL1={existingL1}
-              defaultOpen={false}
-              onBeforeApply={() => snapshotUndo()}
-              onApplied={() => reload()}
-              embed
-            />
-          </div>
-        )}
-      </section>
-
       {/* Scoring */}
       <section ref={scoreRef} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -292,6 +275,30 @@ export default function ScoringPage() {
           </div>
         </div>
 
+        <section
+          ref={importRef}
+          className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Import</div>
+              <div className="text-xs text-slate-500">
+                Upload capability CSV/JSON; preview and validate before scoring.
+              </div>
+            </div>
+            <span className="fx-pill text-xs">Supported: CSV, JSON</span>
+          </div>
+          <ImportPanel
+            embed
+            defaultOpen={emptyState}
+            projectId={id}
+            storage={localStorageAdapter}
+            existingL1={existingL1}
+            onBeforeApply={snapshotUndo}
+            onApplied={reload}
+          />
+        </section>
+
         {emptyState ? (
           <div className="card rounded-xl border border-slate-200 p-6 flex flex-col items-start gap-3 bg-slate-50">
             <div className="text-sm font-semibold">{emptyTitle}</div>
@@ -302,10 +309,7 @@ export default function ScoringPage() {
               </button>
               <button
                 className="btn"
-                onClick={() => {
-                  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
-                  input?.click();
-                }}
+                onClick={() => openImportPicker()}
               >
                 Import CSV/JSON
               </button>

@@ -65,7 +65,7 @@ export function CapabilityAccordionCard({
     : "band-low";
 
   return (
-    <div className={`card ${band(l1Score)}`} style={{ borderWidth: 1 }}>
+    <div className={`card ${band(l1Score)} space-y-3`} style={{ borderWidth: 1, padding: 14 }}>
       {/* L1 header row */}
       <div className="flex items-start gap-3">
         <button
@@ -77,11 +77,11 @@ export function CapabilityAccordionCard({
           {expanded ? "−" : "+"}
         </button>
 
-        <div className="flex-1">
+        <div className="flex-1 space-y-2">
           <form onBlur={onSubmit} onSubmit={onSubmit}>
             <div className="flex items-center justify-between gap-3">
               <input
-                className="w-full border border-slate-200 rounded-md px-2 py-1 text-sm font-semibold"
+                className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm font-semibold"
                 {...register("name")}
                 defaultValue={cap.name}
                 aria-label="Capability name"
@@ -91,7 +91,7 @@ export function CapabilityAccordionCard({
               </div>
             </div>
             <input
-              className="mt-1 w-full border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700"
+              className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-700"
               {...register("domain")}
               defaultValue={cap.domain}
               placeholder="Domain (optional)"
@@ -100,7 +100,7 @@ export function CapabilityAccordionCard({
           </form>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0 self-start">
           {aiEnabled && onAiAssist && (
             <button className="btn" onClick={() => onAiAssist(cap.id)}>
               AI Assist
@@ -183,16 +183,20 @@ function L2Row({
   drag(drop(ref));
 
   return (
-    <div ref={ref} className={`card ${bandCls}`} style={{ padding: 8, opacity: isDragging ? 0.6 : 1 }}>
-      <div className="flex items-start gap-2">
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
+    <div
+      ref={ref}
+      className={`card ${bandCls} space-y-3`}
+      style={{ padding: 10, opacity: isDragging ? 0.6 : 1 }}
+    >
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div className="flex-1 space-y-2">
+          <div className="flex items-center justify-between gap-3">
             <div className="font-medium">{cap.name}</div>
             <div className="badge" title={`Composite: ${(s * 100).toFixed(0)}%`}>
               {(s * 100).toFixed(0)}%
             </div>
           </div>
-          <div className="mt-2 flex gap-1 text-xs">
+          <div className="flex flex-wrap gap-2 text-xs">
             {[
               { label: "Gap", v: 0.25, color: "#ef4444" },
               { label: "Neutral", v: 0.5, color: "#eab308" },
@@ -210,7 +214,7 @@ function L2Row({
             ))}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0 self-start">
           {aiEnabled && onAiAssist && (
             <button className="btn" onClick={() => onAiAssist(cap.id)}>
               AI Assist
@@ -222,7 +226,7 @@ function L2Row({
 
       {/* L3 list */}
       {cap.children && cap.children.length > 0 && (
-        <ul style={{ marginTop: 6, paddingLeft: 12 }}>
+        <ul className="space-y-2 pl-2 md:pl-4">
           {cap.children.map((l3) => (
             <L3Row
               key={l3.id}
@@ -281,13 +285,25 @@ function L3Row({
   drag(drop(ref));
 
   return (
-    <li ref={ref} className={`card ${bandCls}`} style={{ padding: 6, display: "flex", alignItems: "center", gap: 8, opacity: isDragging ? 0.6 : 1 }}>
-      <span className="text-sm" style={{ flex: 1 }}>{cap.name}</span>
-      <span className="badge" title={`Composite: ${(s * 100).toFixed(0)}%`}>
-        {(s * 100).toFixed(0)}%
-      </span>
-      <div className="flex gap-2 items-center">
-        <div className="flex gap-1">
+    <li
+      ref={ref}
+      className={`card ${bandCls}`}
+      style={{
+        padding: 8,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        opacity: isDragging ? 0.6 : 1,
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <span className="text-sm font-medium" style={{ flex: 1 }}>{cap.name}</span>
+        <span className="badge" title={`Composite: ${(s * 100).toFixed(0)}%`}>
+          {(s * 100).toFixed(0)}%
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-2">
           {[
             { label: "Gap", v: 0.25, color: "#ef4444" },
             { label: "Neutral", v: 0.5, color: "#eab308" },
@@ -304,12 +320,14 @@ function L3Row({
             </button>
           ))}
         </div>
-        {aiEnabled && onAiAssist && (
-          <button className="btn" onClick={() => onAiAssist(cap.id)}>
-            AI
-          </button>
-        )}
-        <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+        <div className="flex gap-2">
+          {aiEnabled && onAiAssist && (
+            <button className="btn" onClick={() => onAiAssist(cap.id)}>
+              AI
+            </button>
+          )}
+          <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+        </div>
       </div>
     </li>
   );
