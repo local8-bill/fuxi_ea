@@ -187,6 +187,9 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
     };
   });
 
+  const btnBase =
+    "rounded-full px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300";
+
   return (
     <div className="w-full">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -196,7 +199,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
               key={m}
               onClick={() => setMode(m)}
               aria-label={`Set mode to ${m}`}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              className={`${btnBase} ${
                 state.mode === m ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
               }`}
             >
@@ -209,7 +212,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
           <button
             onClick={() => setLayout("flow")}
             aria-label="Set layout to free"
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+            className={`${btnBase} ${
               layout === "flow" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
             }`}
           >
@@ -218,7 +221,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
           <button
             onClick={() => setLayout("dagre")}
             aria-label="Set layout to dagre"
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+            className={`${btnBase} ${
               layout === "dagre" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
             }`}
           >
@@ -239,7 +242,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
               key={key}
               onClick={() => setLayer(key)}
               aria-label={`Show ${labelText} layer`}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              className={`${btnBase} ${
                 layer === key ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
               }`}
             >

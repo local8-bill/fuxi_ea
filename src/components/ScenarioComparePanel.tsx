@@ -241,14 +241,14 @@ function ExportButtons({ current, target }: { current: Scenario; target: Scenari
     <div className="inline-flex items-center gap-1">
       <button
         onClick={exportJson}
-        className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+        className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
         aria-label="Export scenario comparison as JSON"
       >
         Export JSON
       </button>
       <button
         onClick={exportCsv}
-        className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+        className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
         aria-label="Export scenario comparison as CSV"
       >
         Export CSV
