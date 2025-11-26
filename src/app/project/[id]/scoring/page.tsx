@@ -109,6 +109,16 @@ export default function ScoringPage() {
   const emptyTitle = "No capabilities yet";
   const emptyBody = "Import a capability map or add an L1 to begin scoring.";
 
+  const importRef = React.useRef<HTMLDivElement | null>(null);
+  const scoreRef = React.useRef<HTMLDivElement | null>(null);
+  const vizRef = React.useRef<HTMLDivElement | null>(null);
+
+  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
+    if (ref.current) {
+      ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
       {/* Header */}
@@ -124,15 +134,20 @@ export default function ScoringPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            {(["Import", "Score", "Visualize"] as const).map((label) => (
-              <span
-                key={label}
-                className={`fx-pill ${step === label ? "active" : ""}`}
-                aria-label={`Step ${label}`}
-              >
-                {label}
-              </span>
-            ))}
+            {(["Import", "Score", "Visualize"] as const).map((label) => {
+              const target = label === "Import" ? importRef : label === "Score" ? scoreRef : vizRef;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => scrollToRef(target)}
+                  className={`fx-pill ${step === label ? "active" : ""}`}
+                  aria-label={`Jump to ${label}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </header>
@@ -194,7 +209,7 @@ export default function ScoringPage() {
       </section>
 
       {/* Import */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section ref={importRef} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-slate-900">Import</div>
@@ -218,7 +233,7 @@ export default function ScoringPage() {
       </section>
 
       {/* Scoring */}
-      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section ref={scoreRef} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-slate-900">Score</div>
@@ -301,7 +316,7 @@ export default function ScoringPage() {
       </section>
 
       {/* Visualization */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+      <section ref={vizRef} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-slate-900">Visualize</div>
