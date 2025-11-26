@@ -7,7 +7,7 @@ Structure
 - `ai_primitives/`: Definitions of AI use case primitives.
 - `impact_effort/`: Helpers to classify impact/effort quadrants.
 - `industry_cases/`: Reference examples by industry.
-- `metrics/`: Calculators (e.g., AI Opportunity Index).
+- `metrics/`: Calculators (e.g., AI Opportunity Index, AI readiness, redundancy index, ROI).
 - `index.ts`: Central exports.
 
 Conventions
