@@ -86,15 +86,15 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
         return {
           id: n.id,
           label: n.label,
-          domain: n.domain,
+          domain: insight?.domain ?? n.domain,
           health: 60 + Math.random() * 30,
           aiReadiness: insight?.aiReadiness ?? 50 + Math.random() * 40,
           opportunityScore: insight?.opportunityScore,
           riskScore: insight?.riskScore,
           roiScore: 40 + Math.random() * 50,
           aiSummary: insight?.summary,
-          disposition: dispositions[idx % dispositions.length],
-          integrationCount: n.integrationCount,
+          disposition: (insight?.disposition as any) ?? dispositions[idx % dispositions.length],
+          integrationCount: insight?.integrationCount ?? n.integrationCount,
         };
       }),
       edges: graph.edges.map((e) => ({

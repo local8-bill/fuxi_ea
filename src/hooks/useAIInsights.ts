@@ -9,6 +9,9 @@ export type AIInsight = {
   opportunityScore: number;
   riskScore: number;
   summary?: string;
+  domain?: string;
+  disposition?: "keep" | "modernize" | "replace" | "retire";
+  integrationCount?: number;
 };
 
 type RemoteInsightPayload = {
@@ -25,19 +28,34 @@ function scoreFromString(input: string, offset = 0): number {
   return 40 + normalized; // 40-95
 }
 
-function toInsight(node: { id?: string; label?: string; raw?: any }, fallbackLabel?: string): AIInsight {
-  const label = node.label || fallbackLabel || node.id || "Unknown";
-  const key = node.id || label;
-  const aiReadiness = scoreFromString(key, 7);
-  const opportunityScore = scoreFromString(key, 17);
-  const riskScore = scoreFromString(key, 31);
+function toInsight(node: { id?: string; label?: string; raw?: any } = {}, fallbackLabel?: string): AIInsight {
+  const label = (node.label || fallbackLabel || node.id || "Unknown").trim();
+  const key = (node.id || label).trim();
+  const aiReadiness = Number(
+    node.raw?.aiReadiness ??
+      node.raw?.readiness ??
+      (node as any).aiReadiness ??
+      scoreFromString(key, 7)
+  );
+  const opportunityScore = Number(
+    node.raw?.opportunityScore ?? (node as any).opportunityScore ?? scoreFromString(key, 17)
+  );
+  const riskScore = Number(node.raw?.riskScore ?? (node as any).riskScore ?? scoreFromString(key, 31));
+  const disposition = (node.raw?.disposition ?? (node as any).disposition) as AIInsight["disposition"];
+  const domain = (node.raw?.domain ?? (node as any).domain) as string | undefined;
+  const integrationCount = Number(
+    node.raw?.integrationCount ?? (node as any).integrationCount ?? undefined
+  );
   return {
     id: key,
     label,
     aiReadiness,
     opportunityScore,
     riskScore,
-    summary: node.raw?.Comments || `AI modernization opportunity for ${label}`,
+    domain,
+    disposition,
+    integrationCount: Number.isFinite(integrationCount) ? integrationCount : undefined,
+    summary: node.raw?.Comments || node.raw?.summary || `AI modernization opportunity for ${label}`,
   };
 }
 
@@ -46,6 +64,7 @@ type InputNode = { id: string; label?: string };
 export function useAIInsights(sourceNodes: InputNode[]) {
   const [remoteMap, setRemoteMap] = useState<Record<string, AIInsight>>({});
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +72,9 @@ export function useAIInsights(sourceNodes: InputNode[]) {
       setLoading(true);
       try {
         const res = await fetch("/api/digital-enterprise/insights", { cache: "no-store" });
-        if (!res.ok) return;
+        if (!res.ok) {
+          return;
+        }
         const json = (await res.json()) as RemoteInsightPayload;
         const mapped: Record<string, AIInsight> = {};
         (json.nodes ?? []).forEach((n, idx) => {
@@ -65,6 +86,7 @@ export function useAIInsights(sourceNodes: InputNode[]) {
         }
       } catch (err) {
         if (!cancelled) {
+          setError("Falling back to local AI scores");
           console.warn("[AI-INSIGHTS] falling back to local scores", err);
         }
       } finally {
@@ -79,17 +101,17 @@ export function useAIInsights(sourceNodes: InputNode[]) {
 
   const insights = useMemo(() => {
     const output: Record<string, AIInsight> = {};
+    const remotes = Object.values(remoteMap);
     sourceNodes.forEach((n, idx) => {
-      const fromRemote =
-        remoteMap[n.id] ||
-        Object.values(remoteMap).find(
-          (ri) => ri.label?.toLowerCase() === (n.label ?? "").toLowerCase()
-        );
+      const fromId = remoteMap[n.id];
+      const fromLabel = remotes.find(
+        (ri) => ri.label?.toLowerCase() === (n.label ?? "").toLowerCase()
+      );
       const fallback = toInsight({ id: n.id, label: n.label }, `Node ${idx + 1}`);
-      output[n.id] = { ...fallback, ...(fromRemote ?? {}) };
+      output[n.id] = { ...fallback, ...(fromLabel ?? {}), ...(fromId ?? {}) };
     });
     return output;
   }, [sourceNodes, remoteMap]);
 
-  return { insights, loading };
+  return { insights, loading, error };
 }
