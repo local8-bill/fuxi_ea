@@ -68,24 +68,34 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const graph = useImpactGraph();
-  const livingMapData: LivingMapData = useMemo(() => ({
-    nodes: graph.nodes.map((n) => ({
-      id: n.id,
-      label: n.label,
-      domain: n.domain,
-      health: 60 + Math.random() * 30,
-      aiReadiness: 50 + Math.random() * 40,
-      redundancyScore: 40 + Math.random() * 40,
-      integrationCount: n.integrationCount,
-    })),
-    edges: graph.edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      weight: e.weight,
-      kind: "api",
-    })),
-  }), [graph]);
+  const livingMapData: LivingMapData = useMemo(() => {
+    const dispositions: Array<NonNullable<LivingMapData["nodes"][number]["disposition"]>> = [
+      "keep",
+      "modernize",
+      "replace",
+      "retire",
+    ];
+    return {
+      nodes: graph.nodes.map((n, idx) => ({
+        id: n.id,
+        label: n.label,
+        domain: n.domain,
+        health: 60 + Math.random() * 30,
+        aiReadiness: 50 + Math.random() * 40,
+        redundancyScore: 40 + Math.random() * 40,
+        roiScore: 40 + Math.random() * 50,
+        disposition: dispositions[idx % dispositions.length],
+        integrationCount: n.integrationCount,
+      })),
+      edges: graph.edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        weight: e.weight,
+        kind: "api",
+      })),
+    };
+  }, [graph]);
 
   const roiSim = useROISimulation();
 

@@ -8,6 +8,10 @@ export type LivingNode = {
   redundancyScore?: number;
   health?: number;
   integrationCount?: number;
+  disposition?: "keep" | "modernize" | "replace" | "retire";
+  roiScore?: number;
+  opportunityScore?: number;
+  riskScore?: number;
 };
 
 export type LivingEdge = {

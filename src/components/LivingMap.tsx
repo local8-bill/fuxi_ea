@@ -25,12 +25,34 @@ const COLORS = {
   warning: "#fbbf24",
   danger: "#f87171",
   neutral: "#94a3b8",
+  disposition: {
+    keep: "#22c55e",
+    modernize: "#2563eb",
+    replace: "#f97316",
+    retire: "#ef4444",
+  },
 };
+
+type LayerMode = "stack" | "domain" | "integration" | "disposition" | "roi";
 
 export function LivingMap({ data, height = 720 }: LivingMapProps) {
   const { data: simData, state, setMode, toggleNode } = useSimulationEngine(data);
   const [layout, setLayout] = useState<"flow" | "dagre">("dagre");
-  const [layer, setLayer] = useState<"health" | "ai" | "redundancy">("health");
+  const [layer, setLayer] = useState<LayerMode>("stack");
+
+  const domainColors = useMemo(() => {
+    const palette = ["#2563eb", "#0ea5e9", "#6366f1", "#14b8a6", "#f59e0b", "#fb7185", "#8b5cf6"];
+    const seen = new Map<string, string>();
+    let idx = 0;
+    simData.nodes.forEach((n) => {
+      const key = n.domain ?? "Other";
+      if (!seen.has(key)) {
+        seen.set(key, palette[idx % palette.length]);
+        idx += 1;
+      }
+    });
+    return seen;
+  }, [simData.nodes]);
   const baseNodes: Node[] = simData.nodes.map((n, idx) => ({
     id: n.id,
     data: { label: n.label, meta: n },
@@ -70,13 +92,29 @@ export function LivingMap({ data, height = 720 }: LivingMapProps) {
 
   const coloredNodes = nodes.map((n) => {
     const meta = simData.nodes.find((m) => m.id === n.id);
-    const score =
-      layer === "health"
-        ? meta?.health ?? 50
-        : layer === "ai"
-        ? meta?.aiReadiness ?? 50
-        : meta?.redundancyScore ?? 50;
-    const color = score >= 75 ? COLORS.healthy : score >= 50 ? COLORS.warning : COLORS.danger;
+    const healthScore = meta?.health ?? 60;
+    const aiScore = meta?.aiReadiness ?? 55;
+    const roiScore = meta?.roiScore ?? aiScore;
+    const domainColor = domainColors.get(meta?.domain ?? "Other") ?? COLORS.neutral;
+    const dispositionColor = meta?.disposition ? COLORS.disposition[meta.disposition] : COLORS.neutral;
+
+    let color = COLORS.neutral;
+    switch (layer) {
+      case "domain":
+        color = domainColor;
+        break;
+      case "disposition":
+        color = dispositionColor;
+        break;
+      case "roi":
+        color = roiScore >= 75 ? "#22c55e" : roiScore >= 50 ? "#eab308" : "#a855f7";
+        break;
+      case "stack":
+      case "integration":
+      default:
+        color = healthScore >= 75 ? COLORS.healthy : healthScore >= 50 ? COLORS.warning : COLORS.danger;
+    }
+
     return {
       ...n,
       style: {
@@ -92,6 +130,22 @@ export function LivingMap({ data, height = 720 }: LivingMapProps) {
       toggleNode(node.id);
     }
   };
+
+  const styledEdges = edges.map((e) => {
+    const edgeMeta = simData.edges.find((m) => m.id === e.id);
+    const baseWidth = Math.min(10, Math.max(2, (edgeMeta?.weight ?? 1) * 1.2));
+    const activeWidth = layer === "integration" ? baseWidth * 1.25 : baseWidth;
+    const stroke = layer === "integration" ? "#2563eb" : "#94a3b8";
+    return {
+      ...e,
+      style: {
+        ...(e.style || {}),
+        strokeWidth: activeWidth,
+        stroke,
+        opacity: layer === "disposition" ? 0.7 : 0.9,
+      },
+    };
+  });
 
   return (
     <div className="w-full">
@@ -130,39 +184,84 @@ export function LivingMap({ data, height = 720 }: LivingMapProps) {
         </div>
 
         <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
-          <button
-            onClick={() => setLayer("health")}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              layer === "health" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
-            }`}
-          >
-            Health
-          </button>
-          <button
-            onClick={() => setLayer("ai")}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              layer === "ai" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
-            }`}
-          >
-            AI Readiness
-          </button>
-          <button
-            onClick={() => setLayer("redundancy")}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              layer === "redundancy"
-                ? "bg-slate-900 text-white"
-                : "text-slate-700 hover:bg-slate-100"
-            }`}
-          >
-            Redundancy
-          </button>
+          {([
+            ["stack", "Stack"],
+            ["domain", "Domain"],
+            ["integration", "Integration"],
+            ["disposition", "Disposition"],
+            ["roi", "Heatmap/ROI"],
+          ] as const).map(([key, labelText]) => (
+            <button
+              key={key}
+              onClick={() => setLayer(key)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                layer === key ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              {labelText}
+            </button>
+          ))}
         </div>
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+        {layer === "domain" && (
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-800">Domains</span>
+            {[...domainColors.entries()].map(([name, c]) => (
+              <span key={name} className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
+                <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: c }} />
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
+        {layer === "disposition" && (
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-800">Disposition</span>
+            {([
+              ["keep", "Keep"],
+              ["modernize", "Modernize"],
+              ["replace", "Replace"],
+              ["retire", "Retire"],
+            ] as const).map(([k, labelText]) => (
+              <span key={k} className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
+                <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: COLORS.disposition[k] }} />
+                {labelText}
+              </span>
+            ))}
+          </div>
+        )}
+        {layer === "roi" && (
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-800">Heatmap</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#a855f7" }} />
+              Low readiness
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#eab308" }} />
+              Mid readiness
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#22c55e" }} />
+              High readiness
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ height }}>
         <ReactFlow
-          nodes={layout === "dagre" ? coloredNodes.map((n, i) => ({ ...n, position: laidOutNodes[i]?.position ?? n.position })) : coloredNodes}
-          edges={edges}
+          nodes={
+            layout === "dagre"
+              ? coloredNodes.map((n) => {
+                  const mapped = laidOutNodes.find((ln) => ln.id === n.id);
+                  return { ...n, position: mapped?.position ?? n.position };
+                })
+              : coloredNodes
+          }
+          edges={styledEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
