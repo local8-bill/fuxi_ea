@@ -86,6 +86,16 @@ export default function ScoringPage() {
 
   const existingL1 = React.useMemo(() => items.map((i) => i.name), [items]);
 
+  const importRef = React.useRef<HTMLDivElement | null>(null);
+  const scoreRef = React.useRef<HTMLDivElement | null>(null);
+  const vizRef = React.useRef<HTMLDivElement | null>(null);
+
+  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
+    if (ref.current) {
+      ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   // Show a super-light loading placeholder (avoids flicker)
   if (loading) {
     return (
@@ -108,16 +118,6 @@ export default function ScoringPage() {
   const emptyState = sorted.length === 0;
   const emptyTitle = "No capabilities yet";
   const emptyBody = "Import a capability map or add an L1 to begin scoring.";
-
-  const importRef = React.useRef<HTMLDivElement | null>(null);
-  const scoreRef = React.useRef<HTMLDivElement | null>(null);
-  const vizRef = React.useRef<HTMLDivElement | null>(null);
-
-  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
-    if (ref.current) {
-      ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
