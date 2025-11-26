@@ -270,6 +270,7 @@ export default function ScoringPage() {
               defaultOpen={false}
               onBeforeApply={() => snapshotUndo()}
               onApplied={() => reload()}
+              embed
             />
           </div>
         )}
