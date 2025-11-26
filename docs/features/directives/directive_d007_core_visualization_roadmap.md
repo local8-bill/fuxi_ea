@@ -117,9 +117,9 @@ Each view is modular and composable; users can dock, undock, or overlay as neede
 |--------|------------|-------------|---------|--------------|------------|
 | Phase 1 | Stack Core | React Flow foundation + clustering functional | ☑ | Codex | 2025-11-26T01:09Z |
 | Phase 2 | Simulation Layer | Timeline + Event Log integrated, ROI sync verified | ☑ | Codex | 2025-11-26T01:09Z |
-| Phase 3 | Intelligence Overlay | AI Opportunity and Predictive ROI layers operational | ☐ |  |  |
-| Phase 4 | Comparative & Reporting | Scenario diff + export/report suite complete | ☐ |  |  |
-| Phase 5 | UX Cohesion | Unified design system + visual consistency pass complete | ☐ |  |  |
+| Phase 3 | Intelligence Overlay | AI Opportunity and Predictive ROI layers operational | ☑ | Codex | 2025-11-26T02:42Z |
+| Phase 4 | Comparative & Reporting | Scenario diff + export/report suite complete | ☑ (beta) | Codex | 2025-11-26T02:42Z |
+| Phase 5 | UX Cohesion | Unified design system + visual consistency pass complete | ☐ (pending polish) |  |  |
 
 ---
 
