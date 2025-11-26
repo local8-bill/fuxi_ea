@@ -10,8 +10,8 @@ import { notFound } from "next/navigation";
 
 type Params = { id: string };
 
-export default async function VerificationPage({ params }: { params: Params }) {
-  const projectId = params?.id;
+export default async function VerificationPage({ params }: { params: Promise<Params> }) {
+  const { id: projectId } = await params;
   if (!projectId) return notFound();
 
   const { directives, tests, summary } = await loadVerificationData();
