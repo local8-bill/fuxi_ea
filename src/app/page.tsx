@@ -127,6 +127,35 @@ export default function StartPage() {
             </article>
           ))}
         </section>
+
+        {/* Junk drawer for unassociated routes (labs) */}
+        <section className="rounded-3xl border border-rose-200 bg-rose-50/70 p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-rose-500">Labs / Junk Drawer</p>
+              <p className="text-xs text-rose-600">Quick links to standalone or experimental routes.</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-sm">
+            {[
+              { label: "Dashboard", href: "/dashboard" },
+              { label: "Insights", href: "/insights" },
+              { label: "Research", href: "/research" },
+              { label: "Schema", href: "/schema" },
+              { label: "Verification (demo)", href: "/project/demo/verification" },
+              { label: "Scenario Studio (demo)", href: "/project/demo/scenario-studio" },
+              { label: "Scoring (demo)", href: "/project/demo/scoring" },
+            ].map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="rounded-full border border-rose-200 bg-white px-3 py-1 text-rose-700 hover:border-rose-400 hover:text-rose-900"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
