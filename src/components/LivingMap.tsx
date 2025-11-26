@@ -145,6 +145,19 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
         border: isSelected ? `2px solid ${color}` : `1px solid ${color}`,
         boxShadow: isSelected ? `0 10px 24px ${color}55` : `0 6px 14px ${color}33`,
       },
+      data: {
+        ...n.data,
+        meta,
+        tooltip: [
+          meta?.label,
+          meta?.domain ? `Domain: ${meta.domain}` : null,
+          meta?.disposition ? `Disposition: ${meta.disposition}` : null,
+          `AI: ${Math.round(aiScore)}% · ROI: ${Math.round(roiScore)}%`,
+          meta?.aiSummary ? `Note: ${meta.aiSummary}` : null,
+        ]
+          .filter(Boolean)
+          .join(" • "),
+      },
     };
   });
 
@@ -311,6 +324,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
           fitView
+          proOptions={{ hideAttribution: true }}
         >
           <Controls />
           <Background gap={16} color="#e2e8f0" />

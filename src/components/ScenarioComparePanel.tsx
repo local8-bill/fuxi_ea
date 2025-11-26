@@ -61,8 +61,8 @@ export function ScenarioComparePanel({
 
   const current: Scenario = {
     label: "Current",
-    systems: baseline?.systems ?? 42,
-    integrations: baseline?.integrations ?? 118,
+    systems: baseline?.systems ?? 0,
+    integrations: baseline?.integrations ?? 0,
     roi: 0,
     risk: 0,
     note: "Derived from latest Lucid ingestion",
@@ -80,6 +80,8 @@ export function ScenarioComparePanel({
     integrations: target.integrations - current.integrations,
   };
 
+  const hasBaseline = current.systems > 0 || current.integrations > 0;
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -93,6 +95,12 @@ export function ScenarioComparePanel({
         </div>
       </div>
 
+      {!hasBaseline && (
+        <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          No baseline metrics detected yet. Once systems/integration counts are available, this will model Target deltas.
+        </div>
+      )}
+
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <ScenarioCard data={current} />
         <ScenarioCard data={target} />
@@ -103,6 +111,33 @@ export function ScenarioComparePanel({
         <Delta label="Integrations" value={deltas.integrations} />
         <Delta label="ROI Lift" value={target.roi} suffix=" pts" />
         <Delta label="Risk Delta" value={target.risk} suffix=" pts" inverse />
+      </div>
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-full text-xs">
+          <thead>
+            <tr className="text-left text-slate-500">
+              <th className="px-2 py-2">Scenario</th>
+              <th className="px-2 py-2">Systems</th>
+              <th className="px-2 py-2">Integrations</th>
+              <th className="px-2 py-2">ROI Lift</th>
+              <th className="px-2 py-2">Risk Δ</th>
+              <th className="px-2 py-2">Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[current, target].map((row) => (
+              <tr key={row.label} className="border-t border-slate-100">
+                <td className="px-2 py-2 font-semibold text-slate-900">{row.label}</td>
+                <td className="px-2 py-2 text-slate-700">{row.systems}</td>
+                <td className="px-2 py-2 text-slate-700">{row.integrations}</td>
+                <td className="px-2 py-2 text-slate-700">{formatPct(row.roi)}</td>
+                <td className="px-2 py-2 text-slate-700">{formatPct(row.risk)}</td>
+                <td className="px-2 py-2 text-slate-500">{row.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
