@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { SurveyClient } from "@/components/research/SurveyClient";
 
 type SurveyQuestion =
   | { id: string; type: "rank" | "multi-select"; prompt: string; options: string[]; allowOther?: boolean }
@@ -23,8 +24,20 @@ async function loadSurvey(): Promise<SurveyTemplate | null> {
   }
 }
 
+async function loadResponses(): Promise<any[]> {
+  try {
+    const filePath = path.join(process.cwd(), ".fuxi", "data", "research", "responses.json");
+    const raw = await fs.readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw || "{}");
+    return Array.isArray(parsed.responses) ? parsed.responses.slice(-5).reverse() : [];
+  } catch {
+    return [];
+  }
+}
+
 export default async function ResearchPage() {
   const survey = await loadSurvey();
+  const responses = await loadResponses();
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
@@ -72,6 +85,16 @@ export default async function ResearchPage() {
         )}
       </section>
 
+      {survey && (
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-900">Submit a response</div>
+            <div className="text-xs text-slate-500">Stored locally in .fuxi/data/research/responses.json</div>
+          </div>
+          <SurveyClient questions={survey.questions} />
+        </section>
+      )}
+
       <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="text-sm font-semibold text-slate-900">Interview & Workshop Guide</div>
         <div className="mt-2 text-sm text-slate-700">
@@ -81,6 +104,27 @@ export default async function ResearchPage() {
         <div className="mt-3 text-xs text-slate-500">
           Next steps: wire a form to capture responses, persist to <code>.fuxi/data/research/responses.json</code>, and auto-tag insights.
         </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="text-sm font-semibold text-slate-900">Recent Responses (last 5)</div>
+        {responses.length === 0 && (
+          <div className="mt-2 text-xs text-slate-500">No responses captured yet.</div>
+        )}
+        {responses.length > 0 && (
+          <div className="mt-3 space-y-2 text-xs text-slate-700">
+            {responses.map((r: any) => (
+              <div key={r.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                  {new Date(r.createdAt).toLocaleString()}
+                </div>
+                <pre className="mt-1 whitespace-pre-wrap break-words text-[11px] text-slate-700">
+                  {JSON.stringify(r.payload, null, 2)}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
