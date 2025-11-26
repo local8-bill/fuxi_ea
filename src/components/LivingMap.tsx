@@ -20,6 +20,7 @@ type LivingMapProps = {
   height?: number;
   selectedNodeId?: string;
   onSelectNode?: (id: string) => void;
+  searchTerm?: string;
 };
 
 const COLORS = {
@@ -37,7 +38,7 @@ const COLORS = {
 
 type LayerMode = "stack" | "domain" | "integration" | "disposition" | "roi" | "ai";
 
-export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: LivingMapProps) {
+export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, searchTerm }: LivingMapProps) {
   const { data: simData, state, setMode, toggleNode } = useSimulationEngine(data);
   const [layout, setLayout] = useState<"flow" | "dagre">("dagre");
   const [layer, setLayer] = useState<LayerMode>("stack");
@@ -87,14 +88,30 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
     };
   });
 
+  const edgeKindColor = (kind?: string) => {
+    switch (kind) {
+      case "api":
+        return "#2563eb";
+      case "data":
+        return "#22c55e";
+      case "workflow":
+        return "#9333ea";
+      case "manual":
+        return "#94a3b8";
+      default:
+        return "#94a3b8";
+    }
+  };
+
   const baseEdges: Edge[] = simData.edges.map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,
     label: e.weight ? `${e.weight.toFixed(1)} load` : undefined,
+    data: { kind: e.kind },
     style: {
       strokeWidth: Math.min(8, Math.max(2, (e.weight ?? 1) * 1.2)),
-      stroke: "#94a3b8",
+      stroke: edgeKindColor(e.kind),
       opacity: 0.9,
     },
   }));
@@ -108,6 +125,8 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
     }
     return nodes;
   }, [layout, nodes, edges]);
+
+  const normalizedSearch = (searchTerm ?? "").toLowerCase();
 
   const coloredNodes = nodes.map((n) => {
     const meta = simData.nodes.find((m) => m.id === n.id);
@@ -138,12 +157,16 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
     }
 
     const isSelected = selectedNodeId === n.id;
+    const matchesSearch =
+      normalizedSearch.length > 1 &&
+      (meta?.label?.toLowerCase().includes(normalizedSearch) || meta?.domain?.toLowerCase().includes(normalizedSearch));
     return {
       ...n,
       style: {
         ...n.style,
         border: isSelected ? `2px solid ${color}` : `1px solid ${color}`,
-        boxShadow: isSelected ? `0 10px 24px ${color}55` : `0 6px 14px ${color}33`,
+        boxShadow: isSelected || matchesSearch ? `0 10px 24px ${color}55` : `0 6px 14px ${color}33`,
+        opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.6 : 1,
       },
       data: {
         ...n.data,
@@ -175,7 +198,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
     const edgeMeta = simData.edges.find((m) => m.id === e.id);
     const baseWidth = Math.min(10, Math.max(2, (edgeMeta?.weight ?? 1) * 1.2));
     const activeWidth = layer === "integration" ? baseWidth * 1.25 : baseWidth;
-    const stroke = layer === "integration" ? "#2563eb" : "#94a3b8";
+    const stroke = layer === "integration" ? "#2563eb" : edgeKindColor((e as any).data?.kind);
     return {
       ...e,
       style: {
