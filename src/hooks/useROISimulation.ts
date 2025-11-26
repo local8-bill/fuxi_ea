@@ -9,6 +9,7 @@ export type ROISimulationResult = {
   timeline: ROICurvePoint[];
   breakEvenMonth: number | null;
   events: SimulationEvent[];
+  filteredEvents: SimulationEvent[];
   month: number;
   setMonth: (m: number) => void;
 };
@@ -17,6 +18,7 @@ const MOCK_EVENTS: SimulationEvent[] = [
   {
     id: "evt-1",
     timestamp: "2025-06-01",
+    month: 6,
     type: "system_decommissioned",
     title: "CRM v1 retired",
     detail: "2 downstream systems impacted, rerouting to CRM NextGen.",
@@ -26,6 +28,7 @@ const MOCK_EVENTS: SimulationEvent[] = [
   {
     id: "evt-2",
     timestamp: "2025-09-15",
+    month: 9,
     type: "system_golive",
     title: "ERP NextGen Go-Live",
     detail: "3 integrations migrated; latency improved 12%.",
@@ -35,6 +38,7 @@ const MOCK_EVENTS: SimulationEvent[] = [
   {
     id: "evt-3",
     timestamp: "2026-01-01",
+    month: 13,
     type: "domain_modernized",
     title: "Data Warehouse consolidation",
     detail: "ROI threshold reached; redundancy reduced.",
@@ -67,6 +71,7 @@ export function useROISimulation(totalMonths = 24): ROISimulationResult {
   }, [timeline]);
 
   const events = MOCK_EVENTS;
+  const filteredEvents = events.filter((e) => (e as any).month == null || (e as any).month <= month);
 
-  return { timeline, breakEvenMonth, events, month, setMonth };
+  return { timeline, breakEvenMonth, events, filteredEvents, month, setMonth };
 }

@@ -221,6 +221,21 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
             </p>
             <LivingMap data={livingMapData} height={720} />
+            <div className="mt-4 flex items-center gap-3 text-xs text-slate-600">
+              <label className="flex items-center gap-2">
+                <span className="font-semibold text-slate-800">Timeline (months)</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={24}
+                  value={roiSim.month}
+                  onChange={(e) => roiSim.setMonth(Number(e.target.value))}
+                />
+                <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                  {roiSim.month}
+                </span>
+              </label>
+            </div>
           </section>
 
           {/* ROI + Events */}
@@ -230,7 +245,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               breakEvenMonth={roiSim.breakEvenMonth}
               currentMonth={roiSim.month}
             />
-            <EventLogPanel events={roiSim.events} />
+            <EventLogPanel events={roiSim.filteredEvents} />
           </section>
 
           {/* Top systems table */}

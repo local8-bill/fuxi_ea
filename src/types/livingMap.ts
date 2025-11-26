@@ -40,4 +40,5 @@ export type SimulationEvent = {
   detail: string;
   domain?: string;
   severity?: "info" | "warning" | "critical";
+  month?: number;
 };
