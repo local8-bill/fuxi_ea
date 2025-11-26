@@ -46,7 +46,8 @@ export default function ScoringPage() {
     canUndo,
     canRedo,
     moveL1,
-    moveL2,
+    moveChild,
+    snapshotUndo,
   } = useScoringPage(id, localStorageAdapter);
 
   // Feature flags (flip to false for prod if you want)
@@ -267,6 +268,7 @@ export default function ScoringPage() {
               storage={localStorageAdapter}
               existingL1={existingL1}
               defaultOpen={false}
+              onBeforeApply={() => snapshotUndo()}
               onApplied={() => reload()}
             />
           </div>
@@ -337,15 +339,16 @@ export default function ScoringPage() {
                         onToggle={() => toggleExpanded(x.id)}
                         onOpen={(cid) => setOpenId(cid)}
                         compositeFor={compositeFor}
-                        aiEnabled={aiEnabled}
-                        onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
-                        onInlineEdit={updateCapability}
-                        onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
-                      />
-                    </DraggableCard>
-                  ))}
-                </div>
-              </section>
+                      aiEnabled={aiEnabled}
+                      onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
+                      onInlineEdit={updateCapability}
+                      onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
+                      onMoveL2={moveChild}
+                    />
+                  </DraggableCard>
+                ))}
+              </div>
+            </section>
             ))}
           </>
         ) : (
@@ -365,15 +368,16 @@ export default function ScoringPage() {
                   onToggle={() => toggleExpanded(x.id)}
                   onOpen={(cid) => setOpenId(cid)}
                   compositeFor={compositeFor}
-                  aiEnabled={aiEnabled}
-                  onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
-                  onInlineEdit={updateCapability}
-                  onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
-                />
-              </DraggableCard>
-            ))}
-          </section>
-        )}
+                aiEnabled={aiEnabled}
+                onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
+                onInlineEdit={updateCapability}
+                onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
+                onMoveL2={moveChild}
+              />
+            </DraggableCard>
+          ))}
+        </section>
+      )}
       </section>
 
       {/* Visualization */}

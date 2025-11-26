@@ -11,6 +11,7 @@ type Props = {
   existingL1: string[];
   defaultOpen?: boolean;
   onApplied?: () => void; // refresh callback (e.g., reload grid)
+  onBeforeApply?: () => void;
 };
 
 export function ImportPanel({
@@ -19,6 +20,7 @@ export function ImportPanel({
   existingL1,
   defaultOpen = false,
   onApplied,
+  onBeforeApply,
 }: Props) {
   const [open, setOpen] = React.useState(defaultOpen);
   const [kind, setKind] = React.useState<"csv" | "json">("csv");
@@ -68,6 +70,7 @@ export function ImportPanel({
 
   const onApply = async () => {
     try {
+      onBeforeApply?.();
       await applyToProject(projectId, storage);
       onApplied?.();
     } finally {

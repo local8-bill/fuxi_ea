@@ -130,6 +130,7 @@ export function CapabilityAccordionCard({
                   onInlineEdit={onInlineEdit}
                   onScoreChip={onScoreChip}
                   onMove={(drag, hover) => onMoveL2?.(cap.id, drag, hover)}
+                  onMoveChild={onMoveL2}
                 />
               ))}
             </div>
@@ -149,6 +150,7 @@ function L2Row({
   onInlineEdit,
   onScoreChip,
   onMove,
+  onMoveChild,
 }: {
   cap: Capability;
   onOpen: (id: string) => void;
@@ -158,6 +160,7 @@ function L2Row({
   onInlineEdit?: (id: string, patch: { name?: string; domain?: string }) => void;
   onScoreChip?: (id: string, score: number) => void;
   onMove?: (dragId: string, hoverId: string) => void;
+  onMoveChild?: (parentId: string, dragId: string, hoverId: string) => void;
 }) {
   const s = safeScore(cap, compositeFor);
   const bandCls = s >= 0.75 ? "band-high" : s >= 0.5 ? "band-med" : "band-low";
@@ -226,6 +229,11 @@ function L2Row({
               cap={l3}
               onOpen={onOpen}
               compositeFor={compositeFor}
+              aiEnabled={aiEnabled}
+              onAiAssist={onAiAssist}
+              onScoreChip={onScoreChip}
+              parentId={cap.id}
+              onMove={onMoveChild ? (parent, drag, hover) => onMoveChild(parent, drag, hover) : undefined}
             />
           ))}
         </ul>
@@ -241,6 +249,8 @@ function L3Row({
   aiEnabled,
   onAiAssist,
   onScoreChip,
+  parentId,
+  onMove,
 }: {
   cap: Capability;
   onOpen: (id: string) => void;
@@ -248,12 +258,30 @@ function L3Row({
   aiEnabled?: boolean;
   onAiAssist?: (id: string) => void;
   onScoreChip?: (id: string, score: number) => void;
+  parentId?: string;
+  onMove?: (parentId: string, dragId: string, hoverId: string) => void;
 }) {
   const s = safeScore(cap, compositeFor);
   const bandCls = s >= 0.75 ? "band-high" : s >= 0.5 ? "band-med" : "band-low";
+  const ref = React.useRef<HTMLLIElement | null>(null);
+
+  const [{ isDragging }, drag] = useDrag({
+    type: "L3",
+    item: { id: cap.id, parentId },
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+
+  const [, drop] = useDrop({
+    accept: "L3",
+    hover(item: any) {
+      if (!onMove || item.id === cap.id || item.parentId !== parentId) return;
+      onMove(parentId!, item.id, cap.id);
+    },
+  });
+  drag(drop(ref));
 
   return (
-    <li className={`card ${bandCls}`} style={{ padding: 6, display: "flex", alignItems: "center", gap: 8 }}>
+    <li ref={ref} className={`card ${bandCls}`} style={{ padding: 6, display: "flex", alignItems: "center", gap: 8, opacity: isDragging ? 0.6 : 1 }}>
       <span className="text-sm" style={{ flex: 1 }}>{cap.name}</span>
       <span className="badge" title={`Composite: ${(s * 100).toFixed(0)}%`}>
         {(s * 100).toFixed(0)}%

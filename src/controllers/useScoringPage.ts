@@ -189,7 +189,7 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     });
   }, []);
 
-  const moveL2 = useCallback((parentId: string, dragId: string, hoverId: string) => {
+  const moveChild = useCallback((parentId: string, dragId: string, hoverId: string) => {
     setRoots((prev) => {
       const base = prev ?? [];
       const parent = findById(base, parentId);
@@ -229,6 +229,12 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     });
   }, [roots]);
 
+  const snapshotUndo = useCallback(() => {
+    if (!roots) return;
+    setUndoStack((u) => [...u.slice(-19), jclone(roots)]);
+    setRedoStack([]);
+  }, [roots]);
+
   return {
     // ready state
     loading: roots === null,
@@ -254,7 +260,8 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     // actions
     addL1,
     moveL1,
-    moveL2,
+    moveChild,
+    snapshotUndo,
     reload: () => void reload(),
   };
 }
