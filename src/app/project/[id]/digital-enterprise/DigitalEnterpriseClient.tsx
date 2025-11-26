@@ -13,6 +13,8 @@ import type { LivingMapData } from "@/types/livingMap";
 import { useROISimulation } from "@/hooks/useROISimulation";
 import { ROIChart } from "@/components/ROIChart";
 import { EventLogPanel } from "@/components/EventLogPanel";
+import { useAIInsights } from "@/hooks/useAIInsights";
+import { NodeInsightPanel } from "@/components/NodeInsightPanel";
 
 interface TopSystemRaw {
   systemId?: string;
@@ -67,7 +69,9 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const graph = useImpactGraph();
+  const aiInsights = useAIInsights(graph.nodes);
   const livingMapData: LivingMapData = useMemo(() => {
     const dispositions: Array<NonNullable<LivingMapData["nodes"][number]["disposition"]>> = [
       "keep",
@@ -76,17 +80,22 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       "retire",
     ];
     return {
-      nodes: graph.nodes.map((n, idx) => ({
-        id: n.id,
-        label: n.label,
-        domain: n.domain,
-        health: 60 + Math.random() * 30,
-        aiReadiness: 50 + Math.random() * 40,
-        redundancyScore: 40 + Math.random() * 40,
-        roiScore: 40 + Math.random() * 50,
-        disposition: dispositions[idx % dispositions.length],
-        integrationCount: n.integrationCount,
-      })),
+      nodes: graph.nodes.map((n, idx) => {
+        const insight = aiInsights.insights[n.id];
+        return {
+          id: n.id,
+          label: n.label,
+          domain: n.domain,
+          health: 60 + Math.random() * 30,
+          aiReadiness: insight?.aiReadiness ?? 50 + Math.random() * 40,
+          opportunityScore: insight?.opportunityScore,
+          riskScore: insight?.riskScore,
+          roiScore: 40 + Math.random() * 50,
+          aiSummary: insight?.summary,
+          disposition: dispositions[idx % dispositions.length],
+          integrationCount: n.integrationCount,
+        };
+      }),
       edges: graph.edges.map((e) => ({
         id: e.id,
         source: e.source,
@@ -160,6 +169,11 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     ((stats.systemsFuture ?? 0) > 0 ||
       (stats.integrationsFuture ?? 0) > 0);
 
+  const selectedNode = useMemo(
+    () => livingMapData.nodes.find((n) => n.id === selectedNodeId) ?? null,
+    [livingMapData.nodes, selectedNodeId]
+  );
+
   function handleSelectSystem(name: string, degree: number) {
     // For now, we mock upstream/downstream split.
     // Backend traversal will replace this logic later.
@@ -230,21 +244,29 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             <p className="text-xs text-gray-500 mb-4">
               Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
             </p>
-            <LivingMap data={livingMapData} height={720} />
-            <div className="mt-4 flex items-center gap-3 text-xs text-slate-600">
-              <label className="flex items-center gap-2">
-                <span className="font-semibold text-slate-800">Timeline (months)</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={24}
-                  value={roiSim.month}
-                  onChange={(e) => roiSim.setMonth(Number(e.target.value))}
-                />
-                <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                  {roiSim.month}
-                </span>
-              </label>
+            <LivingMap
+              data={livingMapData}
+              height={720}
+              selectedNodeId={selectedNodeId ?? undefined}
+              onSelectNode={setSelectedNodeId}
+            />
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex items-center gap-3 text-xs text-slate-600">
+                <label className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-800">Timeline (months)</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={24}
+                    value={roiSim.month}
+                    onChange={(e) => roiSim.setMonth(Number(e.target.value))}
+                  />
+                  <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                    {roiSim.month}
+                  </span>
+                </label>
+              </div>
+              <NodeInsightPanel node={selectedNode} />
             </div>
           </section>
 

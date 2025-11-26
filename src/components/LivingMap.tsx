@@ -18,6 +18,8 @@ import "./ImpactGraph.css"; // reuse theme
 type LivingMapProps = {
   data: LivingMapData;
   height?: number;
+  selectedNodeId?: string;
+  onSelectNode?: (id: string) => void;
 };
 
 const COLORS = {
@@ -33,9 +35,9 @@ const COLORS = {
   },
 };
 
-type LayerMode = "stack" | "domain" | "integration" | "disposition" | "roi";
+type LayerMode = "stack" | "domain" | "integration" | "disposition" | "roi" | "ai";
 
-export function LivingMap({ data, height = 720 }: LivingMapProps) {
+export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: LivingMapProps) {
   const { data: simData, state, setMode, toggleNode } = useSimulationEngine(data);
   const [layout, setLayout] = useState<"flow" | "dagre">("dagre");
   const [layer, setLayer] = useState<LayerMode>("stack");
@@ -53,20 +55,37 @@ export function LivingMap({ data, height = 720 }: LivingMapProps) {
     });
     return seen;
   }, [simData.nodes]);
-  const baseNodes: Node[] = simData.nodes.map((n, idx) => ({
-    id: n.id,
-    data: { label: n.label, meta: n },
-    position: { x: 120 * (idx % 5), y: 120 * Math.floor(idx / 5) },
-    style: {
-      borderRadius: 14,
-      padding: 10,
-      border: "1px solid #e2e8f0",
-      background: "#fff",
-      color: "#0f172a",
-      boxShadow: "0 6px 14px rgba(15,23,42,0.08)",
-      cursor: state.mode === "simulate" ? "pointer" : "default",
-    },
-  }));
+  const baseNodes: Node[] = simData.nodes.map((n, idx) => {
+    const tooltip = [
+      `AI Readiness: ${Math.round(n.aiReadiness ?? 0)}%`,
+      `Opportunity: ${Math.round(n.opportunityScore ?? n.roiScore ?? 0)}%`,
+      n.disposition ? `Disposition: ${n.disposition}` : null,
+    ]
+      .filter(Boolean)
+      .join(" • ");
+
+    return {
+      id: n.id,
+      data: {
+        label: (
+          <div title={tooltip}>
+            <div className="text-xs font-semibold text-slate-900">{n.label}</div>
+          </div>
+        ),
+        meta: n,
+      },
+      position: { x: 120 * (idx % 5), y: 120 * Math.floor(idx / 5) },
+      style: {
+        borderRadius: 14,
+        padding: 10,
+        border: "1px solid #e2e8f0",
+        background: "#fff",
+        color: "#0f172a",
+        boxShadow: "0 6px 14px rgba(15,23,42,0.08)",
+        cursor: state.mode === "simulate" ? "pointer" : "default",
+      },
+    };
+  });
 
   const baseEdges: Edge[] = simData.edges.map((e) => ({
     id: e.id,
@@ -106,6 +125,9 @@ export function LivingMap({ data, height = 720 }: LivingMapProps) {
       case "disposition":
         color = dispositionColor;
         break;
+      case "ai":
+        color = aiScore >= 75 ? "#22c55e" : aiScore >= 50 ? "#eab308" : "#a855f7";
+        break;
       case "roi":
         color = roiScore >= 75 ? "#22c55e" : roiScore >= 50 ? "#eab308" : "#a855f7";
         break;
@@ -115,12 +137,13 @@ export function LivingMap({ data, height = 720 }: LivingMapProps) {
         color = healthScore >= 75 ? COLORS.healthy : healthScore >= 50 ? COLORS.warning : COLORS.danger;
     }
 
+    const isSelected = selectedNodeId === n.id;
     return {
       ...n,
       style: {
         ...n.style,
-        border: `1px solid ${color}`,
-        boxShadow: `0 6px 14px ${color}33`,
+        border: isSelected ? `2px solid ${color}` : `1px solid ${color}`,
+        boxShadow: isSelected ? `0 10px 24px ${color}55` : `0 6px 14px ${color}33`,
       },
     };
   });
@@ -128,6 +151,10 @@ export function LivingMap({ data, height = 720 }: LivingMapProps) {
   const onNodeClick = (_: any, node: Node) => {
     if (state.mode === "simulate") {
       toggleNode(node.id);
+      return;
+    }
+    if (onSelectNode) {
+      onSelectNode(node.id);
     }
   };
 
@@ -189,6 +216,7 @@ export function LivingMap({ data, height = 720 }: LivingMapProps) {
             ["domain", "Domain"],
             ["integration", "Integration"],
             ["disposition", "Disposition"],
+            ["ai", "AI"],
             ["roi", "Heatmap/ROI"],
           ] as const).map(([key, labelText]) => (
             <button
@@ -235,6 +263,23 @@ export function LivingMap({ data, height = 720 }: LivingMapProps) {
         {layer === "roi" && (
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-800">Heatmap</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#a855f7" }} />
+              Low readiness
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#eab308" }} />
+              Mid readiness
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#22c55e" }} />
+              High readiness
+            </span>
+          </div>
+        )}
+        {layer === "ai" && (
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-800">AI Opportunity</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
               <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#a855f7" }} />
               Low readiness
