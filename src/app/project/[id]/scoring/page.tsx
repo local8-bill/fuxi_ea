@@ -139,15 +139,15 @@ export default function ScoringPage() {
 
       <section className="card border border-slate-200 p-4 rounded-2xl">
         <div className="grid gap-2 sm:grid-cols-3 text-sm text-slate-700">
-          <span className="fx-pill justify-between" aria-label="Total capabilities">
+          <span className="fx-pill justify-between w-full" aria-label="Total capabilities">
             <span>Capabilities</span>
             <strong>{totalCaps}</strong>
           </span>
-          <span className="fx-pill justify-between" aria-label="Total domains">
+          <span className="fx-pill justify-between w-full" aria-label="Total domains">
             <span>Domains</span>
             <strong>{totalDomains}</strong>
           </span>
-          <span className="fx-pill justify-between" aria-label="Average score">
+          <span className="fx-pill justify-between w-full" aria-label="Average score">
             <span>Avg Score</span>
             <strong>{avgScore}</strong>
           </span>
