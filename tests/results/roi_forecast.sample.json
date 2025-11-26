@@ -1,0 +1,44 @@
+{
+  "timeline": [
+    { "month": 0, "cost": 200, "benefit": 50 },
+    { "month": 3, "cost": 750, "benefit": 320 },
+    { "month": 6, "cost": 1250, "benefit": 820 },
+    { "month": 9, "cost": 1700, "benefit": 1550 },
+    { "month": 12, "cost": 2000, "benefit": 2400 }
+  ],
+  "events": [
+    {
+      "id": "evt-1",
+      "timestamp": "2025-06-01",
+      "month": 6,
+      "type": "system_decommissioned",
+      "title": "CRM v1 retired",
+      "detail": "2 downstream systems impacted, rerouting to CRM NextGen.",
+      "domain": "Experience",
+      "severity": "warning"
+    },
+    {
+      "id": "evt-2",
+      "timestamp": "2025-09-15",
+      "month": 9,
+      "type": "system_golive",
+      "title": "ERP NextGen Go-Live",
+      "detail": "3 integrations migrated; latency improved 12%.",
+      "domain": "Core Ops",
+      "severity": "info"
+    },
+    {
+      "id": "evt-3",
+      "timestamp": "2026-01-01",
+      "month": 12,
+      "type": "domain_modernized",
+      "title": "Data Warehouse consolidation",
+      "detail": "ROI threshold reached; redundancy reduced.",
+      "domain": "Data",
+      "severity": "info"
+    }
+  ],
+  "predictions": {
+    "breakEvenMonth": 11
+  }
+}
