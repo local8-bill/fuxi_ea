@@ -19,6 +19,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { aiScoringEnabled } from "@/lib/featureFlags";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -47,6 +48,7 @@ export default function ScoringPage() {
   const [weightsOpen, setWeightsOpen] = React.useState(false);
   const [showAddL1, setShowAddL1] = React.useState(false);
   const [showVision, setShowVision] = React.useState(false);
+  const aiEnabled = aiScoringEnabled();
 
   const domains = React.useMemo(
     () => Array.from(new Set(items.map((x) => x.domain ?? "Unassigned"))).sort(),
@@ -132,6 +134,11 @@ export default function ScoringPage() {
             <p className="text-sm text-slate-500">
               Import capability maps, score them, and visualize readiness per domain.
             </p>
+            {aiEnabled && (
+              <p className="text-xs text-green-700 mt-1">
+                AI-assisted scoring is enabled (Labs). Use AI Assist drawers to propose scores.
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             {(["Import", "Score", "Visualize"] as const).map((label) => {

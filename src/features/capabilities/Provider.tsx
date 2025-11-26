@@ -12,6 +12,10 @@ export interface Capability {
   scores?: Scores;
   overrideEnabled?: boolean;
   overrideScores?: Scores;
+  ai_rationale?: string;
+  confidence?: number;
+  last_assessed?: string;
+  assessment_mode?: "manual" | "ai_conversational" | "ai_batch";
 }
 
 type Ctx = {
