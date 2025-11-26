@@ -122,6 +122,10 @@ export function CapabilityAccordionCard({
                   cap={l2}
                   onOpen={onOpen}
                   compositeFor={compositeFor}
+                  aiEnabled={aiEnabled}
+                  onAiAssist={onAiAssist}
+                  onInlineEdit={onInlineEdit}
+                  onScoreChip={onScoreChip}
                 />
               ))}
             </div>
