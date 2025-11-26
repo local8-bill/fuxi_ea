@@ -165,7 +165,7 @@ export default function ScenarioStudioPage() {
             </div>
           </div>
         </div>
-        <div className="h-80">
+        <div className="h-80 min-h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
