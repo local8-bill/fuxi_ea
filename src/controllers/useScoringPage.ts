@@ -173,6 +173,22 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     setExpandedL1((m) => ({ ...m, [id]: !m[id] }));
   }, []);
 
+  const moveL1 = useCallback((dragId: string, hoverId: string) => {
+    setRoots((prev) => {
+      const base = prev ?? [];
+      const dragIndex = base.findIndex((c) => c.id === dragId);
+      const hoverIndex = base.findIndex((c) => c.id === hoverId);
+      if (dragIndex < 0 || hoverIndex < 0 || dragIndex === hoverIndex) return base;
+      setUndoStack((u) => [...u.slice(-19), jclone(base)]);
+      setRedoStack([]);
+      const clone = jclone(base) as Capability[];
+      const [removed] = clone.splice(dragIndex, 1);
+      clone.splice(hoverIndex, 0, removed);
+      saveDebounced.current?.(clone);
+      return clone;
+    });
+  }, []);
+
   const undo = useCallback(() => {
     setUndoStack((stack) => {
       if (!stack.length || roots === null) return stack;
@@ -217,6 +233,7 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     compositeFor: (cap: Capability) => compositeNode(cap, weights, { blend: 0.5 }),
     // actions
     addL1,
+    moveL1,
     reload: () => void reload(),
   };
 }

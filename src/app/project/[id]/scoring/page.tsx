@@ -21,6 +21,8 @@ import {
 } from "recharts";
 import { aiScoringEnabled } from "@/lib/featureFlags";
 import { AiAssistDrawer } from "@/components/capabilities/AiAssistDrawer";
+import { DndProvider, useDrag, useDrop } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -43,6 +45,7 @@ export default function ScoringPage() {
     redo,
     canUndo,
     canRedo,
+    moveL1,
   } = useScoringPage(id, localStorageAdapter);
 
   // Feature flags (flip to false for prod if you want)
@@ -138,6 +141,7 @@ export default function ScoringPage() {
   const emptyBody = "Import a capability map or add an L1 to begin scoring.";
 
   return (
+    <DndProvider backend={HTML5Backend}>
     <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
       {/* Header */}
       <header className="space-y-2">
@@ -317,43 +321,55 @@ export default function ScoringPage() {
                   )}
                 </div>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {caps.map((x) => (
-                  <CapabilityAccordionCard
-                    key={x.id}
-                    cap={x.raw}
-                    l1Score={x.score}
-                    weights={weights}
-                    expanded={!!expandedL1[x.id]}
-                    onToggle={() => toggleExpanded(x.id)}
-                    onOpen={(cid) => setOpenId(cid)}
-                    compositeFor={compositeFor}
-                    aiEnabled={aiEnabled}
-                    onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
-                    onInlineEdit={updateCapability}
-                    onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+                  {caps.map((x, idx) => (
+                    <DraggableCard
+                      key={x.id}
+                      id={x.id}
+                      index={idx}
+                      onMove={(from, to) => moveL1(from, to)}
+                    >
+                      <CapabilityAccordionCard
+                        cap={x.raw}
+                        l1Score={x.score}
+                        weights={weights}
+                        expanded={!!expandedL1[x.id]}
+                        onToggle={() => toggleExpanded(x.id)}
+                        onOpen={(cid) => setOpenId(cid)}
+                        compositeFor={compositeFor}
+                        aiEnabled={aiEnabled}
+                        onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
+                        onInlineEdit={updateCapability}
+                        onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
+                      />
+                    </DraggableCard>
+                  ))}
+                </div>
+              </section>
+            ))}
           </>
         ) : (
           <section className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sorted.map((x) => (
-              <CapabilityAccordionCard
+            {sorted.map((x, idx) => (
+              <DraggableCard
                 key={x.id}
-                cap={x.raw}
-                l1Score={x.score}
-                weights={weights}
-                expanded={!!expandedL1[x.id]}
-                onToggle={() => toggleExpanded(x.id)}
-                onOpen={(cid) => setOpenId(cid)}
-                compositeFor={compositeFor}
-                aiEnabled={aiEnabled}
-                onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
-                onInlineEdit={updateCapability}
-                onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
-              />
+                id={x.id}
+                index={idx}
+                onMove={(from, to) => moveL1(from, to)}
+              >
+                <CapabilityAccordionCard
+                  cap={x.raw}
+                  l1Score={x.score}
+                  weights={weights}
+                  expanded={!!expandedL1[x.id]}
+                  onToggle={() => toggleExpanded(x.id)}
+                  onOpen={(cid) => setOpenId(cid)}
+                  compositeFor={compositeFor}
+                  aiEnabled={aiEnabled}
+                  onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
+                  onInlineEdit={updateCapability}
+                  onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
+                />
+              </DraggableCard>
             ))}
           </section>
         )}
@@ -434,5 +450,41 @@ export default function ScoringPage() {
         />
       )}
     </main>
+    </DndProvider>
+  );
+}
+
+type DragItem = { id: string; index: number; type: "L1" };
+
+function DraggableCard({
+  id,
+  index,
+  onMove,
+  children,
+}: {
+  id: string;
+  index: number;
+  onMove: (dragId: string, hoverId: string) => void;
+  children: React.ReactNode;
+}) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const [, drop] = useDrop<DragItem>({
+    accept: "L1",
+    hover(item) {
+      if (!ref.current || item.id === id) return;
+      onMove(item.id, id);
+      item.index = index;
+    },
+  });
+  const [{ isDragging }, drag] = useDrag({
+    type: "L1",
+    item: { id, index, type: "L1" },
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+  drag(drop(ref));
+  return (
+    <div ref={ref} style={{ opacity: isDragging ? 0.6 : 1 }}>
+      {children}
+    </div>
   );
 }
