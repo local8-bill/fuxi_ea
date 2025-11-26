@@ -3,6 +3,25 @@
 import fs from "fs/promises";
 import path from "path";
 
+async function fetchStatusApi(): Promise<TestResult[] | null> {
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/api/tests/status`, {
+      next: { revalidate: 30 },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const suites = data?.summary?.suites ?? [];
+    return suites.map((s: any) => ({
+      suite: s.suite ?? s.name ?? "tests",
+      status: s.status ?? "unknown",
+      runAt: s.runAt ?? data?.summary?.lastRun,
+      details: s.summary ?? undefined,
+    }));
+  } catch {
+    return null;
+  }
+}
+
 export type DirectiveMeta = {
   id: string;
   title: string;
@@ -74,6 +93,10 @@ async function readDirectiveFiles(): Promise<DirectiveMeta[]> {
 }
 
 async function readTestResults(): Promise<TestResult[]> {
+  // Try API first (if server has NEXT_PUBLIC_BASE_URL), else fallback to filesystem
+  const api = await fetchStatusApi();
+  if (api && api.length) return api;
+
   // Prefer persisted results under .fuxi/tests/results.json (written by CI or local runs)
   const localResultsPath = path.join(process.cwd(), ".fuxi", "tests", "results.json");
   try {
