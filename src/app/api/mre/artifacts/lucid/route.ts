@@ -18,11 +18,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
     // Use the shared Lucid CSV parser (future + current view if you like)
-    const lucidItems = await parseLucidCsv(buffer);
+    const arrayBuffer = await file.arrayBuffer();
+    const csvText = Buffer.from(arrayBuffer).toString("utf8");
+    const lucidItems = await parseLucidCsv(csvText);
 
     const artifact: Artifact = {
       id: uuid(),

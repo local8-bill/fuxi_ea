@@ -4,7 +4,7 @@ import type {
   InventoryRow,
   NormalizedApp,
   ArtifactKind,
-} from "@/domain/model/tech-stack";
+} from "@/domain/model/modernization";
 import { normalizeAppsFromSources } from "@/domain/services/normalization";
 
 type DiagramBox = {

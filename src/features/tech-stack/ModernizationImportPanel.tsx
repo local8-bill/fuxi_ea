@@ -17,21 +17,30 @@ type NormalizedApp = {
   normalizedName: string;
 };
 
-type Summary = {
-  artifacts: Artifact[];
-  inventoryRows: InventoryRow[];
-  normalizedApps: NormalizedApp[];
-};
-
 type Props = {
-  projectId: string;
-  summary: Summary;
+  projectId?: string;
+  summary?: {
+    artifacts: Artifact[];
+    inventoryRows: InventoryRow[];
+    normalizedApps: NormalizedApp[];
+  };
+  artifacts?: Artifact[];
+  inventoryRows?: InventoryRow[];
+  normalizedApps?: NormalizedApp[];
+  busy?: boolean;
+  error?: string | null;
+  onUploadInventory?: (file: File) => Promise<void>;
+  onUploadDiagram?: (file: File, kind: any) => Promise<void>;
   onUploadLucid: (file: File) => Promise<void>;
 };
 
 export function ModernizationImportPanel({
   projectId,
   summary,
+  artifacts,
+  inventoryRows,
+  normalizedApps,
+  busy = false,
   onUploadLucid,
 }: Props) {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -68,9 +77,9 @@ export function ModernizationImportPanel({
     }
   };
 
-  const artifactsCount = summary.artifacts?.length ?? 0;
-  const inventoryCount = summary.inventoryRows?.length ?? 0;
-  const normalizedCount = summary.normalizedApps?.length ?? 0;
+  const artifactsCount = summary?.artifacts?.length ?? artifacts?.length ?? 0;
+  const inventoryCount = summary?.inventoryRows?.length ?? inventoryRows?.length ?? 0;
+  const normalizedCount = summary?.normalizedApps?.length ?? normalizedApps?.length ?? 0;
 
   return (
     <section className="card border border-slate-200 p-4 space-y-4">
@@ -89,7 +98,7 @@ export function ModernizationImportPanel({
             className="btn btn-primary text-xs"
             type="button"
             onClick={handleClickUpload}
-            disabled={uploadBusy}
+            disabled={uploadBusy || busy}
           >
             {uploadBusy ? "Uploading…" : "Upload Lucid CSV"}
           </button>

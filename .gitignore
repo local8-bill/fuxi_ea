@@ -63,3 +63,6 @@ _archive/
 src_backup_*/
 src_broken_*/
 src_clean*/
+
+# local app data/cache
+.fuxi/data/
