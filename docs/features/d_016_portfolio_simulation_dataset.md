@@ -3,6 +3,8 @@
 ### Purpose
 Establish the **Deckers Current/Future Inventory Dataset** as the canonical real-world test case for Fuxi EA's Scenario Studio (D015). This dataset serves as both a validation bed and a live simulation source for ROI, volatility, and dependency modeling across the current vs. future enterprise landscape.
 
+**Status:** ✅ Completed
+
 ---
 
 ### Provenance
@@ -127,4 +129,3 @@ Additional metadata columns (e.g., `Notes`, `Interpretation`, `Disposition_Color
 - **Feature Branch:** `feat/d016_portfolio_simulation_dataset`  
 - **Auth Mode:** Disabled (FUXI_AUTH_OPTIONAL=true)  
 - **Next Step:** Integrate as test dataset for D015 Scenario Studio simulation and validate all ROI/risk formulas against real enterprise data.
-

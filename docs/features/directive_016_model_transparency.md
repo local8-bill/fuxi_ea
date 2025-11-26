@@ -3,6 +3,8 @@
 ### Purpose & Ethos
 AI can’t be trusted until it shows its work. **Fuxi_EA** is not a black box; it’s a glass engine. Every recommendation, score, and financial model in the system must be traceable to the data, formulas, and assumptions that generated it.
 
+**Status:** ✅ Completed
+
 This directive formalizes that transparency as a core feature of every workspace and analytical output.
 
 > *“AI-driven is meaningless unless it’s data-verified. Transparency is the new intelligence.”*
@@ -106,4 +108,3 @@ Each model document will live under `/docs/models/` and contain:
 - **Feature Branch:** `feat/d016_model_transparency`  
 - **Auth Mode:** Disabled for local dev (`FUXI_AUTH_OPTIONAL=true`)  
 - **Next Step:** Commit to `/Users/local8_bill/Projects/fuxi_ea/docs/features/D016_model_transparency.md`
-
