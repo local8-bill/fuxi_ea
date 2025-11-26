@@ -48,8 +48,8 @@ Define the unified data object schema that underpins Fuxi EA so visualization, a
 ### Verification & Validation (status as of 2025-11-26T01:24Z)
 | Checkpoint | Description | Status | Verified By | Timestamp |
 | --- | --- | --- | --- | --- |
-| Entity Definitions | Core entities captured with required fields | ☐ | Codex |  |
-| Validation Rules | Ingestion schemas implemented (Zod/Joi) | ☐ | Codex |  |
+| Entity Definitions | Core entities captured with required fields | ☑ | Codex | 2025-11-26T02:58Z |
+| Validation Rules | Ingestion schemas implemented (Zod/Joi) | ☑ | Codex | 2025-11-26T02:58Z |
 | Lineage Rules | Versioning/append-only enforced | ☐ | Mesh |  |
 | Integration Map | Modules consume schema consistently | ☐ | Codex |  |
 | Extensions Plan | Risk/AIRecommendation/DataSource registry scoped | ☐ | Fuxi |  |
