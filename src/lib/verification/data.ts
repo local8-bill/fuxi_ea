@@ -74,6 +74,22 @@ async function readDirectiveFiles(): Promise<DirectiveMeta[]> {
 }
 
 async function readTestResults(): Promise<TestResult[]> {
+  // Prefer persisted results under .fuxi/tests/results.json (written by CI or local runs)
+  const localResultsPath = path.join(process.cwd(), ".fuxi", "tests", "results.json");
+  try {
+    const raw = await fs.readFile(localResultsPath, "utf8");
+    const data = JSON.parse(raw);
+    const suites: any[] = Array.isArray(data) ? data : data.suites ?? [];
+    return suites.map((s) => ({
+      suite: s.suite ?? s.name ?? "tests",
+      status: s.status ?? "unknown",
+      runAt: s.runAt ?? data.lastRun,
+      details: s.summary ?? undefined,
+    }));
+  } catch {
+    // fall through to legacy tests/results directory
+  }
+
   const dir = path.join(process.cwd(), "tests", "results");
   try {
     const files = await fs.readdir(dir);
