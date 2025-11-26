@@ -101,6 +101,10 @@ export default function ScoringPage() {
     const avg = caps.reduce((sum, c) => sum + c.score, 0) / Math.max(1, caps.length);
     return { domain, avg: Number(avg.toFixed(1)), count: caps.length };
   });
+  const totalCaps = items.length;
+  const totalDomains = domains.length;
+  const avgScore =
+    totalCaps === 0 ? 0 : Number((items.reduce((sum, c) => sum + c.score, 0) / totalCaps).toFixed(1));
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
@@ -130,6 +134,23 @@ export default function ScoringPage() {
         </div>
       </header>
 
+      <section className="card border border-slate-200 p-4 rounded-2xl">
+        <div className="grid gap-2 sm:grid-cols-3 text-sm text-slate-700">
+          <span className="fx-pill justify-between">
+            <span>Capabilities</span>
+            <strong>{totalCaps}</strong>
+          </span>
+          <span className="fx-pill justify-between">
+            <span>Domains</span>
+            <strong>{totalDomains}</strong>
+          </span>
+          <span className="fx-pill justify-between">
+            <span>Avg Score</span>
+            <strong>{avgScore}</strong>
+          </span>
+        </div>
+      </section>
+
       {/* Scope / filters */}
       <section className="card border border-slate-200 p-4 rounded-2xl space-y-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -153,17 +174,17 @@ export default function ScoringPage() {
             <option value="score">Sort: Score</option>
           </select>
 
-          <button className="btn" onClick={() => setShowAddL1(true)}>
+          <button className="btn" onClick={() => setShowAddL1(true)} aria-label="Add new L1 capability">
             Add Capability (L1)
           </button>
 
           {LABS_VISION && (
-            <button className="btn" onClick={() => setShowVision((v) => !v)}>
+            <button className="btn" onClick={() => setShowVision((v) => !v)} aria-label="Toggle visualize view">
               {showVision ? "Hide Visualize" : "Visualize"}
             </button>
           )}
 
-          <button className="btn ml-auto" onClick={() => setWeightsOpen(true)}>
+          <button className="btn ml-auto" onClick={() => setWeightsOpen(true)} aria-label="Adjust scoring weights">
             Weights
           </button>
         </div>
