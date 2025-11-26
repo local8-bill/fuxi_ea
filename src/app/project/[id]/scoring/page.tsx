@@ -38,6 +38,11 @@ export default function ScoringPage() {
     compositeFor,
     addL1,
     reload,
+    updateCapability,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useScoringPage(id, localStorageAdapter);
 
   // Feature flags (flip to false for prod if you want)
@@ -50,6 +55,8 @@ export default function ScoringPage() {
   const [showAddL1, setShowAddL1] = React.useState(false);
   const [showVision, setShowVision] = React.useState(false);
   const [aiTargetId, setAiTargetId] = React.useState<string | null>(null);
+  const [undoStack, setUndoStack] = React.useState<any[]>([]);
+  const [redoStack, setRedoStack] = React.useState<any[]>([]);
   const aiEnabled = aiScoringEnabled();
 
   const domains = React.useMemo(
@@ -221,6 +228,12 @@ export default function ScoringPage() {
           <button className="btn ml-auto" onClick={() => setWeightsOpen(true)} aria-label="Adjust scoring weights">
             Weights
           </button>
+          <button className="btn" onClick={undo} disabled={!canUndo} aria-label="Undo last change">
+            Undo
+          </button>
+          <button className="btn" onClick={redo} disabled={!canRedo} aria-label="Redo change">
+            Redo
+          </button>
         </div>
       </section>
 
@@ -309,6 +322,8 @@ export default function ScoringPage() {
                     compositeFor={compositeFor}
                     aiEnabled={aiEnabled}
                     onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
+                    onInlineEdit={updateCapability}
+                    onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
                   />
                 ))}
               </div>
@@ -329,6 +344,8 @@ export default function ScoringPage() {
                 compositeFor={compositeFor}
                 aiEnabled={aiEnabled}
                 onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
+                onInlineEdit={updateCapability}
+                onScoreChip={(cid, v) => updateScores(cid, { maturity: v, opportunity: v, techFit: v })}
               />
             ))}
           </section>

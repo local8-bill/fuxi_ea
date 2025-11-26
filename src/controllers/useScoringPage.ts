@@ -36,6 +36,8 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
   const [weights, setWeights] = useState<Weights>(defaultWeights);
   const [openId, setOpenId] = useState<string | null>(null);
   const [expandedL1, setExpandedL1] = useState<Record<string, boolean>>({});
+  const [undoStack, setUndoStack] = useState<Capability[][]>([]);
+  const [redoStack, setRedoStack] = useState<Capability[][]>([]);
 
   // Debounced save to avoid spamming storage on rapid changes
   const saveDebounced = useRef<((data: Capability[]) => void) | null>(null);
@@ -116,6 +118,8 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
       const d = (domain ?? "").trim() || "Unassigned";
       setRoots((prev) => {
         const base = prev ?? [];
+        setUndoStack((u) => [...u.slice(-19), jclone(base)]);
+        setRedoStack([]);
         const clone = jclone(base) as Capability[];
         clone.push({
           id: `cap-${Math.random().toString(36).slice(2, 10)}`,
@@ -136,6 +140,8 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     async (id: string, patch: Partial<Scores>) => {
       setRoots((prev) => {
         const base = prev ?? [];
+        setUndoStack((u) => [...u.slice(-19), jclone(base)]);
+        setRedoStack([]);
         const clone = jclone(base) as Capability[];
 
         const target = findById(clone, id);
@@ -150,9 +156,42 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     []
   );
 
+  const updateCapability = useCallback((id: string, patch: Partial<Capability>) => {
+    setRoots((prev) => {
+      const base = prev ?? [];
+      setUndoStack((u) => [...u.slice(-19), jclone(base)]);
+      setRedoStack([]);
+      const clone = jclone(base) as Capability[];
+      const target = findById(clone, id);
+      if (target) Object.assign(target, patch);
+      saveDebounced.current?.(clone);
+      return clone;
+    });
+  }, []);
+
   const toggleExpanded = useCallback((id: string) => {
     setExpandedL1((m) => ({ ...m, [id]: !m[id] }));
   }, []);
+
+  const undo = useCallback(() => {
+    setUndoStack((stack) => {
+      if (!stack.length || roots === null) return stack;
+      const prev = stack[stack.length - 1];
+      setRedoStack((r) => [...r, jclone(roots)]);
+      setRoots(jclone(prev));
+      return stack.slice(0, -1);
+    });
+  }, [roots]);
+
+  const redo = useCallback(() => {
+    setRedoStack((stack) => {
+      if (!stack.length || roots === null) return stack;
+      const next = stack[stack.length - 1];
+      setUndoStack((u) => [...u, jclone(roots)]);
+      setRoots(jclone(next));
+      return stack.slice(0, -1);
+    });
+  }, [roots]);
 
   return {
     // ready state
@@ -166,9 +205,14 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     setOpenId,
     selected,
     updateScores,
+    updateCapability,
     // accordion state
     expandedL1,
     toggleExpanded,
+    undo,
+    redo,
+    canUndo: undoStack.length > 0,
+    canRedo: redoStack.length > 0,
     // helpers the card may use
     compositeFor: (cap: Capability) => compositeNode(cap, weights, { blend: 0.5 }),
     // actions

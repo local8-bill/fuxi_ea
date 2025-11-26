@@ -2,6 +2,9 @@
 "use client";
 
 import * as React from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import type { Capability } from "@/domain/model/capability";
 import type { Weights } from "@/domain/services/scoring";
 
@@ -15,6 +18,8 @@ type Props = {
   compositeFor: (cap: Capability) => number; // compute composite for any node
   aiEnabled?: boolean;
   onAiAssist?: (id: string) => void;
+  onInlineEdit?: (id: string, patch: { name?: string; domain?: string }) => void;
+  onScoreChip?: (id: string, score: number) => void;
 };
 
 export function CapabilityAccordionCard({
@@ -27,7 +32,29 @@ export function CapabilityAccordionCard({
   compositeFor,
   aiEnabled = false,
   onAiAssist,
+  onInlineEdit,
+  onScoreChip,
 }: Props) {
+  const schema = React.useMemo(
+    () =>
+      z.object({
+        name: z.string().min(1, "Name is required"),
+        domain: z.string().optional(),
+      }),
+    []
+  );
+  const { register, handleSubmit, watch } = useForm<{ name: string; domain?: string }>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: cap.name, domain: cap.domain ?? "" },
+  });
+
+  const onSubmit = handleSubmit((values) => {
+    onInlineEdit?.(cap.id, { name: values.name.trim(), domain: values.domain?.trim() || undefined });
+  });
+
+  const nameVal = watch("name");
+  const domainVal = watch("domain");
+
   // map 0..1 to our soft “band” classes
   const band = (s: number) =>
     s >= 0.75 ? "band-high"
@@ -48,18 +75,26 @@ export function CapabilityAccordionCard({
         </button>
 
         <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <div className="font-semibold">{cap.name}</div>
-            <div className="badge" title={`Composite: ${(l1Score * 100).toFixed(0)}%`}>
-              {(l1Score * 100).toFixed(0)}%
+          <form onBlur={onSubmit} onSubmit={onSubmit}>
+            <div className="flex items-center justify-between gap-3">
+              <input
+                className="w-full border border-slate-200 rounded-md px-2 py-1 text-sm font-semibold"
+                {...register("name")}
+                defaultValue={cap.name}
+                aria-label="Capability name"
+              />
+              <div className="badge" title={`Composite: ${(l1Score * 100).toFixed(0)}%`}>
+                {(l1Score * 100).toFixed(0)}%
+              </div>
             </div>
-          </div>
-
-          {cap.domain && (
-            <div className="text-sm" style={{ opacity: 0.7, marginTop: 2 }}>
-              {cap.domain}
-            </div>
-          )}
+            <input
+              className="mt-1 w-full border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700"
+              {...register("domain")}
+              defaultValue={cap.domain}
+              placeholder="Domain (optional)"
+              aria-label="Capability domain"
+            />
+          </form>
         </div>
 
         <div className="flex gap-2">
@@ -103,12 +138,16 @@ function L2Row({
   compositeFor,
   aiEnabled,
   onAiAssist,
+  onInlineEdit,
+  onScoreChip,
 }: {
   cap: Capability;
   onOpen: (id: string) => void;
   compositeFor: (cap: Capability) => number;
   aiEnabled?: boolean;
   onAiAssist?: (id: string) => void;
+  onInlineEdit?: (id: string, patch: { name?: string; domain?: string }) => void;
+  onScoreChip?: (id: string, score: number) => void;
 }) {
   const s = safeScore(cap, compositeFor);
   const bandCls = s >= 0.75 ? "band-high" : s >= 0.5 ? "band-med" : "band-low";
@@ -122,6 +161,23 @@ function L2Row({
             <div className="badge" title={`Composite: ${(s * 100).toFixed(0)}%`}>
               {(s * 100).toFixed(0)}%
             </div>
+          </div>
+          <div className="mt-2 flex gap-1 text-xs">
+            {[
+              { label: "Gap", v: 0.25, color: "#ef4444" },
+              { label: "Neutral", v: 0.5, color: "#eab308" },
+              { label: "Strong", v: 0.85, color: "#22c55e" },
+            ].map((chip) => (
+              <button
+                key={chip.label}
+                className="fx-pill"
+                style={{ background: `${chip.color}22`, borderColor: `${chip.color}44` }}
+                onClick={() => onScoreChip?.(cap.id, chip.v)}
+                aria-label={`Set score ${chip.label}`}
+              >
+                {chip.label}
+              </button>
+            ))}
           </div>
         </div>
         <div className="flex gap-2">
@@ -157,12 +213,14 @@ function L3Row({
   compositeFor,
   aiEnabled,
   onAiAssist,
+  onScoreChip,
 }: {
   cap: Capability;
   onOpen: (id: string) => void;
   compositeFor: (cap: Capability) => number;
   aiEnabled?: boolean;
   onAiAssist?: (id: string) => void;
+  onScoreChip?: (id: string, score: number) => void;
 }) {
   const s = safeScore(cap, compositeFor);
   const bandCls = s >= 0.75 ? "band-high" : s >= 0.5 ? "band-med" : "band-low";
@@ -173,7 +231,24 @@ function L3Row({
       <span className="badge" title={`Composite: ${(s * 100).toFixed(0)}%`}>
         {(s * 100).toFixed(0)}%
       </span>
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
+        <div className="flex gap-1">
+          {[
+            { label: "Gap", v: 0.25, color: "#ef4444" },
+            { label: "Neutral", v: 0.5, color: "#eab308" },
+            { label: "Strong", v: 0.85, color: "#22c55e" },
+          ].map((chip) => (
+            <button
+              key={chip.label}
+              className="fx-pill"
+              style={{ background: `${chip.color}22`, borderColor: `${chip.color}44` }}
+              onClick={() => onScoreChip?.(cap.id, chip.v)}
+              aria-label={`Set score ${chip.label}`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
         {aiEnabled && onAiAssist && (
           <button className="btn" onClick={() => onAiAssist(cap.id)}>
             AI
