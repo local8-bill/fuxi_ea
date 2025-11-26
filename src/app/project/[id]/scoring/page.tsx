@@ -20,6 +20,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { aiScoringEnabled } from "@/lib/featureFlags";
+import { AiAssistDrawer } from "@/components/capabilities/AiAssistDrawer";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -48,6 +49,7 @@ export default function ScoringPage() {
   const [weightsOpen, setWeightsOpen] = React.useState(false);
   const [showAddL1, setShowAddL1] = React.useState(false);
   const [showVision, setShowVision] = React.useState(false);
+  const [aiTargetId, setAiTargetId] = React.useState<string | null>(null);
   const aiEnabled = aiScoringEnabled();
 
   const domains = React.useMemo(
@@ -97,6 +99,13 @@ export default function ScoringPage() {
       ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
+
+  const aiTargetName = React.useMemo(() => {
+    if (!aiTargetId) return undefined;
+    const direct = items.find((i) => i.id === aiTargetId)?.name;
+    if (direct) return direct;
+    return aiTargetId;
+  }, [aiTargetId, items]);
 
   // Show a super-light loading placeholder (avoids flicker)
   if (loading) {
@@ -289,20 +298,22 @@ export default function ScoringPage() {
                 </div>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {caps.map((x) => (
-                    <CapabilityAccordionCard
-                      key={x.id}
-                      cap={x.raw}
-                      l1Score={x.score}
-                      weights={weights}
-                      expanded={!!expandedL1[x.id]}
-                      onToggle={() => toggleExpanded(x.id)}
-                      onOpen={(cid) => setOpenId(cid)}
-                      compositeFor={compositeFor}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+                  <CapabilityAccordionCard
+                    key={x.id}
+                    cap={x.raw}
+                    l1Score={x.score}
+                    weights={weights}
+                    expanded={!!expandedL1[x.id]}
+                    onToggle={() => toggleExpanded(x.id)}
+                    onOpen={(cid) => setOpenId(cid)}
+                    compositeFor={compositeFor}
+                    aiEnabled={aiEnabled}
+                    onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
           </>
         ) : (
           <section className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -316,6 +327,8 @@ export default function ScoringPage() {
                 onToggle={() => toggleExpanded(x.id)}
                 onOpen={(cid) => setOpenId(cid)}
                 compositeFor={compositeFor}
+                aiEnabled={aiEnabled}
+                onAiAssist={aiEnabled ? (cid) => setAiTargetId(cid) : undefined}
               />
             ))}
           </section>
@@ -383,6 +396,19 @@ export default function ScoringPage() {
         onCreate={(name, domain) => addL1(name, domain)}
         domainSuggestions={domains}
       />
+
+      {aiEnabled && (
+        <AiAssistDrawer
+          open={!!aiTargetId}
+          name={aiTargetName}
+          onClose={() => setAiTargetId(null)}
+          onAccept={(score) => {
+            if (!aiTargetId) return;
+            const val = Math.max(0, Math.min(100, score)) / 100;
+            updateScores(aiTargetId, { maturity: val, opportunity: val, techFit: val });
+          }}
+        />
+      )}
     </main>
   );
 }

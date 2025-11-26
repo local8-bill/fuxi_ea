@@ -13,6 +13,8 @@ type Props = {
   onToggle: () => void;           // toggle L1 open/closed
   onOpen: (id: string) => void;   // open scoring drawer for any node (L1/2/3)
   compositeFor: (cap: Capability) => number; // compute composite for any node
+  aiEnabled?: boolean;
+  onAiAssist?: (id: string) => void;
 };
 
 export function CapabilityAccordionCard({
@@ -23,6 +25,8 @@ export function CapabilityAccordionCard({
   onToggle,
   onOpen,
   compositeFor,
+  aiEnabled = false,
+  onAiAssist,
 }: Props) {
   // map 0..1 to our soft “band” classes
   const band = (s: number) =>
@@ -58,7 +62,14 @@ export function CapabilityAccordionCard({
           )}
         </div>
 
-        <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+        <div className="flex gap-2">
+          {aiEnabled && onAiAssist && (
+            <button className="btn" onClick={() => onAiAssist(cap.id)}>
+              AI Assist
+            </button>
+          )}
+          <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+        </div>
       </div>
 
       {/* L2 / L3 body */}
@@ -90,10 +101,14 @@ function L2Row({
   cap,
   onOpen,
   compositeFor,
+  aiEnabled,
+  onAiAssist,
 }: {
   cap: Capability;
   onOpen: (id: string) => void;
   compositeFor: (cap: Capability) => number;
+  aiEnabled?: boolean;
+  onAiAssist?: (id: string) => void;
 }) {
   const s = safeScore(cap, compositeFor);
   const bandCls = s >= 0.75 ? "band-high" : s >= 0.5 ? "band-med" : "band-low";
@@ -109,7 +124,14 @@ function L2Row({
             </div>
           </div>
         </div>
-        <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+        <div className="flex gap-2">
+          {aiEnabled && onAiAssist && (
+            <button className="btn" onClick={() => onAiAssist(cap.id)}>
+              AI Assist
+            </button>
+          )}
+          <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+        </div>
       </div>
 
       {/* L3 list */}
@@ -133,10 +155,14 @@ function L3Row({
   cap,
   onOpen,
   compositeFor,
+  aiEnabled,
+  onAiAssist,
 }: {
   cap: Capability;
   onOpen: (id: string) => void;
   compositeFor: (cap: Capability) => number;
+  aiEnabled?: boolean;
+  onAiAssist?: (id: string) => void;
 }) {
   const s = safeScore(cap, compositeFor);
   const bandCls = s >= 0.75 ? "band-high" : s >= 0.5 ? "band-med" : "band-low";
@@ -147,7 +173,14 @@ function L3Row({
       <span className="badge" title={`Composite: ${(s * 100).toFixed(0)}%`}>
         {(s * 100).toFixed(0)}%
       </span>
-      <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+      <div className="flex gap-2">
+        {aiEnabled && onAiAssist && (
+          <button className="btn" onClick={() => onAiAssist(cap.id)}>
+            AI
+          </button>
+        )}
+        <button className="btn" onClick={() => onOpen(cap.id)}>Score</button>
+      </div>
     </li>
   );
 }
