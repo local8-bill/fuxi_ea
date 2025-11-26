@@ -14,6 +14,16 @@ export function AiAssistDrawer({ open, name, onClose, onAccept }: Props) {
   const [rationale, setRationale] = React.useState("");
   const [confidence, setConfidence] = React.useState(75);
   const [answers, setAnswers] = React.useState<Record<string, string>>({});
+  const [step, setStep] = React.useState(0);
+
+  const steps = React.useMemo(() => [
+    { id: "process", prompt: "How standardized is this process today?" },
+    { id: "tooling", prompt: "Which tools support it? Any gaps?" },
+    { id: "integration", prompt: "How well does it integrate with upstream/downstream?" },
+    { id: "risk", prompt: "What risks or blockers exist?" },
+  ], []);
+
+  const current = steps[step];
 
   React.useEffect(() => {
     if (open) {
@@ -21,6 +31,7 @@ export function AiAssistDrawer({ open, name, onClose, onAccept }: Props) {
       setRationale("");
       setConfidence(75);
       setAnswers({});
+      setStep(0);
     }
   }, [open]);
 
@@ -43,43 +54,66 @@ export function AiAssistDrawer({ open, name, onClose, onAccept }: Props) {
         </div>
 
         <div className="space-y-2 text-xs text-slate-700">
-          {questions.map((q) => (
-            <label key={q.id} className="flex flex-col gap-1">
-              <span className="font-semibold">{q.prompt}</span>
-              <textarea
-                className="rounded-md border border-slate-200 px-2 py-2 text-sm"
-                rows={2}
-                value={answers[q.id] ?? ""}
-                onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                placeholder="Your answer..."
-              />
-            </label>
-          ))}
+          <label className="flex flex-col gap-1">
+            <span className="font-semibold">{current.prompt}</span>
+            <textarea
+              className="rounded-md border border-slate-200 px-2 py-2 text-sm"
+              rows={2}
+              value={answers[current.id] ?? ""}
+              onChange={(e) => setAnswers((prev) => ({ ...prev, [current.id]: e.target.value }))}
+              placeholder="Your answer..."
+            />
+          </label>
+          <div className="flex items-center justify-between text-xs text-slate-600">
+            <button
+              className="btn"
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              disabled={step === 0}
+              aria-label="Previous question"
+            >
+              Back
+            </button>
+            <div className="flex gap-1">
+              {steps.map((_, idx) => (
+                <span key={idx} className={`fx-pill ${idx === step ? "active" : ""}`}>{idx + 1}</span>
+              ))}
+            </div>
+            <button
+              className="btn"
+              onClick={() => setStep((s) => Math.min(steps.length - 1, s + 1))}
+              disabled={step === steps.length - 1}
+              aria-label="Next question"
+            >
+              Next
+            </button>
+          </div>
         </div>
 
-        <label className="text-xs text-slate-700">
-          Proposed score: <strong>{score}</strong>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={score}
-            onChange={(e) => setScore(Number(e.target.value))}
-            className="w-full"
-          />
-        </label>
+        <div className="grid grid-cols-2 gap-3 text-xs text-slate-700">
+          <label className="flex flex-col gap-1">
+            <span>Proposed score: <strong>{score}</strong></span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={score}
+              onChange={(e) => setScore(Number(e.target.value))}
+              className="w-full"
+            />
+          </label>
 
-        <label className="text-xs text-slate-700">
-          Confidence: <strong>{confidence}%</strong>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={confidence}
-            onChange={(e) => setConfidence(Number(e.target.value))}
-            className="w-full"
-          />
-        </label>
+          <label className="flex flex-col gap-1">
+            <span>Confidence: <strong>{confidence}%</strong></span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={confidence}
+              onChange={(e) => setConfidence(Number(e.target.value))}
+              className="w-full"
+            />
+          </label>
+        </div>
 
         <label className="text-xs text-slate-700 flex flex-col gap-1">
           Rationale / summary
