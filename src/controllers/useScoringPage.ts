@@ -189,6 +189,26 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     });
   }, []);
 
+  const moveL2 = useCallback((parentId: string, dragId: string, hoverId: string) => {
+    setRoots((prev) => {
+      const base = prev ?? [];
+      const parent = findById(base, parentId);
+      if (!parent || !parent.children) return base;
+      const dragIndex = parent.children.findIndex((c) => c.id === dragId);
+      const hoverIndex = parent.children.findIndex((c) => c.id === hoverId);
+      if (dragIndex < 0 || hoverIndex < 0 || dragIndex === hoverIndex) return base;
+      setUndoStack((u) => [...u.slice(-19), jclone(base)]);
+      setRedoStack([]);
+      const clone = jclone(base) as Capability[];
+      const parentClone = findById(clone, parentId);
+      if (!parentClone || !parentClone.children) return base;
+      const [removed] = parentClone.children.splice(dragIndex, 1);
+      parentClone.children.splice(hoverIndex, 0, removed);
+      saveDebounced.current?.(clone);
+      return clone;
+    });
+  }, []);
+
   const undo = useCallback(() => {
     setUndoStack((stack) => {
       if (!stack.length || roots === null) return stack;
@@ -234,6 +254,7 @@ export function useScoringPage(projectId: string, storage: StoragePort) {
     // actions
     addL1,
     moveL1,
+    moveL2,
     reload: () => void reload(),
   };
 }

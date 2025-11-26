@@ -5,6 +5,7 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useDrag, useDrop } from "react-dnd";
 import type { Capability } from "@/domain/model/capability";
 import type { Weights } from "@/domain/services/scoring";
 
@@ -20,6 +21,7 @@ type Props = {
   onAiAssist?: (id: string) => void;
   onInlineEdit?: (id: string, patch: { name?: string; domain?: string }) => void;
   onScoreChip?: (id: string, score: number) => void;
+  onMoveL2?: (parentId: string, dragId: string, hoverId: string) => void;
 };
 
 export function CapabilityAccordionCard({
@@ -34,6 +36,7 @@ export function CapabilityAccordionCard({
   onAiAssist,
   onInlineEdit,
   onScoreChip,
+  onMoveL2,
 }: Props) {
   const schema = React.useMemo(
     () =>
@@ -126,6 +129,7 @@ export function CapabilityAccordionCard({
                   onAiAssist={onAiAssist}
                   onInlineEdit={onInlineEdit}
                   onScoreChip={onScoreChip}
+                  onMove={(drag, hover) => onMoveL2?.(cap.id, drag, hover)}
                 />
               ))}
             </div>
@@ -144,6 +148,7 @@ function L2Row({
   onAiAssist,
   onInlineEdit,
   onScoreChip,
+  onMove,
 }: {
   cap: Capability;
   onOpen: (id: string) => void;
@@ -152,12 +157,30 @@ function L2Row({
   onAiAssist?: (id: string) => void;
   onInlineEdit?: (id: string, patch: { name?: string; domain?: string }) => void;
   onScoreChip?: (id: string, score: number) => void;
+  onMove?: (dragId: string, hoverId: string) => void;
 }) {
   const s = safeScore(cap, compositeFor);
   const bandCls = s >= 0.75 ? "band-high" : s >= 0.5 ? "band-med" : "band-low";
+  const ref = React.useRef<HTMLDivElement | null>(null);
+
+  const [{ isDragging }, drag, preview] = useDrag({
+    type: "L2",
+    item: { id: cap.id },
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+
+  const [, drop] = useDrop({
+    accept: "L2",
+    hover(item: any) {
+      if (!onMove || item.id === cap.id) return;
+      onMove(item.id, cap.id);
+    },
+  });
+
+  drag(drop(ref));
 
   return (
-    <div className={`card ${bandCls}`} style={{ padding: 8 }}>
+    <div ref={ref} className={`card ${bandCls}`} style={{ padding: 8, opacity: isDragging ? 0.6 : 1 }}>
       <div className="flex items-start gap-2">
         <div className="flex-1">
           <div className="flex items-center justify-between">

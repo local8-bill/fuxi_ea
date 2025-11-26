@@ -46,6 +46,7 @@ export default function ScoringPage() {
     canUndo,
     canRedo,
     moveL1,
+    moveL2,
   } = useScoringPage(id, localStorageAdapter);
 
   // Feature flags (flip to false for prod if you want)
