@@ -10,6 +10,15 @@ import { WeightsDrawer } from "@/ui/components/WeightsDrawer";
 import { AddL1Dialog } from "@/ui/components/AddL1Dialog";
 import { ImportPanel } from "@/ui/components/ImportPanel";
 import { defaultWeights } from "@/domain/services/scoring";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -86,25 +95,44 @@ export default function ScoringPage() {
     );
   }
 
+  const step = sorted.length === 0 ? "Import" : showVision ? "Visualize" : "Score";
+  const scoreData = sorted.slice(0, 12).map((s) => ({ name: s.name, score: Number(s.score ?? 0) }));
+  const domainStats = grouped?.map(([domain, caps]) => {
+    const avg = caps.reduce((sum, c) => sum + c.score, 0) / Math.max(1, caps.length);
+    return { domain, avg: Number(avg.toFixed(1)), count: caps.length };
+  });
+
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 space-y-6">
-      {/* Header to match Tech Stack look */}
-      <header className="space-y-1">
+    <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+      {/* Header */}
+      <header className="space-y-2">
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
           Project: {id}
         </p>
-        <h1 className="text-2xl font-semibold text-slate-900">
-          Capability Scoring Workspace
-        </h1>
-        <p className="text-sm text-slate-500">
-          Score business capabilities, compare domains, and explore AI-assisted insights for this
-          project.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">Capability Workspace</h1>
+            <p className="text-sm text-slate-500">
+              Import capability maps, score them, and visualize readiness per domain.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {(["Import", "Score", "Visualize"] as const).map((label) => (
+              <span
+                key={label}
+                className={`fx-pill ${step === label ? "active" : ""}`}
+                aria-label={`Step ${label}`}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
       </header>
 
-      {/* Controls card (filters, sort, actions) */}
-      <section className="card border border-gray-100 p-4 space-y-3 rounded-2xl">
-        <div className="flex flex-wrap gap-3 items-center">
+      {/* Scope / filters */}
+      <section className="card border border-slate-200 p-4 rounded-2xl space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             className="select"
             value={domainFilter}
@@ -126,12 +154,12 @@ export default function ScoringPage() {
           </select>
 
           <button className="btn" onClick={() => setShowAddL1(true)}>
-            Add L1
+            Add Capability (L1)
           </button>
 
           {LABS_VISION && (
             <button className="btn" onClick={() => setShowVision((v) => !v)}>
-              {showVision ? "Hide Vision" : "Vision (Labs)"}
+              {showVision ? "Hide Visualize" : "Visualize"}
             </button>
           )}
 
@@ -141,77 +169,141 @@ export default function ScoringPage() {
         </div>
       </section>
 
-      {/* Labs panels */}
-      {LABS_IMPORT && (
-        <ImportPanel
-          projectId={id}
-          storage={localStorageAdapter}
-          existingL1={existingL1}
-          defaultOpen={false}
-          onApplied={() => reload()}
-        />
-      )}
-
-      {LABS_VISION && showVision && (
-        <VisionPanel
-          projectId={id}
-          storage={localStorageAdapter}
-          defaultOpen={true}
-          onApplied={() => reload()}
-        />
-      )}
-
-      {/* Main content */}
-      {sorted.length === 0 ? (
-        <section className="card rounded-2xl border border-slate-200 p-4 mt-2">
-          <div className="font-medium mb-2">No capabilities yet</div>
-          <p className="text-sm opacity-70 mb-3">
-            Start by adding an L1 capability or importing a capability map.
-          </p>
-          <button className="btn btn-primary" onClick={() => setShowAddL1(true)}>
-            Add L1
-          </button>
-        </section>
-      ) : domainFilter === "All Domains" && grouped ? (
-        // Grouped by Domain
-        <>
-          {grouped.map(([domain, caps]) => (
-            <section key={domain} className="space-y-3">
-              <h2 className="text-base font-semibold">{domain}</h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {caps.map((x) => (
-                  <CapabilityAccordionCard
-                    key={x.id}
-                    cap={x.raw}
-                    l1Score={x.score}
-                    weights={weights}
-                    expanded={!!expandedL1[x.id]}
-                    onToggle={() => toggleExpanded(x.id)}
-                    onOpen={(cid) => setOpenId(cid)}
-                    compositeFor={compositeFor}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-        </>
-      ) : (
-        // Ungrouped grid
-        <section className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((x) => (
-            <CapabilityAccordionCard
-              key={x.id}
-              cap={x.raw}
-              l1Score={x.score}
-              weights={weights}
-              expanded={!!expandedL1[x.id]}
-              onToggle={() => toggleExpanded(x.id)}
-              onOpen={(cid) => setOpenId(cid)}
-              compositeFor={compositeFor}
+      {/* Import */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Import</div>
+            <div className="text-xs text-slate-500">
+              Upload capability CSV/JSON; preview and validate before scoring.
+            </div>
+          </div>
+          <span className="fx-pill">Supported: CSV, JSON</span>
+        </div>
+        {LABS_IMPORT && (
+          <div className="mt-3">
+            <ImportPanel
+              projectId={id}
+              storage={localStorageAdapter}
+              existingL1={existingL1}
+              defaultOpen={false}
+              onApplied={() => reload()}
             />
-          ))}
-        </section>
-      )}
+          </div>
+        )}
+      </section>
+
+      {/* Scoring */}
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Score</div>
+            <div className="text-xs text-slate-500">
+              Inline scoring for each capability; adjust weights and filters as you go.
+            </div>
+          </div>
+          <div className="flex gap-2 text-xs text-slate-600">
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#ef4444" }} /> Gap</span>
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#eab308" }} /> Neutral</span>
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} /> Strong</span>
+          </div>
+        </div>
+
+        {sorted.length === 0 ? (
+          <div className="card rounded-xl border border-slate-200 p-4">
+            <div className="font-medium mb-2">No capabilities yet</div>
+            <p className="text-sm opacity-70 mb-3">
+              Start by adding an L1 capability or importing a capability map.
+            </p>
+            <button className="btn btn-primary" onClick={() => setShowAddL1(true)}>
+              Add L1
+            </button>
+          </div>
+        ) : domainFilter === "All Domains" && grouped ? (
+          <>
+            {grouped.map(([domain, caps]) => (
+              <section key={domain} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-semibold">{domain}</h2>
+                  {domainStats && (
+                    <span className="fx-pill text-xs">
+                      Avg: {domainStats.find((d) => d.domain === domain)?.avg ?? 0} ·{" "}
+                      {domainStats.find((d) => d.domain === domain)?.count ?? 0} caps
+                    </span>
+                  )}
+                </div>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {caps.map((x) => (
+                    <CapabilityAccordionCard
+                      key={x.id}
+                      cap={x.raw}
+                      l1Score={x.score}
+                      weights={weights}
+                      expanded={!!expandedL1[x.id]}
+                      onToggle={() => toggleExpanded(x.id)}
+                      onOpen={(cid) => setOpenId(cid)}
+                      compositeFor={compositeFor}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </>
+        ) : (
+          <section className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sorted.map((x) => (
+              <CapabilityAccordionCard
+                key={x.id}
+                cap={x.raw}
+                l1Score={x.score}
+                weights={weights}
+                expanded={!!expandedL1[x.id]}
+                onToggle={() => toggleExpanded(x.id)}
+                onOpen={(cid) => setOpenId(cid)}
+                compositeFor={compositeFor}
+              />
+            ))}
+          </section>
+        )}
+      </section>
+
+      {/* Visualization */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Visualize</div>
+            <div className="text-xs text-slate-500">Domain averages and top capability scores.</div>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+            <div className="text-xs font-semibold text-slate-700 mb-2">Top Capabilities</div>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={scoreData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip />
+                  <Bar dataKey="score" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+            <div className="text-xs font-semibold text-slate-700 mb-2">Domain Summary</div>
+            <div className="space-y-2 text-sm text-slate-800">
+              {(domainStats ?? []).map((d) => (
+                <div key={d.domain} className="flex items-center justify-between rounded-md bg-white px-3 py-2 border border-slate-100">
+                  <span className="font-semibold">{d.domain}</span>
+                  <span className="text-xs text-slate-600">Avg {d.avg} · {d.count} caps</span>
+                </div>
+              ))}
+              {!domainStats?.length && <div className="text-xs text-slate-500">No domain data yet.</div>}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Drawers & Dialogs */}
       <ScoringDrawer
