@@ -7,8 +7,9 @@ import {
   SystemImpactPanel,
   type SystemImpact,
 } from "@/components/digital-enterprise/SystemImpactPanel";
-import { ImpactGraph } from "@/components/ImpactGraph";
 import { useImpactGraph } from "@/hooks/useImpactGraph";
+import { LivingMap } from "@/components/LivingMap";
+import type { LivingMapData } from "@/types/livingMap";
 
 interface TopSystemRaw {
   systemId?: string;
@@ -64,10 +65,24 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const graph = useImpactGraph();
-  const [layoutMode, setLayoutMode] = useState<"flow" | "dagre">("flow");
-  const [colorMode, setColorMode] = useState<"domain" | "impact">("domain");
-  const [showEdgeLabels, setShowEdgeLabels] = useState(false);
-  const [weightEdges, setWeightEdges] = useState(true);
+  const livingMapData: LivingMapData = useMemo(() => ({
+    nodes: graph.nodes.map((n) => ({
+      id: n.id,
+      label: n.label,
+      domain: n.domain,
+      health: 60 + Math.random() * 30,
+      aiReadiness: 50 + Math.random() * 40,
+      redundancyScore: 40 + Math.random() * 40,
+      integrationCount: n.integrationCount,
+    })),
+    edges: graph.edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      weight: e.weight,
+      kind: "api",
+    })),
+  }), [graph]);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,84 +211,11 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
           {/* Top systems table */}
           <section className="mt-12">
-            <h2 className="text-sm font-semibold mb-1">IMPACT GRAPH (BETA)</h2>
+            <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
             <p className="text-xs text-gray-500 mb-4">
-              Interactive upstream/downstream view (mock data until graph ingestion is wired).
+              Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
             </p>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
-                <button
-                  onClick={() => setLayoutMode("flow")}
-                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                    layoutMode === "flow"
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  Free
-                </button>
-                <button
-                  onClick={() => setLayoutMode("dagre")}
-                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                    layoutMode === "dagre"
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  Dagre
-                </button>
-              </div>
-
-              <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
-                <button
-                  onClick={() => setColorMode("domain")}
-                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                    colorMode === "domain"
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  Domain
-                </button>
-                <button
-                  onClick={() => setColorMode("impact")}
-                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                    colorMode === "impact"
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  Impact
-                </button>
-              </div>
-
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                <label className="inline-flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showEdgeLabels}
-                    onChange={(e) => setShowEdgeLabels(e.target.checked)}
-                  />
-                  Labels
-                </label>
-                <label className="inline-flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={weightEdges}
-                    onChange={(e) => setWeightEdges(e.target.checked)}
-                  />
-                  Weight
-                </label>
-              </div>
-            </div>
-            <ImpactGraph
-              graph={graph}
-              height={520}
-              layout={layoutMode}
-              colorMode={colorMode}
-              showEdgeLabels={showEdgeLabels}
-              weightEdges={weightEdges}
-            />
+            <LivingMap data={livingMapData} height={720} />
           </section>
 
           {/* Top systems table */}
