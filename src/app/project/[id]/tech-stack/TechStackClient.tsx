@@ -505,6 +505,12 @@ export function TechStackClient({ projectId }: Props) {
     void runTruthPass(candidates);
   }, [diffStats, inventoryDisplayByNorm, diagramSystems, projectId, intakeContext]);
 
+  const normalizeName = (value: unknown): string | null => {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  };
+
   // Overlap clusters derived from Truth Pass
   const overlapClusters: OverlapCluster[] = (() => {
     if (!truthRows || truthRows.length === 0) return [];
@@ -513,18 +519,15 @@ export function TechStackClient({ projectId }: Props) {
 
     for (const row of truthRows) {
       const names: string[] = [];
-      if (row.inventoryName && row.inventoryName.trim().length > 0) {
-        names.push(row.inventoryName.trim());
-      }
-      if (row.diagramName && row.diagramName.trim().length > 0) {
-        names.push(row.diagramName.trim());
-      }
-      if (!names.length && row.recommended && row.recommended.trim().length > 0) {
-        names.push(row.recommended.trim());
-      }
-      if (!names.length && row.norm) {
-        names.push(row.norm);
-      }
+      const inv = normalizeName((row as any).inventoryName);
+      const diagram = normalizeName((row as any).diagramName);
+      const rec = normalizeName((row as any).recommended);
+      const norm = normalizeName((row as any).norm);
+
+      if (inv) names.push(inv);
+      if (diagram) names.push(diagram);
+      if (!names.length && rec) names.push(rec);
+      if (!names.length && norm) names.push(norm);
 
       for (const name of names) {
         const lane = categorizeSystem(name);
