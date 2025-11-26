@@ -23,6 +23,7 @@ import { aiScoringEnabled } from "@/lib/featureFlags";
 import { AiAssistDrawer } from "@/components/capabilities/AiAssistDrawer";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { ModelBasisPanel } from "@/components/ui/ModelBasisPanel";
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
@@ -267,6 +268,7 @@ export default function ScoringPage() {
             <div className="text-xs text-slate-500">
               Inline scoring for each capability; adjust weights and filters as you go.
             </div>
+            <ModelBasisPanel modelName="capability_scoring" />
           </div>
           <div className="flex gap-2 text-xs text-slate-600">
             <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#ef4444" }} /> Gap</span>

@@ -1,0 +1,24 @@
+{
+  "modelName": "ROI_Calculation_v1.2",
+  "modelType": "Quantitative",
+  "purpose": "Calculates ROI based on savings vs cost of change for modernization or scenario deltas.",
+  "inputs": [
+    "Savings",
+    "Cost_of_Change",
+    "Cost_Pre",
+    "Cost_Post",
+    "Value_Pre",
+    "Value_Post"
+  ],
+  "formulaSummary": "ROI = ((Value_Post - Value_Pre) - (Cost_Post - Cost_Pre)) / max(Cost_Post - Cost_Pre, 0.01)",
+  "assumptions": [
+    "Savings include OpEx reduction plus efficiency yield",
+    "Value estimates are normalized 0-1 and mapped to financial equivalent",
+    "Cost deltas include CAPEX + OPEX across the period",
+    "If denominator is ~0, guard with small epsilon"
+  ],
+  "confidenceLevel": "Validated",
+  "referenceDocs": "/docs/features/d_015_scenario_studio_framework.md",
+  "author": "Fuxi",
+  "lastUpdated": "2025-11-26"
+}

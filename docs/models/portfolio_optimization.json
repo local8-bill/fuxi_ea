@@ -1,0 +1,22 @@
+{
+  "modelName": "Portfolio_Optimization_v1.0",
+  "modelType": "Quantitative",
+  "purpose": "Scores portfolio moves based on cost, risk, and strategic alignment from intake + tech stack.",
+  "inputs": [
+    "Cost_Profile",
+    "Risk_Exposure",
+    "Strategic_Alignment",
+    "Dependency_Density",
+    "Change_Posture"
+  ],
+  "formulaSummary": "Score = w1*(1 - Cost_Profile) + w2*(1 - Risk_Exposure) + w3*Strategic_Alignment - w4*Dependency_Density + posture_adjustment",
+  "assumptions": [
+    "Weights default to 0.3/0.3/0.3/0.1 until tuned",
+    "Change posture nudges posture_adjustment (aggressive vs conservative)",
+    "Inputs normalized 0-1 before aggregation"
+  ],
+  "confidenceLevel": "Validated",
+  "referenceDocs": "/docs/features/d_015_scenario_studio_framework.md",
+  "author": "Fuxi",
+  "lastUpdated": "2025-11-26"
+}

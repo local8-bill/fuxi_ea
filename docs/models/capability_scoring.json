@@ -1,0 +1,21 @@
+{
+  "modelName": "Capability_Scoring_v1.0",
+  "modelType": "Hybrid",
+  "purpose": "Blends maturity, opportunity, and tech fit into a composite score for capabilities (L1-L3).",
+  "inputs": [
+    "Maturity",
+    "Opportunity",
+    "TechFit",
+    "Weights"
+  ],
+  "formulaSummary": "Composite = blend(leaf scores, children composites, weights) with 0.5 parent/child blend.",
+  "assumptions": [
+    "Weights are normalized per project and persisted locally",
+    "Missing child scores fall back to parent composites",
+    "AI-assisted scores are tagged with rationale and confidence"
+  ],
+  "confidenceLevel": "Validated",
+  "referenceDocs": "/docs/features/d_012_d_013_capability_interaction_ai_scoring.md",
+  "author": "Fuxi",
+  "lastUpdated": "2025-11-26"
+}
