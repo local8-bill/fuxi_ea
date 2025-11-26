@@ -6,17 +6,21 @@ type Props = {
   open: boolean;
   name?: string;
   onClose: () => void;
-  onAccept: (score: number, rationale: string) => void;
+  onAccept: (score: number, rationale: string, meta?: { last_assessed?: string; assessment_mode?: string; confidence?: number }) => void;
 };
 
 export function AiAssistDrawer({ open, name, onClose, onAccept }: Props) {
   const [score, setScore] = React.useState(50);
   const [rationale, setRationale] = React.useState("");
+  const [confidence, setConfidence] = React.useState(75);
+  const [answers, setAnswers] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
     if (open) {
       setScore(50);
       setRationale("");
+      setConfidence(75);
+      setAnswers({});
     }
   }, [open]);
 
@@ -35,7 +39,22 @@ export function AiAssistDrawer({ open, name, onClose, onAccept }: Props) {
         </div>
 
         <div className="text-xs text-slate-600">
-          Mock conversational assessment. Provide a quick rationale and proposed score (0-100). AI score is only applied after you accept.
+          Mock conversational assessment. Provide quick notes; AI score is only applied after you accept.
+        </div>
+
+        <div className="space-y-2 text-xs text-slate-700">
+          {questions.map((q) => (
+            <label key={q.id} className="flex flex-col gap-1">
+              <span className="font-semibold">{q.prompt}</span>
+              <textarea
+                className="rounded-md border border-slate-200 px-2 py-2 text-sm"
+                rows={2}
+                value={answers[q.id] ?? ""}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                placeholder="Your answer..."
+              />
+            </label>
+          ))}
         </div>
 
         <label className="text-xs text-slate-700">
@@ -50,8 +69,20 @@ export function AiAssistDrawer({ open, name, onClose, onAccept }: Props) {
           />
         </label>
 
+        <label className="text-xs text-slate-700">
+          Confidence: <strong>{confidence}%</strong>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={confidence}
+            onChange={(e) => setConfidence(Number(e.target.value))}
+            className="w-full"
+          />
+        </label>
+
         <label className="text-xs text-slate-700 flex flex-col gap-1">
-          Rationale
+          Rationale / summary
           <textarea
             className="rounded-md border border-slate-200 px-2 py-2 text-sm"
             rows={4}
@@ -66,7 +97,12 @@ export function AiAssistDrawer({ open, name, onClose, onAccept }: Props) {
           <button
             className="btn btn-primary"
             onClick={() => {
-              onAccept(score, rationale);
+              const summary = rationale || Object.values(answers).filter(Boolean).join(" ");
+              onAccept(score, summary, {
+                assessment_mode: "ai_conversational",
+                confidence: confidence / 100,
+                last_assessed: new Date().toISOString(),
+              });
               onClose();
             }}
           >
@@ -77,3 +113,10 @@ export function AiAssistDrawer({ open, name, onClose, onAccept }: Props) {
     </div>
   );
 }
+
+const questions = [
+  { id: "process", prompt: "How standardized is this process today?" },
+  { id: "tooling", prompt: "Which tools support it? Any gaps?" },
+  { id: "integration", prompt: "How well does it integrate with upstream/downstream?" },
+  { id: "risk", prompt: "What risks or blockers exist?" },
+];

@@ -442,10 +442,16 @@ export default function ScoringPage() {
           open={!!aiTargetId}
           name={aiTargetName}
           onClose={() => setAiTargetId(null)}
-          onAccept={(score) => {
+          onAccept={(score, rationale, meta) => {
             if (!aiTargetId) return;
             const val = Math.max(0, Math.min(100, score)) / 100;
             updateScores(aiTargetId, { maturity: val, opportunity: val, techFit: val });
+            updateCapability(aiTargetId, {
+              ai_rationale: rationale,
+              confidence: meta?.confidence,
+              last_assessed: meta?.last_assessed,
+              assessment_mode: meta?.assessment_mode as any,
+            });
           }}
         />
       )}
