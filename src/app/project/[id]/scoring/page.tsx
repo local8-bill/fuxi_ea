@@ -105,6 +105,9 @@ export default function ScoringPage() {
   const totalDomains = domains.length;
   const avgScore =
     totalCaps === 0 ? 0 : Number((items.reduce((sum, c) => sum + c.score, 0) / totalCaps).toFixed(1));
+  const emptyState = sorted.length === 0;
+  const emptyTitle = "No capabilities yet";
+  const emptyBody = "Import a capability map or add an L1 to begin scoring.";
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
@@ -136,15 +139,15 @@ export default function ScoringPage() {
 
       <section className="card border border-slate-200 p-4 rounded-2xl">
         <div className="grid gap-2 sm:grid-cols-3 text-sm text-slate-700">
-          <span className="fx-pill justify-between">
+          <span className="fx-pill justify-between" aria-label="Total capabilities">
             <span>Capabilities</span>
             <strong>{totalCaps}</strong>
           </span>
-          <span className="fx-pill justify-between">
+          <span className="fx-pill justify-between" aria-label="Total domains">
             <span>Domains</span>
             <strong>{totalDomains}</strong>
           </span>
-          <span className="fx-pill justify-between">
+          <span className="fx-pill justify-between" aria-label="Average score">
             <span>Avg Score</span>
             <strong>{avgScore}</strong>
           </span>
@@ -230,15 +233,24 @@ export default function ScoringPage() {
           </div>
         </div>
 
-        {sorted.length === 0 ? (
-          <div className="card rounded-xl border border-slate-200 p-4">
-            <div className="font-medium mb-2">No capabilities yet</div>
-            <p className="text-sm opacity-70 mb-3">
-              Start by adding an L1 capability or importing a capability map.
-            </p>
-            <button className="btn btn-primary" onClick={() => setShowAddL1(true)}>
-              Add L1
-            </button>
+        {emptyState ? (
+          <div className="card rounded-xl border border-slate-200 p-6 flex flex-col items-start gap-3 bg-slate-50">
+            <div className="text-sm font-semibold">{emptyTitle}</div>
+            <p className="text-sm text-slate-600">{emptyBody}</p>
+            <div className="flex gap-2">
+              <button className="btn btn-primary" onClick={() => setShowAddL1(true)}>
+                Add L1 Capability
+              </button>
+              <button
+                className="btn"
+                onClick={() => {
+                  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+                  input?.click();
+                }}
+              >
+                Import CSV/JSON
+              </button>
+            </div>
           </div>
         ) : domainFilter === "All Domains" && grouped ? (
           <>
