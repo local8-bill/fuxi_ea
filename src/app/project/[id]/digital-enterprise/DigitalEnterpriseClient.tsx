@@ -288,6 +288,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                 systems: stats.systemsFuture ?? 0,
                 integrations: stats.integrationsFuture ?? 0,
               }}
+              roiSignal={roiSim.breakEvenMonth}
             />
           </section>
 

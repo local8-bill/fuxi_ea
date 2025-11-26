@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
+
 type Scenario = {
   label: string;
   systems: number;
   integrations: number;
-  roi: number;
-  risk: number;
+  roi: number; // lift points
+  risk: number; // delta points (negative is better)
   note?: string;
 };
 
@@ -13,7 +15,50 @@ function formatPct(n: number) {
   return `${n > 0 ? "+" : ""}${Math.round(n)}%`;
 }
 
-export function ScenarioComparePanel({ baseline }: { baseline?: { systems: number; integrations: number } }) {
+type Mode = "consolidate" | "modernize" | "optimize";
+
+function deriveTarget(current: Scenario, mode: Mode): Scenario {
+  switch (mode) {
+    case "consolidate":
+      return {
+        label: "Target (Consolidate)",
+        systems: Math.round(current.systems * 0.92),
+        integrations: Math.round(current.integrations * 1.05),
+        roi: 10,
+        risk: -6,
+        note: "Fewer systems, slightly denser integrations",
+      };
+    case "modernize":
+      return {
+        label: "Target (Modernize)",
+        systems: Math.round(current.systems * 0.97),
+        integrations: Math.round(current.integrations * 1.1),
+        roi: 14,
+        risk: -10,
+        note: "Retire legacy, add API-first flows",
+      };
+    case "optimize":
+    default:
+      return {
+        label: "Target (Optimize)",
+        systems: Math.round(current.systems * 0.98),
+        integrations: Math.round(current.integrations * 1.15),
+        roi: 18,
+        risk: -12,
+        note: "Flow-first, automation emphasis",
+      };
+  }
+}
+
+export function ScenarioComparePanel({
+  baseline,
+  roiSignal,
+}: {
+  baseline?: { systems: number; integrations: number };
+  roiSignal?: number | null; // e.g., break-even month or ROI lift from sim
+}) {
+  const [mode, setMode] = useState<Mode>("modernize");
+
   const current: Scenario = {
     label: "Current",
     systems: baseline?.systems ?? 42,
@@ -23,13 +68,11 @@ export function ScenarioComparePanel({ baseline }: { baseline?: { systems: numbe
     note: "Derived from latest Lucid ingestion",
   };
 
+  const baseTarget = deriveTarget(current, mode);
+  const roiAdjustment = roiSignal != null ? Math.max(4, 24 - roiSignal) : 0;
   const target: Scenario = {
-    label: "Target (Simulated)",
-    systems: Math.round(current.systems * 0.95),
-    integrations: Math.round(current.integrations * 1.08),
-    roi: 12,
-    risk: -8,
-    note: "Goal: consolidate low-value systems, improve flow",
+    ...baseTarget,
+    roi: baseTarget.roi + roiAdjustment,
   };
 
   const deltas = {
@@ -44,9 +87,10 @@ export function ScenarioComparePanel({ baseline }: { baseline?: { systems: numbe
           <div className="text-sm font-semibold text-slate-900">Scenario Compare (beta)</div>
           <div className="text-xs text-slate-500">Current vs Target view — placeholder until scenario API lands.</div>
         </div>
-        <button className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50">
-          Export snapshot
-        </button>
+        <div className="flex items-center gap-2">
+          <ModeToggle mode={mode} setMode={setMode} />
+          <ExportButtons current={current} target={target} />
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -60,6 +104,29 @@ export function ScenarioComparePanel({ baseline }: { baseline?: { systems: numbe
         <Delta label="ROI Lift" value={target.roi} suffix=" pts" />
         <Delta label="Risk Delta" value={target.risk} suffix=" pts" inverse />
       </div>
+    </div>
+  );
+}
+
+function ModeToggle({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+  const options: { key: Mode; label: string }[] = [
+    { key: "consolidate", label: "Consolidate" },
+    { key: "modernize", label: "Modernize" },
+    { key: "optimize", label: "Optimize" },
+  ];
+  return (
+    <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1 text-xs">
+      {options.map((opt) => (
+        <button
+          key={opt.key}
+          onClick={() => setMode(opt.key)}
+          className={`rounded-full px-3 py-1 font-semibold ${
+            mode === opt.key ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -103,6 +170,52 @@ function Delta({ label, value, suffix = "", inverse = false }: { label: string; 
         {formatPct(value)}
         {suffix}
       </div>
+    </div>
+  );
+}
+
+function ExportButtons({ current, target }: { current: Scenario; target: Scenario }) {
+  const exportJson = () => {
+    const payload = { generatedAt: new Date().toISOString(), current, target };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "scenario_compare.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCsv = () => {
+    const rows = [
+      ["Scenario", "Systems", "Integrations", "ROI Lift (pts)", "Risk Delta (pts)", "Note"],
+      [current.label, current.systems, current.integrations, current.roi, current.risk, current.note ?? ""],
+      [target.label, target.systems, target.integrations, target.roi, target.risk, target.note ?? ""],
+    ];
+    const csv = rows.map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "scenario_compare.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="inline-flex items-center gap-1">
+      <button
+        onClick={exportJson}
+        className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+      >
+        Export JSON
+      </button>
+      <button
+        onClick={exportCsv}
+        className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+      >
+        Export CSV
+      </button>
     </div>
   );
 }
