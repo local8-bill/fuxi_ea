@@ -15,6 +15,7 @@ import { ROIChart } from "@/components/ROIChart";
 import { EventLogPanel } from "@/components/EventLogPanel";
 import { useAIInsights } from "@/hooks/useAIInsights";
 import { NodeInsightPanel } from "@/components/NodeInsightPanel";
+import { ScenarioComparePanel } from "@/components/ScenarioComparePanel";
 
 interface TopSystemRaw {
   systemId?: string;
@@ -278,6 +279,16 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               currentMonth={roiSim.month}
             />
             <EventLogPanel events={roiSim.filteredEvents} />
+          </section>
+
+          {/* Scenario Compare (beta) */}
+          <section className="mt-12">
+            <ScenarioComparePanel
+              baseline={{
+                systems: stats.systemsFuture ?? 0,
+                integrations: stats.integrationsFuture ?? 0,
+              }}
+            />
           </section>
 
           {/* Top systems table */}
