@@ -1,5 +1,7 @@
 ## Directive D012-013: Capability Interaction + AI Scoring Layer
 
+**Status:** ✅ Completed
+
 ### Purpose & Scope
 Unify and extend the Capability Workspace (from D011) to introduce live interaction mechanics and AI-assisted scoring. The objective is to make the workspace both tactile and intelligent: users can directly manipulate their data (edit, drag, create) and optionally engage AI to reason through capability scoring via short, contextual conversations.
 
@@ -133,4 +135,3 @@ In `config/app.config.json`:
 - **Feature Branch:** `feat/d012_d013_interaction_ai_scoring`  
 - **Auth Mode:** Optional  
 - **Next Step:** Save to `/Users/local8_bill/Projects/fuxi_ea/docs/features/D012_D013_interaction_ai_scoring.md`
-
