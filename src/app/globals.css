@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --fx-bg: #f8fafc;
+  --fx-surface: #ffffff;
+  --fx-border: #e5e7eb;
+  --fx-text: #0f172a;
+  --fx-muted: #475569;
+  --fx-accent: #111827;
+  --fx-accent-2: #2563eb;
+  --fx-success: #22c55e;
+  --fx-warn: #eab308;
+  --fx-danger: #ef4444;
+  --fx-radius-sm: 8px;
+  --fx-radius-md: 12px;
+  --fx-shadow: 0 8px 24px rgba(0,0,0,.06);
+}
+
 * { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0;

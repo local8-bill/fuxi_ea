@@ -195,6 +195,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
             <button
               key={m}
               onClick={() => setMode(m)}
+              aria-label={`Set mode to ${m}`}
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
                 state.mode === m ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
               }`}
@@ -207,6 +208,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
         <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
           <button
             onClick={() => setLayout("flow")}
+            aria-label="Set layout to free"
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
               layout === "flow" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
             }`}
@@ -215,6 +217,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
           </button>
           <button
             onClick={() => setLayout("dagre")}
+            aria-label="Set layout to dagre"
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
               layout === "dagre" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
             }`}
@@ -235,6 +238,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode }: 
             <button
               key={key}
               onClick={() => setLayer(key)}
+              aria-label={`Show ${labelText} layer`}
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
                 layer === key ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
               }`}

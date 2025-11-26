@@ -242,12 +242,14 @@ function ExportButtons({ current, target }: { current: Scenario; target: Scenari
       <button
         onClick={exportJson}
         className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+        aria-label="Export scenario comparison as JSON"
       >
         Export JSON
       </button>
       <button
         onClick={exportCsv}
         className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+        aria-label="Export scenario comparison as CSV"
       >
         Export CSV
       </button>
