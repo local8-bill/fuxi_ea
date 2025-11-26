@@ -71,6 +71,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const graph = useImpactGraph();
   const aiInsights = useAIInsights(graph.nodes);
   const livingMapData: LivingMapData = useMemo(() => {
@@ -240,21 +241,33 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           </section>
 
           {/* Top systems table */}
-          <section className="mt-12">
-            <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
-            <p className="text-xs text-gray-500 mb-4">
-              Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
-            </p>
-            <LivingMap
-              data={livingMapData}
-              height={720}
-              selectedNodeId={selectedNodeId ?? undefined}
-              onSelectNode={setSelectedNodeId}
-            />
-            <div className="mt-4 flex flex-col gap-3">
-              <div className="flex items-center gap-3 text-xs text-slate-600">
-                <label className="flex items-center gap-2">
-                  <span className="font-semibold text-slate-800">Timeline (months)</span>
+        <section className="mt-12">
+          <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
+          </p>
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+            <label className="flex items-center gap-2">
+              <span className="text-slate-700 font-semibold">Search</span>
+              <input
+                className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-slate-900 focus:outline-none"
+                placeholder="System or domain"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </label>
+          </div>
+          <LivingMap
+            data={livingMapData}
+            height={720}
+            selectedNodeId={selectedNodeId ?? undefined}
+            onSelectNode={setSelectedNodeId}
+            searchTerm={search}
+          />
+          <div className="mt-4 flex flex-col gap-3">
+            <div className="flex items-center gap-3 text-xs text-slate-600">
+              <label className="flex items-center gap-2">
+                <span className="font-semibold text-slate-800">Timeline (months)</span>
                   <input
                     type="range"
                     min={0}
