@@ -91,15 +91,15 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const edgeKindColor = (kind?: string) => {
     switch (kind) {
       case "api":
-        return "#2563eb";
+        return "#a3bffa";
       case "data":
-        return "#22c55e";
+        return "#bae6fd";
       case "workflow":
-        return "#9333ea";
+        return "#ddd6fe";
       case "manual":
-        return "#94a3b8";
+        return "#e2e8f0";
       default:
-        return "#94a3b8";
+        return "#cbd5e1";
     }
   };
 
@@ -107,12 +107,13 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     id: e.id,
     source: e.source,
     target: e.target,
-    label: e.weight ? `${e.weight.toFixed(1)} load` : undefined,
+    label: undefined,
     data: { kind: e.kind },
     style: {
-      strokeWidth: Math.min(8, Math.max(2, (e.weight ?? 1) * 1.2)),
+      strokeWidth: 1.6,
       stroke: edgeKindColor(e.kind),
-      opacity: 0.9,
+      opacity: 0.7,
+      strokeDasharray: "5 4",
     },
   }));
 
@@ -160,13 +161,16 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     const matchesSearch =
       normalizedSearch.length > 1 &&
       (meta?.label?.toLowerCase().includes(normalizedSearch) || meta?.domain?.toLowerCase().includes(normalizedSearch));
+    const baseBorder = "#e2e8f0";
+    const highlightBorder = "#cbd5e1";
     return {
       ...n,
       style: {
         ...n.style,
-        border: isSelected ? `2px solid ${color}` : `1px solid ${color}`,
-        boxShadow: isSelected || matchesSearch ? `0 10px 24px ${color}55` : `0 6px 14px ${color}33`,
-        opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.6 : 1,
+        border: isSelected || matchesSearch ? `2px solid ${highlightBorder}` : `1px solid ${baseBorder}`,
+        boxShadow: isSelected || matchesSearch ? "0 4px 12px rgba(15,23,42,0.08)" : "0 2px 8px rgba(15,23,42,0.06)",
+        opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.7 : 1,
+        background: "#ffffff",
       },
       data: {
         ...n.data,
@@ -195,17 +199,16 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   };
 
   const styledEdges = edges.map((e) => {
-    const edgeMeta = simData.edges.find((m) => m.id === e.id);
-    const baseWidth = Math.min(10, Math.max(2, (edgeMeta?.weight ?? 1) * 1.2));
-    const activeWidth = layer === "integration" ? baseWidth * 1.25 : baseWidth;
-    const stroke = layer === "integration" ? "#2563eb" : edgeKindColor((e as any).data?.kind);
+    const stroke = edgeKindColor((e as any).data?.kind);
+    const baseWidth = layer === "integration" ? 2 : 1.6;
     return {
       ...e,
       style: {
         ...(e.style || {}),
-        strokeWidth: activeWidth,
+        strokeWidth: baseWidth,
         stroke,
-        opacity: layer === "disposition" ? 0.7 : 0.9,
+        opacity: 0.7,
+        strokeDasharray: "5 4",
       },
     };
   });
