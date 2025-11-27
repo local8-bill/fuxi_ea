@@ -24,13 +24,13 @@ type LivingMapProps = {
 };
 
 const COLORS = {
-  healthy: "#0ea5e9",
-  warning: "#fbbf24",
+  healthy: "#2563eb",
+  warning: "#f59e0b",
   danger: "#f87171",
   neutral: "#94a3b8",
   disposition: {
     keep: "#22c55e",
-    modernize: "#2563eb",
+    modernize: "#0ea5e9",
     replace: "#f97316",
     retire: "#ef4444",
   },
@@ -41,6 +41,7 @@ type LayerMode = "stack" | "domain" | "integration" | "disposition" | "roi" | "a
 export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, searchTerm }: LivingMapProps) {
   const { data: simData, state, setMode, toggleNode } = useSimulationEngine(data);
   const [layout, setLayout] = useState<"flow" | "dagre">("dagre");
+  const [direction, setDirection] = useState<"LR" | "TB">("TB");
   const [layer, setLayer] = useState<LayerMode>("stack");
 
   const domainColors = useMemo(() => {
@@ -93,13 +94,13 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
       case "api":
         return "#2563eb";
       case "data":
-        return "#22c55e";
+        return "#16a34a";
       case "workflow":
-        return "#9333ea";
+        return "#a855f7";
       case "manual":
         return "#94a3b8";
       default:
-        return "#94a3b8";
+        return "#cbd5e1";
     }
   };
 
@@ -107,12 +108,16 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     id: e.id,
     source: e.source,
     target: e.target,
-    label: e.weight ? `${e.weight.toFixed(1)} load` : undefined,
+    label: undefined,
     data: { kind: e.kind },
+    type: "straight",
     style: {
-      strokeWidth: Math.min(8, Math.max(2, (e.weight ?? 1) * 1.2)),
+      strokeWidth: 1.6,
       stroke: edgeKindColor(e.kind),
-      opacity: 0.9,
+      opacity: 0.8,
+      strokeDasharray: "5 4",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
     },
   }));
 
@@ -121,10 +126,10 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
 
   const laidOutNodes = useMemo(() => {
     if (layout === "dagre") {
-      return applyDagreLayout(nodes, edges, "LR").nodes;
+      return applyDagreLayout(nodes, edges, direction).nodes;
     }
     return nodes;
-  }, [layout, nodes, edges]);
+  }, [layout, nodes, edges, direction]);
 
   const normalizedSearch = (searchTerm ?? "").toLowerCase();
 
@@ -160,13 +165,18 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     const matchesSearch =
       normalizedSearch.length > 1 &&
       (meta?.label?.toLowerCase().includes(normalizedSearch) || meta?.domain?.toLowerCase().includes(normalizedSearch));
+    const baseBorder = "#e2e8f0";
+    const highlightBorder = "#cbd5e1";
+    const useColor = layer === "stack" || layer === "integration" ? baseBorder : color;
+    const shadowColor = layer === "stack" || layer === "integration" ? "rgba(15,23,42,0.06)" : `${color}33`;
     return {
       ...n,
       style: {
         ...n.style,
-        border: isSelected ? `2px solid ${color}` : `1px solid ${color}`,
-        boxShadow: isSelected || matchesSearch ? `0 10px 24px ${color}55` : `0 6px 14px ${color}33`,
-        opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.6 : 1,
+        border: isSelected || matchesSearch ? `2px solid ${highlightBorder}` : `1px solid ${useColor}`,
+        boxShadow: isSelected || matchesSearch ? `0 4px 12px ${shadowColor}` : `0 2px 8px ${shadowColor}`,
+        opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.7 : 1,
+        background: "#ffffff",
       },
       data: {
         ...n.data,
@@ -195,17 +205,19 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   };
 
   const styledEdges = edges.map((e) => {
-    const edgeMeta = simData.edges.find((m) => m.id === e.id);
-    const baseWidth = Math.min(10, Math.max(2, (edgeMeta?.weight ?? 1) * 1.2));
-    const activeWidth = layer === "integration" ? baseWidth * 1.25 : baseWidth;
-    const stroke = layer === "integration" ? "#2563eb" : edgeKindColor((e as any).data?.kind);
+    const stroke = edgeKindColor((e as any).data?.kind);
+    const baseWidth = layer === "integration" ? 2 : 1.6;
     return {
       ...e,
+      type: "straight",
       style: {
         ...(e.style || {}),
-        strokeWidth: activeWidth,
+        strokeWidth: baseWidth,
         stroke,
-        opacity: layer === "disposition" ? 0.7 : 0.9,
+        opacity: 0.8,
+        strokeDasharray: "5 4",
+        strokeLinecap: "round" as const,
+        strokeLinejoin: "round" as const,
       },
     };
   });
@@ -251,6 +263,29 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
             Dagre
           </button>
         </div>
+
+        {layout === "dagre" && (
+          <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+            <button
+              onClick={() => setDirection("TB")}
+              aria-label="Top-down layout"
+              className={`${btnBase} ${
+                direction === "TB" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Vertical
+            </button>
+            <button
+              onClick={() => setDirection("LR")}
+              aria-label="Left-right layout"
+              className={`${btnBase} ${
+                direction === "LR" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Horizontal
+            </button>
+          </div>
+        )}
 
         <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
           {([
@@ -354,6 +389,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
           fitView
+          defaultEdgeOptions={{ type: "straight" }}
           proOptions={{ hideAttribution: true }}
         >
           <Controls />
