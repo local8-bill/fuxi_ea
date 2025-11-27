@@ -1,0 +1,31 @@
+App Name,Vendor,Domain,Disposition,Owner,Status
+Zendesk,Microsoft,HR,,Data Platform,Legacy
+Zendesk,AWS,Security,Modernize,HR,Under Review
+Salesforce CRM,Msoft,Sales,Retire,Finance Ops,Under Review
+Slack,Workday,Data,Retire,Sales,Active
+Confluence,Atlassian,Operations,,Sales,Active
+Zoom,Workday,Data,Replace,Global IT,Legacy
+PowerBI,SAP,Data,Keep,HR,Legacy
+GitHub,Msoft,Security,Retire,Finance Ops,Legacy
+Trello,Microsoft,Operations,Keep,Finance Ops,Active
+Zendesk,SAP,Operations,Keep,Finance Ops,Active
+Slack,ServiceNow,Data,Replace,HR,Pilot
+Salesforce CRM,Workday,Sales,Keep,Finance Ops,Pilot
+ServiceNow,SAP,Operations,Replace,HR,Under Review
+AWS S3,Atlassian,Finance,,Sales,Pilot
+Salesforce CRM,Workday,Security,Replace,Sales,Under Review
+AWS Lambda,Atlassian,Sales,Replace,Global IT,Active
+Alteryx,Msoft,IT,,Sales,Pilot
+Google Workspace,Workday,Security,Modernize,Finance Ops,Under Review
+PowerBI,MSFT,Data,Replace,Sales,Pilot
+Zendesk,GCP,IT,,Finance Ops,Under Review
+GitLab,GCP,Finance,Keep,HR,Active
+Monday.com,MSFT,Data,Replace,Global IT,Active
+Alteryx,ServiceNow,HR,,Finance Ops,Pilot
+Monday.com,Salesforce,Data,Keep,HR,Under Review
+Zoom,Atlassian,Security,Replace,Sales,Active
+GitHub,Microsoft,Operations,Keep,HR,Legacy
+Databricks,GCP,Operations,Replace,Global IT,Pilot
+Notion,Oracle,Data,,Finance Ops,Active
+Azure AD,AWS,Security,,Sales,Pilot
+Trello,Workday,Finance,Modernize,Sales,Under Review
