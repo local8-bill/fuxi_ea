@@ -9,6 +9,7 @@ import {
   type ProjectIntake,
   type PortfolioSignals,
 } from "@/domain/services/portfolioEngine";
+import { useTelemetry } from "@/hooks/useTelemetry";
 
 function loadProjectIntakeFromLocalStorage(
   projectId: string,
@@ -45,6 +46,7 @@ export default function PortfolioPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const projectId = params?.id ?? "unknown";
+  const telemetry = useTelemetry("portfolio", { projectId });
 
   const [signals, setSignals] = useState<PortfolioSignals | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -54,7 +56,16 @@ export default function PortfolioPage() {
     const nextSignals = buildPortfolioSignalsFromIntake(intake);
     setSignals(nextSignals);
     setLoaded(true);
+    telemetry.log("portfolio_view", { hasIntake: !!intake });
   }, [projectId]);
+
+  useEffect(() => {
+    if (!signals) return;
+    telemetry.log("portfolio_signals_ready", {
+      hasGoals: signals.goalSummary !== "No primary portfolio goals captured yet.",
+      goals: signals.goalSummary,
+    });
+  }, [signals, telemetry]);
 
   const hasIntake =
     !!signals &&

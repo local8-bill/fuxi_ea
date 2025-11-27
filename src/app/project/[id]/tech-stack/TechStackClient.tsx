@@ -11,6 +11,7 @@ import {
 } from "@/lib/api/digitalEnterprise";
 import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
 import { normalizeSystemName } from "@/domain/services/systemNormalization";
+import { useTelemetry } from "@/hooks/useTelemetry";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -207,6 +208,7 @@ function loadProjectIntake(projectId: string): ProjectIntake | null {
 }
 
 export function TechStackClient({ projectId }: Props) {
+  const telemetry = useTelemetry("tech_stack", { projectId });
   // Inventory / artifacts
   const [inventoryFileName, setInventoryFileName] = useState<string | null>(null);
   const [lucidFileName, setLucidFileName] = useState<string | null>(null);
@@ -260,16 +262,24 @@ export function TechStackClient({ projectId }: Props) {
     let cancelled = false;
 
     async function loadDEAndSystems() {
+      telemetry.log("tech_stack_view", { projectId });
       setLoadingDE(true);
       setDeError(null);
       setDiffError(null);
 
       try {
+        const started = performance.now();
         const stats = await fetchDigitalEnterpriseStats(projectId);
         if (cancelled) return;
 
         if (stats) {
           setDeStats(stats);
+          telemetry.log("tech_stack_stats", {
+            systems: stats.systemsFuture,
+            integrations: stats.integrationsFuture,
+            domains: stats.domainsDetected,
+            duration_ms: Math.round(performance.now() - started),
+          });
         } else {
           setDeStats(null);
         }
@@ -279,6 +289,7 @@ export function TechStackClient({ projectId }: Props) {
           setDeError("Failed to load digital enterprise preview.");
           setDeStats(null);
         }
+        telemetry.log("tech_stack_stats_error", { message: (err as Error)?.message });
       } finally {
         if (!cancelled) {
           setLoadingDE(false);
@@ -304,6 +315,7 @@ export function TechStackClient({ projectId }: Props) {
             setDiffError("Failed to load diagram systems for diff view.");
             setDiagramSystems([]);
           }
+          telemetry.log("tech_stack_diff_error", { status: res.status, body: text });
           return;
         }
         const json = await res.json();

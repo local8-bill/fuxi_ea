@@ -1,0 +1,31 @@
+import { z } from "zod";
+
+export const workspaceEnum = z.enum([
+  "intake",
+  "tech_stack",
+  "digital_enterprise",
+  "portfolio",
+  "insights",
+]);
+
+export const eventType = z.string().min(1);
+
+export const TelemetryEventSchema = z.object({
+  session_id: z.string().min(1),
+  project_id: z.string().optional(),
+  workspace_id: workspaceEnum,
+  event_type: eventType,
+  timestamp: z.string().optional(),
+  data: z.record(z.any()).optional(),
+  simplification_score: z.number().optional(),
+});
+
+export type TelemetryEvent = z.infer<typeof TelemetryEventSchema>;
+
+export function normalizeTelemetryPayload(payload: Partial<TelemetryEvent>): TelemetryEvent {
+  const withDefaults = {
+    timestamp: new Date().toISOString(),
+    ...payload,
+  };
+  return TelemetryEventSchema.parse(withDefaults);
+}

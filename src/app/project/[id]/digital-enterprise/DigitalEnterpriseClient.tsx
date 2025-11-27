@@ -16,6 +16,7 @@ import { EventLogPanel } from "@/components/EventLogPanel";
 import { useAIInsights } from "@/hooks/useAIInsights";
 import { NodeInsightPanel } from "@/components/NodeInsightPanel";
 import { ScenarioComparePanel } from "@/components/ScenarioComparePanel";
+import { useTelemetry } from "@/hooks/useTelemetry";
 
 interface TopSystemRaw {
   systemId?: string;
@@ -65,6 +66,7 @@ function formatNumber(n: number | undefined | null): string {
 }
 
 export function DigitalEnterpriseClient({ projectId }: Props) {
+  const telemetry = useTelemetry("digital_enterprise", { projectId });
   const [stats, setStats] = useState<DigitalEnterpriseStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,9 +113,14 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const roiSim = useROISimulation();
 
   useEffect(() => {
+    telemetry.log("workspace_view", { projectId });
+  }, [projectId, telemetry]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadStats() {
+      const started = performance.now();
       if (!projectId) {
         setError("Missing project ID.");
         setLoading(false);
@@ -138,6 +145,10 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             setError("Failed to load digital enterprise metrics.");
             setStats(null);
           }
+          telemetry.log("graph_load_error", {
+            status: res.status,
+            body: text,
+          });
           return;
         }
 
@@ -145,6 +156,12 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
         if (!cancelled) {
           setStats(json);
           setError(null);
+          telemetry.log("graph_load", {
+            systems: json.systemsFuture,
+            integrations: json.integrationsFuture,
+            domains: json.domainsDetected,
+            duration_ms: Math.round(performance.now() - started),
+          });
         }
       } catch (err: any) {
         console.error("[DE-PAGE] Error loading stats", err);
@@ -152,6 +169,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           setError("Failed to load digital enterprise metrics.");
           setStats(null);
         }
+        telemetry.log("graph_load_error", { message: (err as Error)?.message });
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -181,6 +199,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     // Backend traversal will replace this logic later.
     const upstreamCount = Math.max(0, Math.floor(degree / 2));
     const downstreamCount = Math.max(0, degree - upstreamCount);
+    telemetry.log("node_click", { name, degree });
 
     setImpact({
       systemName: name,

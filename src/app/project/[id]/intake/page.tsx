@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { Card } from "@/components/ui/Card";
+import { useTelemetry } from "@/hooks/useTelemetry";
 
 type AggressionLevel = "conservative" | "balanced" | "bold";
 
@@ -53,6 +54,8 @@ const AGGRESSION_LEVELS: { id: AggressionLevel; label: string; description: stri
 export default function ProjectIntakePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const telemetry = useTelemetry("intake", { projectId: params?.id });
+  const startedRef = useRef(false);
 
   const projectId =
     typeof params?.id === "string"
@@ -65,13 +68,20 @@ export default function ProjectIntakePage() {
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
   const [selectedAggression, setSelectedAggression] =
     useState<AggressionLevel | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   function toggleDriver(driver: string) {
+    startedRef.current = true;
     setSelectedDrivers((prev) =>
       prev.includes(driver)
         ? prev.filter((d) => d !== driver)
         : [...prev, driver],
     );
+    telemetry.log("intake_driver_toggle", {
+      driver,
+      active: !selectedDrivers.includes(driver),
+    });
   }
 
   function handleContinue() {
@@ -82,22 +92,56 @@ export default function ProjectIntakePage() {
       aggression: selectedAggression,
     };
 
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(
-          `fuxi:intake:${projectId}`,
-          JSON.stringify(intake),
-        );
-      } catch (err) {
-        console.error("[INTAKE] Failed to persist intake context", err);
-      }
-    }
+    fetch(`/api/intake/${encodeURIComponent(projectId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(intake),
+    }).catch((err) => {
+      console.error("[INTAKE] Failed to persist intake context", err);
+    });
 
+    telemetry.log("intake_continue", {
+      industry: selectedIndustry,
+      drivers: selectedDrivers,
+      aggression: selectedAggression,
+    });
     router.push(`/project/${projectId}/tech-stack`);
   }
 
   const canContinue =
     !!selectedIndustry && selectedDrivers.length > 0 && !!selectedAggression;
+
+  useEffect(() => {
+    telemetry.log("intake_view", { projectId });
+  }, [projectId, telemetry]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadIntake() {
+      try {
+        const res = await fetch(`/api/intake/${encodeURIComponent(projectId)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Load failed ${res.status}`);
+        const json = await res.json();
+        if (cancelled) return;
+        if (json?.intake) {
+          setSelectedIndustry(json.intake.industry ?? null);
+          setSelectedDrivers(Array.isArray(json.intake.drivers) ? json.intake.drivers : []);
+          setSelectedAggression(json.intake.aggression ?? null);
+        }
+        setLoadError(null);
+      } catch (err: any) {
+        if (!cancelled) {
+          setLoadError("Failed to load saved intake. You can still proceed.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    loadIntake();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   return (
     <div className="px-8 py-10 max-w-5xl mx-auto">
@@ -121,7 +165,11 @@ export default function ProjectIntakePage() {
               <button
                 key={ind}
                 type="button"
-                onClick={() => setSelectedIndustry(ind)}
+                onClick={() => {
+                  startedRef.current = true;
+                  setSelectedIndustry(ind);
+                  telemetry.log("intake_industry_select", { industry: ind });
+                }}
                 className={
                   "w-full rounded-full border px-3 py-1.5 text-[0.75rem] text-left " +
                   (selectedIndustry === ind
@@ -180,7 +228,11 @@ export default function ProjectIntakePage() {
                 <button
                   key={lvl.id}
                   type="button"
-                  onClick={() => setSelectedAggression(lvl.id)}
+                  onClick={() => {
+                    startedRef.current = true;
+                    setSelectedAggression(lvl.id);
+                    telemetry.log("intake_aggression_select", { level: lvl.id });
+                  }}
                   className={
                     "w-full rounded-xl border px-3 py-2 text-left text-[0.75rem] " +
                     (active

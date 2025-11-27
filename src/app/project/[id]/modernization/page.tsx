@@ -1,12 +1,15 @@
 "use client";
 
+import React from "react";
 import { useParams } from "next/navigation";
 import { useModernizationArtifacts } from "@/controllers/useModernizationArtifacts";
 import { ModernizationImportPanel } from "@/features/tech-stack/ModernizationImportPanel";
 import { useModernizationSummary } from "@/features/tech-stack/useModernizationSummary";
+import { useTelemetry } from "@/hooks/useTelemetry";
 
 export default function ModernizationPage() {
   const params = useParams<{ id: string }>();
+  const telemetry = useTelemetry("tech_stack", { projectId: params.id });
   const {
     artifacts,
     inventoryRows,
@@ -19,6 +22,30 @@ export default function ModernizationPage() {
   } = useModernizationArtifacts(params.id);
 
   const summary = useModernizationSummary();
+
+  React.useEffect(() => {
+    telemetry.log("tech_stack_view", {
+      artifacts: artifacts?.length ?? 0,
+      inventory: inventoryRows?.length ?? 0,
+      normalized: normalizedApps?.length ?? 0,
+    });
+  }, [telemetry, artifacts?.length, inventoryRows?.length, normalizedApps?.length]);
+
+  const handleUploadLucid = async (file: File) => {
+    const start = performance.now();
+    telemetry.log("upload_start", { fileType: file.type || "csv", size: file.size });
+    try {
+      await uploadLucid(file);
+      telemetry.log("upload_complete", {
+        fileType: file.type || "csv",
+        size: file.size,
+        duration_ms: Math.round(performance.now() - start),
+      });
+    } catch (err) {
+      telemetry.log("upload_error", { message: (err as Error)?.message });
+      throw err;
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -38,7 +65,7 @@ export default function ModernizationPage() {
         error={error}
         onUploadInventory={uploadInventory}
         onUploadDiagram={uploadDiagram}
-        onUploadLucid={uploadLucid}
+        onUploadLucid={handleUploadLucid}
       />
     </div>
   );
