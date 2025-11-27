@@ -41,6 +41,7 @@ type LayerMode = "stack" | "domain" | "integration" | "disposition" | "roi" | "a
 export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, searchTerm }: LivingMapProps) {
   const { data: simData, state, setMode, toggleNode } = useSimulationEngine(data);
   const [layout, setLayout] = useState<"flow" | "dagre">("dagre");
+  const [direction, setDirection] = useState<"LR" | "TB">("TB");
   const [layer, setLayer] = useState<LayerMode>("stack");
 
   const domainColors = useMemo(() => {
@@ -91,13 +92,13 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const edgeKindColor = (kind?: string) => {
     switch (kind) {
       case "api":
-        return "#a3bffa";
+        return "#9db5ff";
       case "data":
-        return "#bae6fd";
+        return "#93e5bb";
       case "workflow":
-        return "#ddd6fe";
+        return "#c9b6ff";
       case "manual":
-        return "#e2e8f0";
+        return "#cbd5e1";
       default:
         return "#cbd5e1";
     }
@@ -109,11 +110,14 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     target: e.target,
     label: undefined,
     data: { kind: e.kind },
+    type: "straight",
     style: {
       strokeWidth: 1.6,
       stroke: edgeKindColor(e.kind),
-      opacity: 0.7,
+      opacity: 0.8,
       strokeDasharray: "5 4",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
     },
   }));
 
@@ -122,10 +126,10 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
 
   const laidOutNodes = useMemo(() => {
     if (layout === "dagre") {
-      return applyDagreLayout(nodes, edges, "LR").nodes;
+      return applyDagreLayout(nodes, edges, direction).nodes;
     }
     return nodes;
-  }, [layout, nodes, edges]);
+  }, [layout, nodes, edges, direction]);
 
   const normalizedSearch = (searchTerm ?? "").toLowerCase();
 
@@ -203,12 +207,15 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     const baseWidth = layer === "integration" ? 2 : 1.6;
     return {
       ...e,
+      type: "straight",
       style: {
         ...(e.style || {}),
         strokeWidth: baseWidth,
         stroke,
-        opacity: 0.7,
+        opacity: 0.8,
         strokeDasharray: "5 4",
+        strokeLinecap: "round" as const,
+        strokeLinejoin: "round" as const,
       },
     };
   });
@@ -254,6 +261,29 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
             Dagre
           </button>
         </div>
+
+        {layout === "dagre" && (
+          <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+            <button
+              onClick={() => setDirection("TB")}
+              aria-label="Top-down layout"
+              className={`${btnBase} ${
+                direction === "TB" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Vertical
+            </button>
+            <button
+              onClick={() => setDirection("LR")}
+              aria-label="Left-right layout"
+              className={`${btnBase} ${
+                direction === "LR" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Horizontal
+            </button>
+          </div>
+        )}
 
         <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
           {([
@@ -357,6 +387,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
           fitView
+          defaultEdgeOptions={{ type: "straight" }}
           proOptions={{ hideAttribution: true }}
         >
           <Controls />
