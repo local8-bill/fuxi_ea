@@ -257,6 +257,13 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               />
             </label>
           </div>
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+            <span className="font-semibold text-slate-700">Edge kinds:</span>
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#2563eb" }} />API</span>
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />Data</span>
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />Workflow</span>
+            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />Manual/Other</span>
+          </div>
           <LivingMap
             data={livingMapData}
             height={720}
