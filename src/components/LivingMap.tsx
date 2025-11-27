@@ -24,13 +24,13 @@ type LivingMapProps = {
 };
 
 const COLORS = {
-  healthy: "#0ea5e9",
-  warning: "#fbbf24",
+  healthy: "#2563eb",
+  warning: "#f59e0b",
   danger: "#f87171",
   neutral: "#94a3b8",
   disposition: {
     keep: "#22c55e",
-    modernize: "#2563eb",
+    modernize: "#0ea5e9",
     replace: "#f97316",
     retire: "#ef4444",
   },
@@ -92,13 +92,13 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const edgeKindColor = (kind?: string) => {
     switch (kind) {
       case "api":
-        return "#9db5ff";
+        return "#2563eb";
       case "data":
-        return "#93e5bb";
+        return "#16a34a";
       case "workflow":
-        return "#c9b6ff";
+        return "#a855f7";
       case "manual":
-        return "#cbd5e1";
+        return "#94a3b8";
       default:
         return "#cbd5e1";
     }
@@ -167,12 +167,14 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
       (meta?.label?.toLowerCase().includes(normalizedSearch) || meta?.domain?.toLowerCase().includes(normalizedSearch));
     const baseBorder = "#e2e8f0";
     const highlightBorder = "#cbd5e1";
+    const useColor = layer === "stack" || layer === "integration" ? baseBorder : color;
+    const shadowColor = layer === "stack" || layer === "integration" ? "rgba(15,23,42,0.06)" : `${color}33`;
     return {
       ...n,
       style: {
         ...n.style,
-        border: isSelected || matchesSearch ? `2px solid ${highlightBorder}` : `1px solid ${baseBorder}`,
-        boxShadow: isSelected || matchesSearch ? "0 4px 12px rgba(15,23,42,0.08)" : "0 2px 8px rgba(15,23,42,0.06)",
+        border: isSelected || matchesSearch ? `2px solid ${highlightBorder}` : `1px solid ${useColor}`,
+        boxShadow: isSelected || matchesSearch ? `0 4px 12px ${shadowColor}` : `0 2px 8px ${shadowColor}`,
         opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.7 : 1,
         background: "#ffffff",
       },
