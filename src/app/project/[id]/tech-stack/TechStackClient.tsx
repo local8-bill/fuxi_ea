@@ -76,9 +76,22 @@ interface OverlapCluster {
   systems: string[];
 }
 
+type ViewStage = "upload" | "table" | "graph";
+
 function formatNumber(n: number | undefined | null): string {
   if (n == null || Number.isNaN(n)) return "0";
   return n.toLocaleString();
+}
+
+function computeSimplificationScore(diff: DiffStats | null): number {
+  if (!diff) return 0.25;
+  const total = diff.inventoryCount + diff.diagramCount;
+  if (total === 0) return 0.25;
+  const overlapRatio = diff.overlapCount / Math.max(1, total);
+  const uniquePenalty =
+    (diff.inventoryOnlyNorms.length + diff.diagramOnly.length) / Math.max(1, total);
+  const score = overlapRatio * 0.7 + (1 - uniquePenalty) * 0.3;
+  return Math.min(1, Math.max(0, score));
 }
 
 function normalizeForCompare(value: string | null | undefined): string {
@@ -215,6 +228,9 @@ export function TechStackClient({ projectId }: Props) {
   const [lucidFileName, setLucidFileName] = useState<string | null>(null);
   const [inventoryRows, setInventoryRows] = useState<number>(0);
   const [normalizedApps, setNormalizedApps] = useState<number>(0);
+  const [viewStage, setViewStage] = useState<ViewStage>("upload");
+  const [assistMessage, setAssistMessage] = useState<string | null>(null);
+  const [idleNotice, setIdleNotice] = useState<boolean>(false);
   const [invStats, setInvStats] = useState<InventoryStatsLocal | null>(null);
   const [uploadingInv, setUploadingInv] = useState<boolean>(false);
   const [invError, setInvError] = useState<string | null>(null);
@@ -327,6 +343,20 @@ export function TechStackClient({ projectId }: Props) {
     setIntakeContext(ctx);
     loadDEAndSystems();
   }, [projectId, loadDEAndSystems]);
+
+  // Idle assist prompt to nudge uploads/normalization
+  useEffect(() => {
+    setIdleNotice(false);
+    setAssistMessage(null);
+    const timer = window.setTimeout(() => {
+      setIdleNotice(true);
+      setAssistMessage(
+        "Upload an inventory CSV and a Lucid CSV to unlock the table and graph views.",
+      );
+      telemetry.log("tech_stack_idle", { idle_ms: 45000 });
+    }, 45000);
+    return () => window.clearTimeout(timer);
+  }, [inventoryRows, diagramSystems.length, diffStats, telemetry]);
 
   // Compute diff whenever inventory systems or diagram systems change
   useEffect(() => {
@@ -535,6 +565,20 @@ export function TechStackClient({ projectId }: Props) {
       .filter((cluster) => cluster.systems.length > 1);
   })();
 
+  const simplificationScore = computeSimplificationScore(diffStats);
+  const simplificationLabel =
+    simplificationScore >= 0.8
+      ? "Clean ecosystem"
+      : simplificationScore >= 0.5
+      ? "Mostly aligned"
+      : "Needs normalization";
+  const simplificationTone =
+    simplificationScore >= 0.8
+      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+      : simplificationScore >= 0.5
+      ? "bg-amber-50 text-amber-800 border-amber-200"
+      : "bg-rose-50 text-rose-700 border-rose-200";
+
   // Inventory upload
   async function handleInventoryUpload(file: File) {
     setInventoryFileName(file.name);
@@ -584,6 +628,8 @@ export function TechStackClient({ projectId }: Props) {
         rowCount: stats.rowCount,
         uniqueSystems: stats.uniqueSystems,
       });
+      setViewStage("table");
+      telemetry.log("upload_complete", { kind: "inventory" });
     } catch (err: any) {
       console.error("[TECH-STACK] Inventory upload failed (client parse)", err);
       setInvError(err?.message ?? "Inventory upload failed.");
@@ -604,6 +650,8 @@ export function TechStackClient({ projectId }: Props) {
     try {
       const resp = await uploadLucidCsv(projectId, file);
       console.log("[TECH-STACK] Lucid upload success", resp);
+      setViewStage("graph");
+      telemetry.log("upload_complete", { kind: "lucid" });
 
       const stats = await fetchDigitalEnterpriseStats(projectId);
       if (stats) {
@@ -676,6 +724,45 @@ export function TechStackClient({ projectId }: Props) {
           {deError && <ErrorBanner message={deError} onRetry={loadDEAndSystems} />}
           {diffError && !deError && <ErrorBanner message={diffError} onRetry={loadDEAndSystems} />}
         </div>
+      )}
+
+      <Card className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          {(["upload", "table", "graph"] as ViewStage[]).map((stage) => (
+            <span
+              key={stage}
+              className={
+                "inline-flex items-center rounded-full px-3 py-1 text-[0.7rem] font-semibold " +
+                (viewStage === stage
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-700")
+              }
+            >
+              {stage === "upload"
+                ? "Upload"
+                : stage === "table"
+                ? "Table View"
+                : "Graph View"}
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[0.7rem] text-slate-500">Simplification</span>
+          <span
+            className={`inline-flex items-center rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${simplificationTone}`}
+          >
+            {Math.round(simplificationScore * 100)}% · {simplificationLabel}
+          </span>
+        </div>
+      </Card>
+
+      {idleNotice && assistMessage && (
+        <Card className="mb-4 border-amber-200 bg-amber-50">
+          <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
+            NEXT STEP
+          </p>
+          <p className="text-xs text-amber-800">{assistMessage}</p>
+        </Card>
       )}
 
       {/* Inputs description */}

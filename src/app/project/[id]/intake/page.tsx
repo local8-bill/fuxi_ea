@@ -70,6 +70,8 @@ export default function ProjectIntakePage() {
     useState<AggressionLevel | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showAssist, setShowAssist] = useState<boolean>(false);
+  const [idleMessage, setIdleMessage] = useState<string | null>(null);
 
   function toggleDriver(driver: string) {
     startedRef.current = true;
@@ -111,6 +113,27 @@ export default function ProjectIntakePage() {
   const canContinue =
     !!selectedIndustry && selectedDrivers.length > 0 && !!selectedAggression;
 
+  // Idle detection and gentle assist prompt
+  useEffect(() => {
+    if (!startedRef.current) return;
+    setShowAssist(false);
+    setIdleMessage(null);
+    const timer = window.setTimeout(() => {
+      setShowAssist(true);
+      setIdleMessage("Need help clarifying your objectives?");
+      telemetry.log("intake_idle", { idle_ms: 45000 });
+    }, 45000);
+    return () => window.clearTimeout(timer);
+  }, [selectedIndustry, selectedDrivers, selectedAggression, telemetry]);
+
+  const validationErrors = (() => {
+    let count = 0;
+    if (!selectedIndustry) count += 1;
+    if (selectedDrivers.length === 0) count += 1;
+    if (!selectedAggression) count += 1;
+    return count;
+  })();
+
   useEffect(() => {
     telemetry.log("intake_view", { projectId });
   }, [projectId, telemetry]);
@@ -150,6 +173,15 @@ export default function ProjectIntakePage() {
         title="Project Intake"
         description="Capture a few signals about your environment so Fuxi can tune how it interprets your tech stack and portfolio moves."
       />
+
+      {showAssist && idleMessage && (
+        <Card className="mt-4 mb-4 border-amber-200 bg-amber-50">
+          <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
+            ASSIST
+          </p>
+          <p className="text-xs text-amber-800">{idleMessage}</p>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         {/* Industry */}
@@ -250,6 +282,43 @@ export default function ProjectIntakePage() {
           </div>
         </Card>
       </div>
+
+      {startedRef.current && validationErrors > 0 && (
+        <Card className="mt-6 border-amber-200 bg-amber-50">
+          <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
+            NEXT STEP
+          </p>
+          <p className="text-xs text-amber-800">
+            {validationErrors > 2
+              ? "Choose an industry, at least one driver, and your change posture to continue."
+              : "Finish the remaining fields to summarize intake and move forward."}
+          </p>
+        </Card>
+      )}
+
+      {canContinue && (
+        <Card className="mt-6">
+          <p className="text-[0.65rem] tracking-[0.22em] text-gray-500 uppercase mb-1">
+            SUMMARY
+          </p>
+          <p className="text-xs text-gray-500 mb-3">
+            Quick recap before proceeding. You can adjust these later.
+          </p>
+          <div className="text-sm text-slate-800 space-y-1.5">
+            <p>
+              <span className="font-semibold">Industry:</span> {selectedIndustry}
+            </p>
+            <p>
+              <span className="font-semibold">Drivers:</span>{" "}
+              {selectedDrivers.join(", ")}
+            </p>
+            <p>
+              <span className="font-semibold">Change posture:</span>{" "}
+              {selectedAggression}
+            </p>
+          </div>
+        </Card>
+      )}
 
       <div className="mt-8 flex items-center justify-between">
         <p className="text-[0.75rem] text-slate-500">

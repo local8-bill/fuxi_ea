@@ -71,6 +71,8 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [stats, setStats] = useState<DigitalEnterpriseStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [graphDepth, setGraphDepth] = useState<"domains" | "systems" | "integrations">("domains");
+  const [autoCollapsed, setAutoCollapsed] = useState(false);
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -158,6 +160,14 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     loadStats();
   }, [projectId, telemetry, loadStats]);
 
+  useEffect(() => {
+    if (!stats) return;
+    const denseGraph =
+      (stats.systemsFuture ?? 0) > 50 || (stats.integrationsFuture ?? 0) > 80;
+    setAutoCollapsed(denseGraph);
+    setGraphDepth(denseGraph ? "domains" : "systems");
+  }, [stats]);
+
 
   const hasData =
     !!stats &&
@@ -194,6 +204,33 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
         title={`Ecosystem View for Project: ${projectId || "(unknown)"}`}
         description="These metrics are derived directly from your Lucid architecture diagram. We count unique systems that participate in at least one connection and their integrations."
       />
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <p className="text-[0.7rem] text-slate-500">Layer view:</p>
+        {(["domains", "systems", "integrations"] as const).map((depth) => (
+          <button
+            key={depth}
+            type="button"
+            onClick={() => setGraphDepth(depth)}
+            className={
+              "rounded-full border px-3 py-1 text-[0.7rem] font-semibold " +
+              (graphDepth === depth
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-slate-100 text-slate-700 border-slate-200")
+            }
+          >
+            {depth === "domains"
+              ? "Domains"
+              : depth === "systems"
+              ? "Systems"
+              : "Integrations"}
+          </button>
+        ))}
+        {autoCollapsed && (
+          <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-[0.7rem] font-medium text-amber-800">
+            Dense graph — domains collapsed
+          </span>
+        )}
+      </div>
 
       {loading && (
         <div className="mt-10 text-sm text-gray-500">

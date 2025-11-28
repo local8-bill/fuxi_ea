@@ -11,6 +11,21 @@ import {
 } from "@/domain/services/portfolioEngine";
 import { useTelemetry } from "@/hooks/useTelemetry";
 
+function computeSimplificationScore(signals: PortfolioSignals | null): number {
+  if (!signals) return 0.3;
+  let score = 0.4;
+  if (signals.goalSummary && signals.goalSummary !== "No primary portfolio goals captured yet.") {
+    score += 0.25;
+  }
+  if (signals.suggestedThemes.length > 0) {
+    score += 0.15;
+  }
+  if (signals.focusAreas.length > 0) {
+    score += 0.1;
+  }
+  return Math.min(1, score);
+}
+
 function loadProjectIntakeFromLocalStorage(
   projectId: string,
 ): ProjectIntake | null {
@@ -50,6 +65,7 @@ export default function PortfolioPage() {
 
   const [signals, setSignals] = useState<PortfolioSignals | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const simplificationScore = computeSimplificationScore(signals);
 
   useEffect(() => {
     const intake = loadProjectIntakeFromLocalStorage(projectId);
@@ -78,6 +94,28 @@ export default function PortfolioPage() {
         title="Portfolio Optimizer"
         description="Turn your intake and tech stack insights into a portfolio-level game plan the business actually cares about."
       />
+
+      <Card className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[0.7rem] text-slate-500">Readiness</span>
+          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[0.75rem] font-semibold text-slate-700">
+            {Math.round(simplificationScore * 100)}% · {simplificationScore >= 0.75 ? "Ready to compare" : "Add more signals"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-[0.7rem] text-slate-500">
+          <span>Scenario slider (mock)</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            defaultValue={50}
+            onChange={(e) =>
+              telemetry.log("portfolio_scenario_slider", { value: Number(e.target.value) })
+            }
+            className="h-1 w-32 accent-slate-900"
+          />
+        </div>
+      </Card>
 
       {/* Top nav / context */}
       <Card className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
