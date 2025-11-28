@@ -73,6 +73,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [graphDepth, setGraphDepth] = useState<"domains" | "systems" | "integrations">("domains");
   const [autoCollapsed, setAutoCollapsed] = useState(false);
+  const retryAfterRef = useRef<number>(0);
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -116,6 +117,10 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const roiSim = useROISimulation();
 
   const loadStats = useCallback(async () => {
+    const now = Date.now();
+    if (now < retryAfterRef.current) {
+      return;
+    }
     const started = performance.now();
     setLoading(true);
     setError(null);
@@ -127,7 +132,21 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         console.error("[DE-PAGE] Failed to load stats", res.status, text);
-        setError("Failed to load digital enterprise metrics.");
+        if (res.status === 429) {
+          let retryAfterMs = 60000;
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed?.retryAfterMs) {
+              retryAfterMs = Number(parsed.retryAfterMs) || retryAfterMs;
+            }
+          } catch {
+            // ignore JSON parse errors
+          }
+          retryAfterRef.current = Date.now() + retryAfterMs;
+          setError(`Rate limited. Retrying in ${Math.round(retryAfterMs / 1000)}s.`);
+        } else {
+          setError("Failed to load digital enterprise metrics.");
+        }
         setStats(null);
         telemetry.log("graph_load_error", {
           status: res.status,
