@@ -222,7 +222,7 @@ function loadProjectIntake(projectId: string): ProjectIntake | null {
 }
 
 export function TechStackClient({ projectId }: Props) {
-  const telemetry = useTelemetry("tech_stack", { projectId });
+  const { log: telemetryLog } = useTelemetry("tech_stack", { projectId });
   // Inventory / artifacts
   const [inventoryFileName, setInventoryFileName] = useState<string | null>(null);
   const [lucidFileName, setLucidFileName] = useState<string | null>(null);
@@ -272,7 +272,7 @@ export function TechStackClient({ projectId }: Props) {
   const [truthError, setTruthError] = useState<string | null>(null);
 
   const loadDEAndSystems = useCallback(async () => {
-    telemetry.log("tech_stack_view", { projectId });
+    telemetryLog("tech_stack_view", { projectId });
     setLoadingDE(true);
     setDeError(null);
     setDiffError(null);
@@ -281,7 +281,7 @@ export function TechStackClient({ projectId }: Props) {
       const started = performance.now();
       const stats = await fetchDigitalEnterpriseStats(projectId);
       setDeStats(stats ?? null);
-      telemetry.log("tech_stack_stats", {
+      telemetryLog("tech_stack_stats", {
         systems: stats?.systemsFuture,
         integrations: stats?.integrationsFuture,
         domains: stats?.domainsDetected,
@@ -291,7 +291,7 @@ export function TechStackClient({ projectId }: Props) {
       console.error("[TECH-STACK] Error loading digital enterprise stats", err);
       setDeError("Failed to load digital enterprise preview.");
       setDeStats(null);
-      telemetry.log("tech_stack_stats_error", { message: (err as Error)?.message });
+      telemetryLog("tech_stack_stats_error", { message: (err as Error)?.message });
     } finally {
       setLoadingDE(false);
     }
@@ -312,7 +312,7 @@ export function TechStackClient({ projectId }: Props) {
         );
         setDiffError("Failed to load diagram systems for diff view.");
         setDiagramSystems([]);
-        telemetry.log("tech_stack_diff_error", { status: res.status, body: text });
+        telemetryLog("tech_stack_diff_error", { status: res.status, body: text });
       } else {
         const json = await res.json();
         if (json && Array.isArray(json.systems)) {
@@ -335,7 +335,7 @@ export function TechStackClient({ projectId }: Props) {
       setDiffError("Failed to load diagram systems for diff view.");
       setDiagramSystems([]);
     }
-  }, [projectId, telemetry]);
+  }, [projectId, telemetryLog]);
 
   // Load intake + DE stats + diagram systems
   useEffect(() => {
@@ -353,10 +353,10 @@ export function TechStackClient({ projectId }: Props) {
       setAssistMessage(
         "Upload an inventory CSV and a Lucid CSV to unlock the table and graph views.",
       );
-      telemetry.log("tech_stack_idle", { idle_ms: 45000 });
+      telemetryLog("tech_stack_idle", { idle_ms: 45000 });
     }, 45000);
     return () => window.clearTimeout(timer);
-  }, [inventoryRows, diagramSystems.length, diffStats, telemetry]);
+  }, [inventoryRows, diagramSystems.length, diffStats, telemetryLog]);
 
   // Compute diff whenever inventory systems or diagram systems change
   useEffect(() => {
@@ -629,7 +629,7 @@ export function TechStackClient({ projectId }: Props) {
         uniqueSystems: stats.uniqueSystems,
       });
       setViewStage("table");
-      telemetry.log("upload_complete", { kind: "inventory" });
+      telemetryLog("upload_complete", { kind: "inventory" });
     } catch (err: any) {
       console.error("[TECH-STACK] Inventory upload failed (client parse)", err);
       setInvError(err?.message ?? "Inventory upload failed.");
@@ -651,7 +651,7 @@ export function TechStackClient({ projectId }: Props) {
       const resp = await uploadLucidCsv(projectId, file);
       console.log("[TECH-STACK] Lucid upload success", resp);
       setViewStage("graph");
-      telemetry.log("upload_complete", { kind: "lucid" });
+      telemetryLog("upload_complete", { kind: "lucid" });
 
       const stats = await fetchDigitalEnterpriseStats(projectId);
       if (stats) {
