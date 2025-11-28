@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import {
@@ -17,6 +17,7 @@ import { useAIInsights } from "@/hooks/useAIInsights";
 import { NodeInsightPanel } from "@/components/NodeInsightPanel";
 import { ScenarioComparePanel } from "@/components/ScenarioComparePanel";
 import { useTelemetry } from "@/hooks/useTelemetry";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 
 interface TopSystemRaw {
   systemId?: string;
@@ -112,77 +113,51 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
   const roiSim = useROISimulation();
 
-  useEffect(() => {
-    telemetry.log("workspace_view", { projectId });
-  }, [projectId, telemetry]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadStats() {
-      const started = performance.now();
-      if (!projectId) {
-        setError("Missing project ID.");
-        setLoading(false);
+  const loadStats = useCallback(async () => {
+    const started = performance.now();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/digital-enterprise/stats?project=${encodeURIComponent(projectId)}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("[DE-PAGE] Failed to load stats", res.status, text);
+        setError("Failed to load digital enterprise metrics.");
+        setStats(null);
+        telemetry.log("graph_load_error", {
+          status: res.status,
+          body: text,
+        });
         return;
       }
 
-      setLoading(true);
+      const json = (await res.json()) as DigitalEnterpriseStats;
+      setStats(json);
       setError(null);
-
-      try {
-        const res = await fetch(
-          `/api/digital-enterprise/stats?project=${encodeURIComponent(
-            projectId
-          )}`,
-          { cache: "no-store" }
-        );
-
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          console.error("[DE-PAGE] Failed to load stats", res.status, text);
-          if (!cancelled) {
-            setError("Failed to load digital enterprise metrics.");
-            setStats(null);
-          }
-          telemetry.log("graph_load_error", {
-            status: res.status,
-            body: text,
-          });
-          return;
-        }
-
-        const json = (await res.json()) as DigitalEnterpriseStats;
-        if (!cancelled) {
-          setStats(json);
-          setError(null);
-          telemetry.log("graph_load", {
-            systems: json.systemsFuture,
-            integrations: json.integrationsFuture,
-            domains: json.domainsDetected,
-            duration_ms: Math.round(performance.now() - started),
-          });
-        }
-      } catch (err: any) {
-        console.error("[DE-PAGE] Error loading stats", err);
-        if (!cancelled) {
-          setError("Failed to load digital enterprise metrics.");
-          setStats(null);
-        }
-        telemetry.log("graph_load_error", { message: (err as Error)?.message });
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+      telemetry.log("graph_load", {
+        systems: json.systemsFuture,
+        integrations: json.integrationsFuture,
+        domains: json.domainsDetected,
+        duration_ms: Math.round(performance.now() - started),
+      });
+    } catch (err: any) {
+      console.error("[DE-PAGE] Error loading stats", err);
+      setError("Failed to load digital enterprise metrics.");
+      setStats(null);
+      telemetry.log("graph_load_error", { message: (err as Error)?.message });
+    } finally {
+      setLoading(false);
     }
+  }, [projectId, telemetry]);
 
+  useEffect(() => {
+    telemetry.log("workspace_view", { projectId });
     loadStats();
+  }, [projectId, telemetry, loadStats]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
 
   const hasData =
     !!stats &&
@@ -213,6 +188,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
   return (
     <div className="px-8 py-10 max-w-6xl mx-auto">
+      {error && <div className="mb-4"><ErrorBanner message={error} onRetry={loadStats} /></div>}
       <WorkspaceHeader
         statusLabel="DIGITAL ENTERPRISE"
         title={`Ecosystem View for Project: ${projectId || "(unknown)"}`}

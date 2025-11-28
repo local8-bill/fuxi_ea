@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { FileUploadPanel } from "@/components/panels/FileUploadPanel";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -12,6 +12,7 @@ import {
 import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
 import { normalizeSystemName } from "@/domain/services/systemNormalization";
 import { useTelemetry } from "@/hooks/useTelemetry";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -254,73 +255,50 @@ export function TechStackClient({ projectId }: Props) {
   const [truthLoading, setTruthLoading] = useState<boolean>(false);
   const [truthError, setTruthError] = useState<string | null>(null);
 
-  // Load intake + DE stats + diagram systems
-  useEffect(() => {
-    const ctx = loadProjectIntake(projectId);
-    setIntakeContext(ctx);
+  const loadDEAndSystems = useCallback(async () => {
+    telemetry.log("tech_stack_view", { projectId });
+    setLoadingDE(true);
+    setDeError(null);
+    setDiffError(null);
 
-    let cancelled = false;
+    try {
+      const started = performance.now();
+      const stats = await fetchDigitalEnterpriseStats(projectId);
+      setDeStats(stats ?? null);
+      telemetry.log("tech_stack_stats", {
+        systems: stats?.systemsFuture,
+        integrations: stats?.integrationsFuture,
+        domains: stats?.domainsDetected,
+        duration_ms: Math.round(performance.now() - started),
+      });
+    } catch (err: any) {
+      console.error("[TECH-STACK] Error loading digital enterprise stats", err);
+      setDeError("Failed to load digital enterprise preview.");
+      setDeStats(null);
+      telemetry.log("tech_stack_stats_error", { message: (err as Error)?.message });
+    } finally {
+      setLoadingDE(false);
+    }
 
-    async function loadDEAndSystems() {
-      telemetry.log("tech_stack_view", { projectId });
-      setLoadingDE(true);
-      setDeError(null);
-      setDiffError(null);
-
-      try {
-        const started = performance.now();
-        const stats = await fetchDigitalEnterpriseStats(projectId);
-        if (cancelled) return;
-
-        if (stats) {
-          setDeStats(stats);
-          telemetry.log("tech_stack_stats", {
-            systems: stats.systemsFuture,
-            integrations: stats.integrationsFuture,
-            domains: stats.domainsDetected,
-            duration_ms: Math.round(performance.now() - started),
-          });
-        } else {
-          setDeStats(null);
-        }
-      } catch (err: any) {
-        console.error("[TECH-STACK] Error loading digital enterprise stats", err);
-        if (!cancelled) {
-          setDeError("Failed to load digital enterprise preview.");
-          setDeStats(null);
-        }
-        telemetry.log("tech_stack_stats_error", { message: (err as Error)?.message });
-      } finally {
-        if (!cancelled) {
-          setLoadingDE(false);
-        }
-      }
-
-      // Load diagram systems for diff / truth pass
-      try {
-        const res = await fetch(
-          `/api/digital-enterprise/systems?project=${encodeURIComponent(
-            projectId,
-          )}`,
-          { cache: "no-store" },
+    try {
+      const res = await fetch(
+        `/api/digital-enterprise/systems?project=${encodeURIComponent(
+          projectId,
+        )}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(
+          "[TECH-STACK] Failed to load diagram systems for diff",
+          res.status,
+          text,
         );
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          console.error(
-            "[TECH-STACK] Failed to load diagram systems for diff",
-            res.status,
-            text,
-          );
-          if (!cancelled) {
-            setDiffError("Failed to load diagram systems for diff view.");
-            setDiagramSystems([]);
-          }
-          telemetry.log("tech_stack_diff_error", { status: res.status, body: text });
-          return;
-        }
+        setDiffError("Failed to load diagram systems for diff view.");
+        setDiagramSystems([]);
+        telemetry.log("tech_stack_diff_error", { status: res.status, body: text });
+      } else {
         const json = await res.json();
-        if (cancelled) return;
-
         if (json && Array.isArray(json.systems)) {
           const systems: DiagramSystem[] = json.systems.map((s: any) => ({
             id: String(s.id ?? s.name ?? s.normalizedName ?? "unknown"),
@@ -334,21 +312,21 @@ export function TechStackClient({ projectId }: Props) {
         } else {
           setDiagramSystems([]);
         }
-      } catch (err: any) {
-        console.error("[TECH-STACK] Error fetching diagram systems for diff", err);
-        if (!cancelled) {
-          setDiffError("Failed to load diagram systems for diff view.");
-          setDiagramSystems([]);
-        }
+        setDiffError(null);
       }
+    } catch (err: any) {
+      console.error("[TECH-STACK] Error fetching diagram systems for diff", err);
+      setDiffError("Failed to load diagram systems for diff view.");
+      setDiagramSystems([]);
     }
+  }, [projectId, telemetry]);
 
+  // Load intake + DE stats + diagram systems
+  useEffect(() => {
+    const ctx = loadProjectIntake(projectId);
+    setIntakeContext(ctx);
     loadDEAndSystems();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
+  }, [projectId, loadDEAndSystems]);
 
   // Compute diff whenever inventory systems or diagram systems change
   useEffect(() => {
@@ -693,6 +671,12 @@ export function TechStackClient({ projectId }: Props) {
         title="Tech Stack Workspace"
         description="Upload inventories, diagrams, and Lucid exports to understand your applications, integrations, and dependencies."
       />
+      {(deError || diffError) && (
+        <div className="space-y-2">
+          {deError && <ErrorBanner message={deError} onRetry={loadDEAndSystems} />}
+          {diffError && !deError && <ErrorBanner message={diffError} onRetry={loadDEAndSystems} />}
+        </div>
+      )}
 
       {/* Inputs description */}
       <Card className="mb-4">
