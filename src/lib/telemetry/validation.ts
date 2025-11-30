@@ -23,9 +23,18 @@ export const TelemetryEventSchema = z.object({
 export type TelemetryEvent = z.infer<typeof TelemetryEventSchema>;
 
 export function normalizeTelemetryPayload(payload: Partial<TelemetryEvent>): TelemetryEvent {
+  const base =
+    payload && typeof payload === "object"
+      ? payload
+      : {};
   const withDefaults = {
     timestamp: new Date().toISOString(),
-    ...payload,
+    ...base,
   };
-  return TelemetryEventSchema.parse(withDefaults);
+  const parsed = TelemetryEventSchema.safeParse(withDefaults);
+  if (!parsed.success) {
+    const message = parsed.error?.message || "Invalid telemetry payload";
+    throw new Error(message);
+  }
+  return parsed.data;
 }

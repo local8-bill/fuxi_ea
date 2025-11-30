@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import {
   SystemImpactPanel,
   type SystemImpact,
 } from "@/components/digital-enterprise/SystemImpactPanel";
-import { useImpactGraph } from "@/hooks/useImpactGraph";
 import { LivingMap } from "@/components/LivingMap";
 import type { LivingMapData } from "@/types/livingMap";
 import { useROISimulation } from "@/hooks/useROISimulation";
@@ -18,6 +17,9 @@ import { NodeInsightPanel } from "@/components/NodeInsightPanel";
 import { ScenarioComparePanel } from "@/components/ScenarioComparePanel";
 import { useTelemetry } from "@/hooks/useTelemetry";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { useAdaptiveUIState } from "@/hooks/useAdaptiveUIState";
+import { Card } from "@/components/ui/Card";
+import { useSimplificationMetrics } from "@/hooks/useSimplificationMetrics";
 
 interface TopSystemRaw {
   systemId?: string;
@@ -66,61 +68,191 @@ function formatNumber(n: number | undefined | null): string {
   return n.toLocaleString();
 }
 
+function stableScore(id: string, base: number, spread: number) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash << 5) - hash + id.charCodeAt(i);
+    hash |= 0; // force 32-bit
+  }
+  const normalized = Math.abs(hash % 1000) / 1000; // 0..0.999
+  return base + normalized * spread;
+}
+
+function buildLivingMapData(view: { nodes?: any[]; edges?: any[] }): LivingMapData {
+  const nodes = Array.isArray(view.nodes) ? view.nodes : [];
+  const edges = Array.isArray(view.edges) ? view.edges : [];
+  const degree = new Map<string, number>();
+  edges.forEach((e: any) => {
+    if (e?.sourceId) degree.set(e.sourceId, (degree.get(e.sourceId) ?? 0) + 1);
+    if (e?.targetId) degree.set(e.targetId, (degree.get(e.targetId) ?? 0) + 1);
+  });
+
+  const livingNodes: LivingMapData["nodes"] = nodes.map((n: any) => {
+    const id = String(n?.id ?? "");
+    const label = String(n?.label ?? n?.name ?? "Unknown");
+    const domain = n?.domain ?? null;
+    const integrationCount = degree.get(id) ?? 0;
+    return {
+      id,
+      label,
+      domain,
+      integrationCount,
+      health: stableScore(id, 55, 35),
+      aiReadiness: stableScore(id + "-ai", 45, 45),
+      roiScore: stableScore(id + "-roi", 35, 50),
+    };
+  });
+
+  const livingEdges: LivingMapData["edges"] = edges.map((e: any, idx: number) => ({
+    id: String(e?.id ?? `edge-${idx}`),
+    source: String(e?.sourceId ?? ""),
+    target: String(e?.targetId ?? ""),
+    weight: 1,
+    kind: "api",
+  }));
+
+  return { nodes: livingNodes, edges: livingEdges };
+}
+
 export function DigitalEnterpriseClient({ projectId }: Props) {
   const telemetry = useTelemetry("digital_enterprise", { projectId });
+  const { snapshot, setMetrics } = useSimplificationMetrics("digital_enterprise");
+  const {
+    showContextBar,
+    contextMessage,
+    setContextMessage,
+    assistVisible,
+    assistMessage,
+    setAssistMessage,
+    setAssistVisible,
+    ctaEnabled,
+    setCtaEnabled,
+    ctaLabel,
+    setCtaLabel,
+    progress,
+    setProgress,
+  } = useAdaptiveUIState("digital_enterprise", {
+    initialContext: "Explore domains → systems → integrations as data arrives.",
+    initialCTA: "Run AI analysis",
+    initialProgress: 0.25,
+  });
   const [stats, setStats] = useState<DigitalEnterpriseStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [graphDepth, setGraphDepth] = useState<"domains" | "systems" | "integrations">("domains");
   const [autoCollapsed, setAutoCollapsed] = useState(false);
   const retryAfterRef = useRef<number>(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const devLoadOnceRef = useRef(false);
+  const simplificationScoreRef = useRef(0);
+  const prevUiRef = useRef<{
+    progress: number;
+    ctaEnabled: boolean;
+    context: string;
+    ctaLabel: string;
+  }>({
+    progress: 0.25,
+    ctaEnabled: false,
+    context: "",
+    ctaLabel: "Run AI analysis",
+  });
+  const [graphEnabled, setGraphEnabled] = useState(false);
+  const prevMetricsRef = useRef<{ DC: number; CL: number }>({
+    DC: snapshot?.metrics?.DC ?? 0.55,
+    CL: snapshot?.metrics?.CL ?? 0.7,
+  });
+  const [graphData, setGraphData] = useState<LivingMapData | null>(null);
+  const [graphLoading, setGraphLoading] = useState<boolean>(true);
+  const [graphError, setGraphError] = useState<string | null>(null);
+  const [graphMode, setGraphMode] = useState<"all" | "current" | "future">("all");
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const graph = useImpactGraph();
-  const aiInsights = useAIInsights(graph.nodes);
+  const aiInsights = useAIInsights(graphData?.nodes ?? []);
   const livingMapData: LivingMapData = useMemo(() => {
+    const data = graphData ?? { nodes: [], edges: [] };
     const dispositions: Array<NonNullable<LivingMapData["nodes"][number]["disposition"]>> = [
       "keep",
       "modernize",
       "replace",
       "retire",
     ];
-    return {
-      nodes: graph.nodes.map((n, idx) => {
+    const enrichedNodes = (data.nodes ?? [])
+      .map((n, idx) => {
+        const labelRaw = (n as any).system_name ?? (n as any).label ?? "";
+        const label = labelRaw || String(n.id ?? "Unknown");
+        if (!n.id || !label) return null;
         const insight = aiInsights.insights[n.id];
         return {
-          id: n.id,
-          label: n.label,
+          ...n,
+          id: String(n.id),
+          label,
           domain: insight?.domain ?? n.domain,
-          health: 60 + Math.random() * 30,
-          aiReadiness: insight?.aiReadiness ?? 50 + Math.random() * 40,
-          opportunityScore: insight?.opportunityScore,
-          riskScore: insight?.riskScore,
-          roiScore: 40 + Math.random() * 50,
-          aiSummary: insight?.summary,
-          disposition: (insight?.disposition as any) ?? dispositions[idx % dispositions.length],
-          integrationCount: insight?.integrationCount ?? n.integrationCount,
+          aiReadiness: insight?.aiReadiness ?? n.aiReadiness,
+          opportunityScore: insight?.opportunityScore ?? n.opportunityScore,
+          riskScore: insight?.riskScore ?? n.riskScore,
+          roiScore: insight?.roiScore ?? n.roiScore,
+          aiSummary: insight?.summary ?? n.aiSummary,
+          disposition: (insight?.disposition as any) ?? n.disposition ?? dispositions[idx % dispositions.length],
         };
-      }),
-      edges: graph.edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        weight: e.weight,
-        kind: "api",
-      })),
+      })
+      .filter((n): n is LivingMapData["nodes"][number] => !!n && !!n.label);
+
+    return {
+      nodes: enrichedNodes,
+      edges: data.edges ?? [],
     };
-  }, [graph]);
+  }, [graphData, aiInsights.insights]);
+
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_TELEMETRY_DEBUG === "true") {
+      // eslint-disable-next-line no-console
+      console.log("[DE] harmonized graph", {
+        nodes: livingMapData.nodes.length,
+        edges: livingMapData.edges.length,
+        sample: livingMapData.nodes.slice(0, 3).map((n) => ({ id: n.id, label: n.label, domain: (n as any).domain })),
+      });
+    }
+  }, [livingMapData]);
 
   const roiSim = useROISimulation();
+  const simplificationScore = Math.min(
+    1,
+    Math.max(0, (snapshot?.metrics?.SSS ?? 2.4) / 5),
+  );
+  const simplificationLabel =
+    simplificationScore >= 0.8
+      ? "Clean graph"
+      : simplificationScore >= 0.5
+      ? "Mostly aligned"
+      : "Needs clarity";
+  const simplificationTone =
+    simplificationScore >= 0.8
+      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+      : simplificationScore >= 0.5
+      ? "bg-amber-50 text-amber-800 border-amber-200"
+      : "bg-rose-50 text-rose-700 border-rose-200";
+  useEffect(() => {
+    simplificationScoreRef.current = simplificationScore;
+  }, [simplificationScore]);
 
-  const loadStats = useCallback(async () => {
-    const now = Date.now();
-    if (now < retryAfterRef.current) {
-      return;
-    }
+  const loadStats = useCallback(
+    async (opts?: { allowDuplicate?: boolean; source?: "auto" | "retry" | "manual" }) => {
+      if (process.env.NODE_ENV === "development" && !opts?.allowDuplicate) {
+        if (devLoadOnceRef.current) return;
+        devLoadOnceRef.current = true;
+      }
+
+      const now = Date.now();
+      if (now < retryAfterRef.current && !opts?.allowDuplicate) {
+        return;
+      }
+
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
     const started = performance.now();
     setLoading(true);
     setError(null);
@@ -131,7 +263,8 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       );
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        console.error("[DE-PAGE] Failed to load stats", res.status, text);
+        const logFn = res.status === 429 ? console.warn : console.error;
+        logFn("[DE-PAGE] Failed to load stats", res.status, text);
         if (res.status === 429) {
           let retryAfterMs = 60000;
           try {
@@ -144,66 +277,229 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           }
           retryAfterRef.current = Date.now() + retryAfterMs;
           setError(`Rate limited. Retrying in ${Math.round(retryAfterMs / 1000)}s.`);
+          retryTimeoutRef.current = setTimeout(() => {
+            loadStats({ allowDuplicate: true, source: "retry" });
+          }, retryAfterMs);
         } else {
           setError("Failed to load digital enterprise metrics.");
         }
         setStats(null);
-        telemetry.log("graph_load_error", {
-          status: res.status,
-          body: text,
-        });
+        telemetry.log(
+          "graph_load_error",
+          {
+            status: res.status,
+            body: text,
+          },
+          simplificationScoreRef.current,
+        );
         return;
       }
 
       const json = (await res.json()) as DigitalEnterpriseStats;
       setStats(json);
       setError(null);
-      telemetry.log("graph_load", {
-        systems: json.systemsFuture,
-        integrations: json.integrationsFuture,
-        domains: json.domainsDetected,
-        duration_ms: Math.round(performance.now() - started),
-      });
+      telemetry.log(
+        "graph_load",
+        {
+          systems: json.systemsFuture,
+          integrations: json.integrationsFuture,
+          domains: json.domainsDetected,
+          duration_ms: Math.round(performance.now() - started),
+        },
+        simplificationScoreRef.current,
+      );
     } catch (err: any) {
       console.error("[DE-PAGE] Error loading stats", err);
       setError("Failed to load digital enterprise metrics.");
       setStats(null);
-      telemetry.log("graph_load_error", { message: (err as Error)?.message });
+      telemetry.log(
+        "graph_load_error",
+        { message: (err as Error)?.message },
+        simplificationScoreRef.current,
+      );
     } finally {
       setLoading(false);
     }
-  }, [projectId, telemetry]);
+    },
+    [projectId, telemetry],
+  );
 
   useEffect(() => {
-    telemetry.log("workspace_view", { projectId });
+    telemetry.log("workspace_view", { projectId }, simplificationScoreRef.current);
     loadStats();
   }, [projectId, telemetry, loadStats]);
+
+  const loadGraph = useCallback(async () => {
+    setGraphLoading(true);
+    setGraphError(null);
+    try {
+      const res = await fetch(
+        `/api/digital-enterprise/view?project=${encodeURIComponent(projectId)}&mode=${graphMode}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`View load failed ${res.status}: ${text}`);
+      }
+      const json = await res.json();
+      const next = buildLivingMapData(json);
+      setGraphData(next);
+      setGraphEnabled(true);
+    } catch (err: any) {
+      setGraphError(err?.message ?? "Failed to load graph data.");
+      setGraphData(null);
+      setGraphEnabled(false);
+    } finally {
+      setGraphLoading(false);
+    }
+  }, [projectId, graphMode]);
+
+  useEffect(() => {
+    void loadGraph();
+  }, [loadGraph, graphMode]);
+
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!stats) return;
     const denseGraph =
       (stats.systemsFuture ?? 0) > 50 || (stats.integrationsFuture ?? 0) > 80;
-    setAutoCollapsed(denseGraph);
-    setGraphDepth(denseGraph ? "domains" : "systems");
-  }, [stats]);
+    if (autoCollapsed !== denseGraph) {
+      setAutoCollapsed(denseGraph);
+    }
+    const nextDepth: "domains" | "systems" = denseGraph ? "domains" : "systems";
+    if (graphDepth !== nextDepth) {
+      setGraphDepth(nextDepth);
+    }
+    const loadFactor = Math.min(
+      1,
+      ((stats.systemsFuture ?? 0) + (stats.integrationsFuture ?? 0)) / 800,
+    );
+    const nextMetrics = {
+      DC: 0.55 + loadFactor * 0.35,
+      CL: 0.7 - loadFactor * 0.2,
+    };
+    const prev = prevMetricsRef.current;
+    const dcDelta = Math.abs((prev.DC ?? 0) - nextMetrics.DC);
+    const clDelta = Math.abs((prev.CL ?? 0) - nextMetrics.CL);
+    if (dcDelta > 0.001 || clDelta > 0.001) {
+      prevMetricsRef.current = nextMetrics;
+      setMetrics(nextMetrics);
+    }
+  }, [stats, autoCollapsed, graphDepth, setMetrics]);
 
 
-  const hasData =
+  const hasDataFromStats =
     !!stats &&
     ((stats.systemsFuture ?? 0) > 0 ||
       (stats.integrationsFuture ?? 0) > 0);
+  const hasGraphData = (graphData?.nodes?.length ?? 0) > 0;
+  const hasData = hasDataFromStats || hasGraphData;
+  const domainCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    (livingMapData.nodes ?? []).forEach((n: any) => {
+      const d = (n.domain as string) || "Other";
+      counts[d] = (counts[d] ?? 0) + 1;
+    });
+    return counts;
+  }, [livingMapData.nodes]);
 
   const selectedNode = useMemo(
     () => livingMapData.nodes.find((n) => n.id === selectedNodeId) ?? null,
     [livingMapData.nodes, selectedNodeId]
   );
 
+  useEffect(() => {
+    const baseProgress = hasData ? 0.65 : 0.35;
+    const depthBonus = selectedNodeId ? 0.9 : baseProgress;
+    const nextContext = hasData
+      ? "Graph loaded — drill into systems or run AI analysis."
+      : "Load Lucid data on Tech Stack to populate this view.";
+    const nextLabel = hasData ? "Run AI analysis" : "Awaiting Lucid data";
+
+    const prev = prevUiRef.current;
+    const progressChanged = Math.abs(prev.progress - depthBonus) > 0.001;
+    const ctaChanged = prev.ctaEnabled !== hasData || prev.ctaLabel !== nextLabel;
+    const contextChanged = prev.context !== nextContext;
+
+    if (progressChanged) {
+      prevUiRef.current.progress = depthBonus;
+      setProgress(depthBonus);
+    }
+    if (ctaChanged) {
+      prevUiRef.current.ctaEnabled = hasData;
+      prevUiRef.current.ctaLabel = nextLabel;
+      setCtaEnabled(hasData);
+      setCtaLabel(nextLabel);
+    }
+    if (contextChanged) {
+      prevUiRef.current.context = nextContext;
+      setContextMessage(nextContext);
+    }
+  }, [
+    hasData,
+    selectedNodeId,
+    setContextMessage,
+    setCtaEnabled,
+    setCtaLabel,
+    setProgress,
+  ]);
+
+  useEffect(() => {
+    if (error) {
+      setAssistVisible(true);
+      setAssistMessage(error);
+      return;
+    }
+    if (autoCollapsed) {
+      setAssistVisible(true);
+      setAssistMessage(
+        "Dense graph detected — defaulting to domain view. Expand layers as needed.",
+      );
+      return;
+    }
+    setAssistVisible(false);
+    setAssistMessage(null);
+  }, [autoCollapsed, error, setAssistMessage, setAssistVisible]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setAssistVisible(true);
+      setAssistMessage("Explore nodes or run AI analysis to trace integrations.");
+      telemetry.log(
+        "digital_enterprise_idle",
+        { idle_ms: 45000, hasData },
+        simplificationScoreRef.current,
+      );
+    }, 45000);
+    return () => window.clearTimeout(timer);
+  }, [
+    hasData,
+    selectedNodeId,
+    search,
+    telemetry,
+    setAssistMessage,
+    setAssistVisible,
+  ]);
+
   function handleSelectSystem(name: string, degree: number) {
     // For now, we mock upstream/downstream split.
     // Backend traversal will replace this logic later.
     const upstreamCount = Math.max(0, Math.floor(degree / 2));
     const downstreamCount = Math.max(0, degree - upstreamCount);
-    telemetry.log("node_click", { name, degree });
+    telemetry.log("node_click", { name, degree }, simplificationScoreRef.current);
+    telemetry.log(
+      "edge_trace",
+      { name, degree, upstreamCount, downstreamCount },
+      simplificationScoreRef.current,
+    );
 
     setImpact({
       systemName: name,
@@ -217,39 +513,124 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
   return (
     <div className="px-8 py-10 max-w-6xl mx-auto">
-      {error && <div className="mb-4"><ErrorBanner message={error} onRetry={loadStats} /></div>}
+      {error && (
+        <div className="mb-4">
+          <ErrorBanner
+            message={error}
+            onRetry={() => loadStats({ allowDuplicate: true, source: "manual" })}
+          />
+        </div>
+      )}
       <WorkspaceHeader
         statusLabel="DIGITAL ENTERPRISE"
         title={`Ecosystem View for Project: ${projectId || "(unknown)"}`}
         description="These metrics are derived directly from your Lucid architecture diagram. We count unique systems that participate in at least one connection and their integrations."
       />
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <p className="text-[0.7rem] text-slate-500">Layer view:</p>
-        {(["domains", "systems", "integrations"] as const).map((depth) => (
-          <button
-            key={depth}
-            type="button"
-            onClick={() => setGraphDepth(depth)}
-            className={
-              "rounded-full border px-3 py-1 text-[0.7rem] font-semibold " +
-              (graphDepth === depth
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-slate-100 text-slate-700 border-slate-200")
-            }
-          >
-            {depth === "domains"
-              ? "Domains"
-              : depth === "systems"
-              ? "Systems"
-              : "Integrations"}
-          </button>
-        ))}
-        {autoCollapsed && (
-          <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-[0.7rem] font-medium text-amber-800">
-            Dense graph — domains collapsed
-          </span>
-        )}
-      </div>
+      {showContextBar && (
+        <Card className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[0.65rem] tracking-[0.22em] text-slate-500 uppercase mb-1">
+              CONTEXT
+            </p>
+            <p className="text-xs text-slate-700">
+              {contextMessage || "Adaptive guidance will respond as telemetry arrives."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="h-2 w-36 rounded-full bg-slate-100">
+              <div
+                className="h-2 rounded-full bg-slate-900 transition-all"
+                style={{ width: `${Math.round(progress * 100)}%` }}
+              />
+            </div>
+            <span className="text-[0.75rem] font-semibold text-slate-800">
+              {Math.round(progress * 100)}%
+            </span>
+            <span
+              className={`inline-flex items-center rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${simplificationTone}`}
+            >
+              {Math.round(simplificationScore * 100)}% · {simplificationLabel}
+            </span>
+            <button
+              type="button"
+              disabled={!ctaEnabled}
+              onClick={() => {
+                telemetry.log(
+                  "ai_analysis_cta",
+                  { projectId, hasData },
+                  simplificationScoreRef.current,
+                );
+                setGraphDepth("systems");
+              }}
+              className={
+                "rounded-full px-4 py-1.5 text-[0.75rem] font-semibold " +
+                (ctaEnabled
+                  ? "bg-slate-900 text-white hover:bg-slate-800"
+                  : "bg-slate-200 text-slate-500 cursor-not-allowed")
+              }
+            >
+              {ctaLabel}
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {assistVisible && assistMessage && (
+        <Card className="mb-4 border-amber-200 bg-amber-50">
+          <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
+            NEXT STEP
+          </p>
+          <p className="text-xs text-amber-800">{assistMessage}</p>
+        </Card>
+      )}
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            <p className="text-[0.7rem] text-slate-500">Layer view:</p>
+            {(["domains", "systems", "integrations"] as const).map((depth) => (
+              <button
+                key={depth}
+                type="button"
+                onClick={() => setGraphDepth(depth)}
+                className={
+                  "rounded-full border px-3 py-1 text-[0.7rem] font-semibold " +
+                  (graphDepth === depth
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-slate-100 text-slate-700 border-slate-200")
+                }
+              >
+                {depth === "domains"
+                  ? "Domains"
+                  : depth === "systems"
+                  ? "Systems"
+                  : "Integrations"}
+              </button>
+            ))}
+            {autoCollapsed && (
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-[0.7rem] font-medium text-amber-800">
+                Dense graph — domains collapsed
+              </span>
+            )}
+            <div className="ml-auto flex flex-wrap items-center gap-2 text-[0.7rem]">
+              <span className="text-slate-500">Mode:</span>
+              {(["all", "current", "future"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setGraphMode(m);
+                    void loadGraph();
+                  }}
+                  className={
+                    "rounded-full border px-3 py-1 font-semibold " +
+                    (graphMode === m
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-700 border-slate-200")
+                  }
+                >
+                  {m === "all" ? "Delta" : m === "current" ? "Current" : "Future"}
+                </button>
+              ))}
+            </div>
+          </div>
 
       {loading && (
         <div className="mt-10 text-sm text-gray-500">
@@ -260,13 +641,6 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       {!loading && error && (
         <div className="mt-10 text-sm text-red-500">
           {error}
-        </div>
-      )}
-
-      {!loading && !error && !hasData && (
-        <div className="mt-10 text-sm text-gray-500">
-          No digital enterprise metrics are available yet for this project.
-          Upload a Lucid CSV on the Tech Stack page to populate this view.
         </div>
       )}
 
@@ -315,13 +689,91 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />Workflow</span>
             <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />Manual/Other</span>
           </div>
-          <LivingMap
-            data={livingMapData}
-            height={720}
-            selectedNodeId={selectedNodeId ?? undefined}
-            onSelectNode={setSelectedNodeId}
-            searchTerm={search}
-          />
+          {graphError && (
+            <Card className="mb-3 border-rose-200 bg-rose-50">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[0.65rem] tracking-[0.22em] text-rose-700 uppercase mb-1">
+                    GRAPH LOAD ERROR
+                  </p>
+                  <p className="text-xs text-rose-800">
+                    {graphError || "Failed to load Digital Enterprise graph."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                  onClick={() => {
+                    setGraphEnabled(false);
+                    setGraphData(null);
+                    void loadGraph();
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            </Card>
+          )}
+          {!graphEnabled && !graphError && (
+            <Card className="mb-3 border-amber-200 bg-amber-50">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
+                    GRAPH LOADING PAUSED
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    Enable the graph to explore nodes. This reduces React dev-mode re-render churn.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                  onClick={() => setGraphEnabled(true)}
+                >
+                  Load graph
+                </button>
+              </div>
+            </Card>
+          )}
+            {graphEnabled && graphData && (
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+                  Added
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
+                  Modified
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
+                  Removed
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+                  Unchanged
+                </span>
+                <span className="ml-2 text-[0.75rem] text-slate-500">
+                  {livingMapData.nodes.length} nodes · {livingMapData.edges.length} edges
+                </span>
+                <button
+                  type="button"
+                  className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={() => {
+                    // flip showOtherDomain via CSS custom event
+                    const evt = new CustomEvent("livingmap:toggle-other");
+                    window.dispatchEvent(evt);
+                  }}
+                >
+                  Toggle “Other”
+                </button>
+              </div>
+              <LivingMap
+                data={livingMapData}
+                height={720}
+                selectedNodeId={selectedNodeId ?? undefined}
+                onSelectNode={setSelectedNodeId}
+                searchTerm={search}
+              />
+            </>
+          )}
           <div className="mt-4 flex flex-col gap-3">
             <div className="flex items-center gap-3 text-xs text-slate-600">
               <label className="flex items-center gap-2">

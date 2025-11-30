@@ -13,6 +13,7 @@ import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
 import { normalizeSystemName } from "@/domain/services/systemNormalization";
 import { useTelemetry } from "@/hooks/useTelemetry";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { useAdaptiveUIState } from "@/hooks/useAdaptiveUIState";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -223,14 +224,31 @@ function loadProjectIntake(projectId: string): ProjectIntake | null {
 
 export function TechStackClient({ projectId }: Props) {
   const { log: telemetryLog } = useTelemetry("tech_stack", { projectId });
+  const {
+    showContextBar,
+    contextMessage,
+    setContextMessage,
+    assistVisible,
+    assistMessage,
+    setAssistMessage,
+    setAssistVisible,
+    ctaEnabled,
+    setCtaEnabled,
+    ctaLabel,
+    setCtaLabel,
+    progress,
+    setProgress,
+  } = useAdaptiveUIState("tech_stack", {
+    initialContext: "Upload inventory + Lucid exports to unlock the table and graph views.",
+    initialCTA: "Open Digital Enterprise",
+    initialProgress: 0.25,
+  });
   // Inventory / artifacts
   const [inventoryFileName, setInventoryFileName] = useState<string | null>(null);
   const [lucidFileName, setLucidFileName] = useState<string | null>(null);
   const [inventoryRows, setInventoryRows] = useState<number>(0);
   const [normalizedApps, setNormalizedApps] = useState<number>(0);
   const [viewStage, setViewStage] = useState<ViewStage>("upload");
-  const [assistMessage, setAssistMessage] = useState<string | null>(null);
-  const [idleNotice, setIdleNotice] = useState<boolean>(false);
   const [invStats, setInvStats] = useState<InventoryStatsLocal | null>(null);
   const [uploadingInv, setUploadingInv] = useState<boolean>(false);
   const [invError, setInvError] = useState<string | null>(null);
@@ -272,7 +290,7 @@ export function TechStackClient({ projectId }: Props) {
   const [truthError, setTruthError] = useState<string | null>(null);
 
   const loadDEAndSystems = useCallback(async () => {
-    telemetryLog("tech_stack_view", { projectId });
+    telemetryLog("tech_stack_view", { projectId }, simplificationScore);
     setLoadingDE(true);
     setDeError(null);
     setDiffError(null);
@@ -281,17 +299,25 @@ export function TechStackClient({ projectId }: Props) {
       const started = performance.now();
       const stats = await fetchDigitalEnterpriseStats(projectId);
       setDeStats(stats ?? null);
-      telemetryLog("tech_stack_stats", {
-        systems: stats?.systemsFuture,
-        integrations: stats?.integrationsFuture,
-        domains: stats?.domainsDetected,
-        duration_ms: Math.round(performance.now() - started),
-      });
+      telemetryLog(
+        "tech_stack_stats",
+        {
+          systems: stats?.systemsFuture,
+          integrations: stats?.integrationsFuture,
+          domains: stats?.domainsDetected,
+          duration_ms: Math.round(performance.now() - started),
+        },
+        simplificationScore,
+      );
     } catch (err: any) {
       console.error("[TECH-STACK] Error loading digital enterprise stats", err);
       setDeError("Failed to load digital enterprise preview.");
       setDeStats(null);
-      telemetryLog("tech_stack_stats_error", { message: (err as Error)?.message });
+      telemetryLog(
+        "tech_stack_stats_error",
+        { message: (err as Error)?.message },
+        simplificationScore,
+      );
     } finally {
       setLoadingDE(false);
     }
@@ -312,7 +338,11 @@ export function TechStackClient({ projectId }: Props) {
         );
         setDiffError("Failed to load diagram systems for diff view.");
         setDiagramSystems([]);
-        telemetryLog("tech_stack_diff_error", { status: res.status, body: text });
+        telemetryLog(
+          "tech_stack_diff_error",
+          { status: res.status, body: text },
+          simplificationScore,
+        );
       } else {
         const json = await res.json();
         if (json && Array.isArray(json.systems)) {
@@ -346,17 +376,61 @@ export function TechStackClient({ projectId }: Props) {
 
   // Idle assist prompt to nudge uploads/normalization
   useEffect(() => {
-    setIdleNotice(false);
+    setAssistVisible(false);
     setAssistMessage(null);
     const timer = window.setTimeout(() => {
-      setIdleNotice(true);
+      setAssistVisible(true);
       setAssistMessage(
         "Upload an inventory CSV and a Lucid CSV to unlock the table and graph views.",
       );
-      telemetryLog("tech_stack_idle", { idle_ms: 45000 });
+      telemetryLog("tech_stack_idle", { idle_ms: 45000 }, simplificationScore);
     }, 45000);
     return () => window.clearTimeout(timer);
-  }, [inventoryRows, diagramSystems.length, diffStats, telemetryLog]);
+  }, [
+    inventoryRows,
+    diagramSystems.length,
+    diffStats,
+    telemetryLog,
+    setAssistMessage,
+    setAssistVisible,
+  ]);
+
+  // Adaptive context bar + CTA readiness
+  useEffect(() => {
+    const completionFlags = [
+      inventoryRows > 0,
+      diagramSystems.length > 0,
+      !!diffStats,
+    ];
+    const completionRatio =
+      completionFlags.filter(Boolean).length / completionFlags.length;
+    const stageBias =
+      viewStage === "graph" ? 1 : viewStage === "table" ? 0.66 : 0.35;
+    const nextProgress = Math.max(completionRatio, stageBias);
+
+    setProgress(nextProgress);
+    setCtaEnabled(viewStage !== "upload" && (diagramSystems.length > 0 || !!diffStats));
+
+    if (viewStage === "graph") {
+      setContextMessage("Graph view unlocked — continue to Digital Enterprise when ready.");
+      setCtaLabel("Open Digital Enterprise");
+    } else if (viewStage === "table") {
+      setContextMessage("Inventory parsed. Review overlaps, then load the graph.");
+      setCtaLabel("Go to Graph view");
+    } else {
+      setContextMessage("Start with inventory + Lucid uploads to light up the workspace.");
+      setCtaLabel("Upload artifacts first");
+    }
+  }, [
+    diffStats,
+    diagramSystems.length,
+    inventoryRows,
+    setContextMessage,
+    setCtaEnabled,
+    setCtaLabel,
+    setProgress,
+    viewStage,
+  ]);
 
   // Compute diff whenever inventory systems or diagram systems change
   useEffect(() => {
@@ -629,7 +703,7 @@ export function TechStackClient({ projectId }: Props) {
         uniqueSystems: stats.uniqueSystems,
       });
       setViewStage("table");
-      telemetryLog("upload_complete", { kind: "inventory" });
+      telemetryLog("upload_complete", { kind: "inventory" }, simplificationScore);
     } catch (err: any) {
       console.error("[TECH-STACK] Inventory upload failed (client parse)", err);
       setInvError(err?.message ?? "Inventory upload failed.");
@@ -651,7 +725,7 @@ export function TechStackClient({ projectId }: Props) {
       const resp = await uploadLucidCsv(projectId, file);
       console.log("[TECH-STACK] Lucid upload success", resp);
       setViewStage("graph");
-      telemetryLog("upload_complete", { kind: "lucid" });
+      telemetryLog("upload_complete", { kind: "lucid" }, simplificationScore);
 
       const stats = await fetchDigitalEnterpriseStats(projectId);
       if (stats) {
@@ -719,6 +793,53 @@ export function TechStackClient({ projectId }: Props) {
         title="Tech Stack Workspace"
         description="Upload inventories, diagrams, and Lucid exports to understand your applications, integrations, and dependencies."
       />
+      {showContextBar && (
+        <Card className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[0.65rem] tracking-[0.22em] text-slate-500 uppercase mb-1">
+              CONTEXT
+            </p>
+            <p className="text-xs text-slate-700">{contextMessage}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="h-2 w-36 rounded-full bg-slate-100">
+              <div
+                className="h-2 rounded-full bg-slate-900 transition-all"
+                style={{ width: `${Math.round(progress * 100)}%` }}
+              />
+            </div>
+            <span className="text-[0.75rem] font-semibold text-slate-800">
+              {Math.round(progress * 100)}%
+            </span>
+            <button
+              type="button"
+              disabled={!ctaEnabled}
+              onClick={() => {
+                telemetryLog(
+                  "tech_stack_cta",
+                  {
+                    projectId,
+                    viewStage,
+                    target: "digital_enterprise",
+                  },
+                  simplificationScore,
+                );
+                if (typeof window !== "undefined") {
+                  window.location.href = `/project/${projectId}/digital-enterprise`;
+                }
+              }}
+              className={
+                "rounded-full px-4 py-1.5 text-[0.75rem] font-semibold " +
+                (ctaEnabled
+                  ? "bg-slate-900 text-white hover:bg-slate-800"
+                  : "bg-slate-200 text-slate-500 cursor-not-allowed")
+              }
+            >
+              {ctaLabel}
+            </button>
+          </div>
+        </Card>
+      )}
       {(deError || diffError) && (
         <div className="space-y-2">
           {deError && <ErrorBanner message={deError} onRetry={loadDEAndSystems} />}
@@ -756,7 +877,7 @@ export function TechStackClient({ projectId }: Props) {
         </div>
       </Card>
 
-      {idleNotice && assistMessage && (
+      {assistVisible && assistMessage && (
         <Card className="mb-4 border-amber-200 bg-amber-50">
           <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
             NEXT STEP

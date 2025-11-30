@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { Card } from "@/components/ui/Card";
 import { useTelemetry } from "@/hooks/useTelemetry";
+import { useAdaptiveUIState } from "@/hooks/useAdaptiveUIState";
+import { useSimplificationMetrics } from "@/hooks/useSimplificationMetrics";
 
 type AggressionLevel = "conservative" | "balanced" | "bold";
 
@@ -56,6 +58,26 @@ export default function ProjectIntakePage() {
   const params = useParams<{ id: string }>();
   const telemetry = useTelemetry("intake", { projectId: params?.id });
   const startedRef = useRef(false);
+  const summaryLoggedRef = useRef(false);
+  const { snapshot, setMetrics } = useSimplificationMetrics("intake");
+  const {
+    showContextBar,
+    contextMessage,
+    setContextMessage,
+    assistVisible,
+    assistMessage,
+    setAssistMessage,
+    setAssistVisible,
+    ctaEnabled,
+    setCtaEnabled,
+    ctaLabel,
+    progress,
+    setProgress,
+  } = useAdaptiveUIState("intake", {
+    initialContext: "Define objectives to unlock adaptive guidance across workspaces.",
+    initialCTA: "Continue to Tech Stack",
+    initialProgress: 0.2,
+  });
 
   const projectId =
     typeof params?.id === "string"
@@ -70,8 +92,10 @@ export default function ProjectIntakePage() {
     useState<AggressionLevel | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [showAssist, setShowAssist] = useState<boolean>(false);
-  const [idleMessage, setIdleMessage] = useState<string | null>(null);
+  const prevMetricsRef = useRef<{ DC: number; CL: number }>({
+    DC: snapshot?.metrics?.DC ?? 0.65,
+    CL: snapshot?.metrics?.CL ?? 0.7,
+  });
 
   function toggleDriver(driver: string) {
     startedRef.current = true;
@@ -106,25 +130,54 @@ export default function ProjectIntakePage() {
       industry: selectedIndustry,
       drivers: selectedDrivers,
       aggression: selectedAggression,
-    });
+    }, simplificationScore);
     router.push(`/project/${projectId}/tech-stack`);
   }
 
   const canContinue =
     !!selectedIndustry && selectedDrivers.length > 0 && !!selectedAggression;
+  const completionRatio =
+    (Number(!!selectedIndustry) +
+      Number(selectedDrivers.length > 0) +
+      Number(!!selectedAggression)) /
+    3;
+  const simplificationScore = Math.min(
+    1,
+    Math.max(0, (snapshot?.metrics?.SSS ?? 2.5) / 5),
+  );
+  const simplificationLabel =
+    simplificationScore >= 0.8
+      ? "Clean intake"
+      : simplificationScore >= 0.5
+      ? "Mostly aligned"
+      : "Needs clarity";
+  const simplificationTone =
+    simplificationScore >= 0.8
+      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+      : simplificationScore >= 0.5
+      ? "bg-amber-50 text-amber-800 border-amber-200"
+      : "bg-rose-50 text-rose-700 border-rose-200";
 
   // Idle detection and gentle assist prompt
   useEffect(() => {
     if (!startedRef.current) return;
-    setShowAssist(false);
-    setIdleMessage(null);
+    setAssistVisible(false);
+    setAssistMessage(null);
     const timer = window.setTimeout(() => {
-      setShowAssist(true);
-      setIdleMessage("Need help clarifying your objectives?");
-      telemetry.log("intake_idle", { idle_ms: 45000 });
+      setAssistVisible(true);
+      setAssistMessage("Need help clarifying your objectives?");
+      telemetry.log("intake_idle", { idle_ms: 45000 }, simplificationScore);
     }, 45000);
     return () => window.clearTimeout(timer);
-  }, [selectedIndustry, selectedDrivers, selectedAggression, telemetry]);
+  }, [
+    selectedIndustry,
+    selectedDrivers,
+    selectedAggression,
+    telemetry,
+    setAssistVisible,
+    setAssistMessage,
+    simplificationScore,
+  ]);
 
   const validationErrors = (() => {
     let count = 0;
@@ -135,8 +188,47 @@ export default function ProjectIntakePage() {
   })();
 
   useEffect(() => {
-    telemetry.log("intake_view", { projectId });
-  }, [projectId, telemetry]);
+    telemetry.log("intake_view", { projectId }, simplificationScore);
+  }, [projectId, telemetry, simplificationScore]);
+
+  // Adaptive context bar + CTA readiness
+  useEffect(() => {
+    setProgress(completionRatio || 0);
+    setCtaEnabled(canContinue);
+    setContextMessage(
+      canContinue
+        ? "Summary ready — move forward to Tech Stack with confidence."
+        : "Capture industry, drivers, and posture to unlock the summary card.",
+    );
+    const nextMetrics = {
+      DC: 0.65 + completionRatio * 0.25,
+      CL: 0.7 - completionRatio * 0.3,
+    };
+    const dcDelta = Math.abs((prevMetricsRef.current?.DC ?? 0) - nextMetrics.DC);
+    const clDelta = Math.abs((prevMetricsRef.current?.CL ?? 0) - nextMetrics.CL);
+    if (dcDelta > 0.001 || clDelta > 0.001) {
+      prevMetricsRef.current = nextMetrics;
+      setMetrics(nextMetrics);
+    }
+    if (canContinue && !summaryLoggedRef.current) {
+      summaryLoggedRef.current = true;
+      telemetry.log(
+        "intake_summary_view",
+        { projectId },
+        simplificationScore,
+      );
+    }
+  }, [
+    canContinue,
+    completionRatio,
+    setContextMessage,
+    setCtaEnabled,
+    setProgress,
+    setMetrics,
+    telemetry,
+    projectId,
+    simplificationScore,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,12 +266,41 @@ export default function ProjectIntakePage() {
         description="Capture a few signals about your environment so Fuxi can tune how it interprets your tech stack and portfolio moves."
       />
 
-      {showAssist && idleMessage && (
+      {showContextBar && (
+        <Card className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[0.65rem] tracking-[0.22em] text-slate-500 uppercase mb-1">
+              CONTEXT
+            </p>
+            <p className="text-xs text-slate-700">
+              {contextMessage || "Adaptive guidance will surface as you progress."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-32 rounded-full bg-slate-100">
+              <div
+                className="h-2 rounded-full bg-slate-900 transition-all"
+                style={{ width: `${Math.round(progress * 100)}%` }}
+              />
+            </div>
+            <span className="text-[0.75rem] font-semibold text-slate-800">
+              {Math.round(progress * 100)}%
+            </span>
+            <span
+              className={`inline-flex items-center rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${simplificationTone}`}
+            >
+              {Math.round(simplificationScore * 100)}% · {simplificationLabel}
+            </span>
+          </div>
+        </Card>
+      )}
+
+      {assistVisible && assistMessage && (
         <Card className="mt-4 mb-4 border-amber-200 bg-amber-50">
           <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
             ASSIST
           </p>
-          <p className="text-xs text-amber-800">{idleMessage}</p>
+          <p className="text-xs text-amber-800">{assistMessage}</p>
         </Card>
       )}
 
@@ -328,16 +449,16 @@ export default function ProjectIntakePage() {
         </p>
         <button
           type="button"
-          disabled={!canContinue}
+          disabled={!ctaEnabled}
           onClick={handleContinue}
           className={
             "inline-flex items-center rounded-full px-5 py-2 text-[0.8rem] font-semibold " +
-            (canContinue
+            (ctaEnabled
               ? "bg-slate-900 text-white hover:bg-slate-800"
               : "bg-slate-200 text-slate-500 cursor-not-allowed")
           }
         >
-          Continue to Tech Stack
+          {ctaLabel}
         </button>
       </div>
     </div>

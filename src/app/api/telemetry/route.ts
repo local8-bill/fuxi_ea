@@ -70,8 +70,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Payload too large" }, { status: 413 });
     }
 
-    const json = (await req.json()) as TelemetryPayload;
-    const parsed = normalizeTelemetryPayload(json);
+    const json = (await req.json().catch(() => null)) as TelemetryPayload | null;
+    if (!json || typeof json !== "object") {
+      return NextResponse.json({ ok: false, error: "Invalid JSON payload" }, { status: 400 });
+    }
+
+    let parsed: TelemetryPayload;
+    try {
+      parsed = normalizeTelemetryPayload(json);
+    } catch (err: any) {
+      const message = err?.message || "Invalid telemetry payload";
+      return NextResponse.json({ ok: false, error: message }, { status: 400 });
+    }
     if (!workspaceEnum.options.includes(parsed.workspace_id as any)) {
       return NextResponse.json({ ok: false, error: "Invalid workspace" }, { status: 400 });
     }

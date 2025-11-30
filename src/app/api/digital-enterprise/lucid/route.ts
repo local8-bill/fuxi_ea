@@ -4,6 +4,7 @@ import {
   saveDigitalEnterpriseView,
   getStatsForProject,
 } from "@/domain/services/digitalEnterpriseStore";
+import { normalizeLucidData } from "@/domain/services/ingestion";
 import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 
 export const runtime = "nodejs";
@@ -59,6 +60,13 @@ export async function POST(req: NextRequest) {
       nodes: view.nodes.length,
       edges: view.edges.length,
     });
+
+    // Normalize for D027 pipeline and persist cleaned output
+    try {
+      await normalizeLucidData(text);
+    } catch (err) {
+      console.warn("[DE-LUCID] normalizeLucidData failed", err);
+    }
 
     // CRITICAL: pass the parsed view into the store
     await saveDigitalEnterpriseView(projectId, view);
