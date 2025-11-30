@@ -82,6 +82,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   >([]);
   const [transform, setTransform] = useState<[number, number, number]>([0, 0, 1]);
   const [showDomainLegend, setShowDomainLegend] = useState<boolean>(false);
+  const [hiddenDomains, setHiddenDomains] = useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     const handler = () => setShowOtherDomain((prev) => !prev);
@@ -191,7 +192,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
           .map((n) => {
             const meta = simData.nodes.find((m) => m.id === n.id);
             const norm = normalizeDomainValue(meta?.domain);
-            if (!showOtherDomain && norm === "Other") return null;
+            if ((!showOtherDomain && norm === "Other") || hiddenDomains.has(norm)) return null;
             return norm;
           })
           .filter(Boolean),
@@ -217,7 +218,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
       .map((n) => {
         const meta = simData.nodes.find((m) => m.id === n.id);
         const domain = normalizeDomainValue(meta?.domain);
-        if (!showOtherDomain && domain === "Other") return null;
+        if ((!showOtherDomain && domain === "Other") || hiddenDomains.has(domain)) return null;
         const col = domainIndex.get(domain) ?? 0;
         counts[domain] = (counts[domain] ?? 0) + 1;
         const row = (counts[domain] - 1) % maxRows;
@@ -447,13 +448,31 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
               Domains ({domainColors.size}) ▾
             </button>
             {showDomainLegend && (
-              <div className="flex flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
-                {[...domainColors.entries()].map(([name, c]) => (
-                  <span key={name} className="fx-pill">
-                    <span className="fx-legend-dot" style={{ backgroundColor: c }} />
-                    {name}
-                  </span>
-                ))}
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                {[...domainColors.entries()].map(([name, c]) => {
+                  const hidden = hiddenDomains.has(name);
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => {
+                        const next = new Set(hiddenDomains);
+                        if (hidden) next.delete(name);
+                        else next.add(name);
+                        setHiddenDomains(next);
+                      }}
+                      className={
+                        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold " +
+                        (hidden
+                          ? "border-slate-200 bg-white text-slate-400"
+                          : "border-slate-200 bg-white text-slate-800")
+                      }
+                    >
+                      <span className="fx-legend-dot" style={{ backgroundColor: c }} />
+                      {name}
+                      {hidden ? " (hidden)" : ""}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
