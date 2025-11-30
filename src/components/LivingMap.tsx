@@ -181,62 +181,54 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const laidOutNodes = useMemo(() => {
     let boxes: Array<{ label: string; x: number; width: number; height: number }> = [];
     // Group by domain: place nodes in columns by domain key.
-    if (layer === "domain") {
-      const domains = Array.from(
-        new Set(
-          baseNodes
-            .map((n) => {
-              const meta = simData.nodes.find((m) => m.id === n.id);
-              const norm = normalizeDomainValue(meta?.domain);
-              if (!showOtherDomain && norm === "Other") return null;
-              return norm;
-            })
-            .filter(Boolean),
-        ),
-      ).sort();
-      const domainIndex = new Map<string, number>();
-      domains.forEach((d, idx) => domainIndex.set(d || "Other", idx));
+  if (layer === "domain") {
+    const domains = Array.from(
+      new Set(
+        baseNodes
+          .map((n) => {
+            const meta = simData.nodes.find((m) => m.id === n.id);
+            const norm = normalizeDomainValue(meta?.domain);
+            if (!showOtherDomain && norm === "Other") return null;
+            return norm;
+          })
+          .filter(Boolean),
+      ),
+    ).sort();
+    const domainIndex = new Map<string, number>();
+    domains.forEach((d, idx) => domainIndex.set(d || "Other", idx));
 
-      const hGap = 320;
-      const vGap = 150;
-      const maxRows = 14;
-      const counts: Record<string, number> = {};
+    // Widen columns and add vertical padding so domains feel less cramped.
+    const hGap = 420;
+    const vGap = 180;
+    const maxRows = 10;
+    const counts: Record<string, number> = {};
 
-      boxes = domains.map((d, idx) => {
-        const count = baseNodes.filter((n) => {
-          const meta = simData.nodes.find((m) => m.id === n.id);
-          const domain = normalizeDomainValue(meta?.domain);
-          return domain === d;
-        }).length;
-        const rows = Math.min(maxRows, Math.max(1, count));
-        const blocks = Math.max(1, Math.ceil(count / maxRows));
+    boxes = domains.map((d, idx) => ({
+      label: d,
+      x: idx * hGap - 40,
+      width: hGap - 80,
+      height: 1200, // generous vertical space
+    }));
+
+    const laidOut = baseNodes
+      .map((n) => {
+        const meta = simData.nodes.find((m) => m.id === n.id);
+        const domain = normalizeDomainValue(meta?.domain);
+        if (!showOtherDomain && domain === "Other") return null;
+        const col = domainIndex.get(domain) ?? 0;
+        counts[domain] = (counts[domain] ?? 0) + 1;
+        const row = (counts[domain] - 1) % maxRows;
+        const rowBlock = Math.floor((counts[domain] - 1) / maxRows);
         return {
-          label: d,
-          x: idx * hGap - 20,
-          width: hGap - 40,
-          height: rows * vGap * blocks + 60,
+          ...n,
+          position: {
+            x: col * hGap + rowBlock * 60,
+            y: 120 + row * vGap, // add top padding
+          },
         };
-      });
-
-      const laidOut = baseNodes
-        .map((n) => {
-          const meta = simData.nodes.find((m) => m.id === n.id);
-          const domain = normalizeDomainValue(meta?.domain);
-          if (!showOtherDomain && domain === "Other") return null;
-          const col = domainIndex.get(domain) ?? 0;
-          counts[domain] = (counts[domain] ?? 0) + 1;
-          const row = (counts[domain] - 1) % maxRows;
-          const rowBlock = Math.floor((counts[domain] - 1) / maxRows);
-          return {
-            ...n,
-            position: {
-              x: col * hGap + rowBlock * 40,
-              y: row * vGap,
-            },
-          };
-        })
-        .filter(Boolean) as Node[];
-      setDomainBoxes(boxes);
+      })
+      .filter(Boolean) as Node[];
+    setDomainBoxes(boxes);
       return laidOut;
     }
 
