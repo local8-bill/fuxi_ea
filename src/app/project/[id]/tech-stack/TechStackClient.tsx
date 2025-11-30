@@ -781,6 +781,8 @@ export function TechStackClient({ projectId }: Props) {
     ((deStats.systemsFuture ?? 0) > 0 ||
       (deStats.integrationsFuture ?? 0) > 0);
 
+  const canReviewHarmonization = hasDE || artifactCount > 0;
+
 
   const visibleOverlapClusters = overlapClusters.filter(
     (c) => c.label !== "Other / uncategorized"
@@ -836,6 +838,32 @@ export function TechStackClient({ projectId }: Props) {
               }
             >
               {ctaLabel}
+            </button>
+            <button
+              type="button"
+              disabled={!canReviewHarmonization}
+              onClick={() => {
+                telemetryLog(
+                  "tech_stack_cta",
+                  {
+                    projectId,
+                    viewStage,
+                    target: "harmonization_review",
+                  },
+                  simplificationScore,
+                );
+                if (typeof window !== "undefined") {
+                  window.location.href = `/project/${projectId}/harmonization-review`;
+                }
+              }}
+              className={
+                "rounded-full px-4 py-1.5 text-[0.75rem] font-semibold " +
+                (canReviewHarmonization
+                  ? "border border-slate-300 text-slate-800 hover:bg-slate-50"
+                  : "border border-slate-200 text-slate-400 cursor-not-allowed")
+              }
+            >
+              Review harmonization
             </button>
           </div>
         </Card>
