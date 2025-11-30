@@ -1,65 +1,77 @@
-"use server";
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { ReactElement } from "react";
 
-import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
-import { Card } from "@/components/ui/Card";
-import { DirectiveTable } from "@/components/verification/DirectiveTable";
-import { TestResults } from "@/components/verification/TestResults";
-import { HealthMeter } from "@/components/verification/HealthMeter";
-import { loadVerificationData } from "@/lib/verification/data";
-import { notFound } from "next/navigation";
+const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
+const PROJECTS_ROOT = path.join(DATA_ROOT, "projects");
 
-type Params = { id: string };
+// Next 16: params is a Promise and must be awaited.
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
 
-export default async function VerificationPage({ params }: { params: Promise<Params> }) {
-  const { id: projectId } = await params;
-  if (!projectId) return notFound();
+export default async function VerificationPage({ params }: PageProps): Promise<ReactElement> {
+  const resolved = await params;
+  const rawId = resolved?.id;
+  const projectId = typeof rawId === "string" && rawId !== "undefined" ? rawId : "";
+  const state = await readState(projectId);
 
-  const { directives, tests, summary } = await loadVerificationData();
+  if (!state) {
+    return (
+      <div className="mx-auto max-w-5xl px-6 py-12">
+        <h1 className="text-2xl font-semibold text-slate-900">Verification Dashboard</h1>
+        <p className="mt-3 text-slate-600">No project state found for {projectId}. Initialize the project first.</p>
+      </div>
+    );
+  }
+
+  const steps = ["intake", "tech-stack", "connection-confirmation", "digital-enterprise"] as const;
 
   return (
-    <div className="px-6 py-8 md:px-8 lg:px-10 max-w-6xl mx-auto space-y-6">
-      <WorkspaceHeader
-        statusLabel="D014 · Verification"
-        title="Testing & Verification Dashboard"
-        description="Central view of directive status, test outcomes, and component health signals."
-      >
-        <p className="text-xs text-gray-500 mt-1">
-          Project: {projectId} · Pulls directive metadata from docs/features and test stubs from /tests/results (D017 hookup pending).
-        </p>
-      </WorkspaceHeader>
-
-      <Card className="space-y-3">
-        <HealthMeter summary={summary} />
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 uppercase mb-1">Directives</p>
-              <p className="text-xs text-slate-500">Parsed from docs/features/*.md · Status inferred from content.</p>
-            </div>
-          </div>
-          <DirectiveTable items={directives} />
-        </Card>
-
-        <Card className="space-y-3">
-          <div>
-            <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 uppercase mb-1">Tests</p>
-            <p className="text-xs text-slate-500">Waiting on D017 feed in /tests/results/*.json.</p>
-          </div>
-          <TestResults results={tests} />
-        </Card>
+    <div className="mx-auto max-w-6xl px-6 py-10">
+      <h1 className="text-2xl font-bold text-slate-900">Verification Dashboard</h1>
+      <p className="mt-2 text-slate-600">Step completion and timestamps for project {projectId}.</p>
+      <div className="mt-6 overflow-auto rounded-xl border border-slate-200">
+        <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+            <tr>
+              <th className="px-4 py-3">Step</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Updated</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {steps.map((s) => {
+              const st = (state as any)?.steps?.[s];
+              return (
+                <tr key={s} className="bg-white">
+                  <td className="px-4 py-3 font-semibold text-slate-900">{s}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        "rounded-full px-2 py-1 text-xs font-semibold " +
+                        (st?.status === "complete" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700")
+                      }
+                    >
+                      {st?.status ?? "pending"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">{st?.updatedAt ? new Date(st.updatedAt).toLocaleString() : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-
-      <Card className="space-y-2">
-        <p className="text-[0.65rem] tracking-[0.25em] text-gray-500 uppercase mb-1">Summary</p>
-        <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1">
-          <li>Directive registry auto-parsed; statuses are best-effort from file content.</li>
-          <li>Tests integrate with future D017 runner; currently shows any JSON in /tests/results.</li>
-          <li>Build status placeholder; wire to CI feed when available.</li>
-        </ul>
-      </Card>
     </div>
   );
+}
+
+async function readState(projectId: string): Promise<any | null> {
+  try {
+    const raw = await fs.readFile(path.join(PROJECTS_ROOT, projectId, "project.json"), "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }

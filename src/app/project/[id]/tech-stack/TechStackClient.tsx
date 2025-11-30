@@ -5,6 +5,7 @@ import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { FileUploadPanel } from "@/components/panels/FileUploadPanel";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { Card } from "@/components/ui/Card";
+import { ProjectFlowBar } from "@/components/ProjectFlowBar";
 import {
   uploadLucidCsv,
   fetchDigitalEnterpriseStats,
@@ -795,6 +796,7 @@ export function TechStackClient({ projectId }: Props) {
 
   return (
     <div className="px-8 py-10 max-w-6xl mx-auto">
+      <ProjectFlowBar projectId={projectId} />
       <WorkspaceHeader
         statusLabel="STATUS"
         title="Tech Stack Workspace"

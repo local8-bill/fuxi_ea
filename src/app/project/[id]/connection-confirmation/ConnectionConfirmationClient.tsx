@@ -7,6 +7,7 @@ import type { HarmonizedSystem } from "@/domain/services/harmonization";
 import type { ConnectionSuggestion } from "@/domain/services/connectionInference";
 import { ConnectionPanel } from "@/components/ConnectionPanel";
 import { useProjectState } from "@/hooks/useProjectState";
+import { ProjectFlowBar } from "@/components/ProjectFlowBar";
 
 type Props = {
   projectId: string;
@@ -101,6 +102,7 @@ export default function ConnectionConfirmationClient({ projectId, suggestions, n
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
+      <ProjectFlowBar projectId={projectId} />
       <header className="mb-6">
         <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Connection Confirmation</p>
         <h1 className="text-2xl font-bold text-slate-900">Review AI-suggested connections</h1>
