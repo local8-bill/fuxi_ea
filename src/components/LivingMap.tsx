@@ -7,7 +7,7 @@ import ReactFlow, {
   Node,
   Edge,
   OnInit,
-  useStore,
+  Viewport,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import type { LivingMapData, SimulationMode } from "@/types/livingMap";
@@ -80,6 +80,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const [domainBoxes, setDomainBoxes] = useState<
     Array<{ label: string; x: number; width: number; height: number }>
   >([]);
+  const [transform, setTransform] = useState<[number, number, number]>([0, 0, 1]);
 
   React.useEffect(() => {
     const handler = () => setShowOtherDomain((prev) => !prev);
@@ -348,7 +349,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     "rounded-full px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300";
 
   // Track viewport transform so domain overlays move with pan/zoom.
-  const [tx, ty, tz] = useStore((s) => s.transform);
+  const [tx, ty, tz] = transform;
 
   return (
     <div className="w-full">
@@ -528,6 +529,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         )}
         <ReactFlow
           onInit={(inst) => setFlowInstance(inst)}
+          onMove={(_, vp: Viewport) => setTransform([vp.x, vp.y, vp.zoom])}
           nodesDraggable={layer !== "domain"}
           nodesConnectable={layer !== "domain"}
           elementsSelectable={layer !== "domain"}
