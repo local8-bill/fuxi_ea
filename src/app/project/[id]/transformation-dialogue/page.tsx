@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ReactElement } from "react";
 import type { HarmonizedGraph } from "@/domain/services/harmonization";
 import TransformationDialogueClient, { type TransformationItem } from "./TransformationDialogueClient";
+import { inferTransformation } from "@/domain/services/aiInference";
 
 // Next 16: params is a Promise and must be awaited.
 interface PageProps {
@@ -48,6 +49,7 @@ function buildItems(graph: HarmonizedGraph): TransformationItem[] {
     state: n.state,
     confidence: n.confidence ?? 0,
     sources: n.source_origin ?? [],
+    aiSuggestion: inferTransformation(n),
   }));
 }
 

@@ -11,6 +11,7 @@ export type TransformationItem = {
   state: "added" | "removed" | "modified" | "unchanged";
   confidence: number;
   sources?: string[];
+  aiSuggestion?: ActionType | null;
 };
 
 type ActionType = "replace" | "modernize" | "retire" | "rename" | "keep";
@@ -54,12 +55,31 @@ export default function TransformationDialogueClient({ projectId, items }: Props
   const [selections, setSelections] = React.useState<Record<string, Selection>>({});
   const [saving, setSaving] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [domainFilter, setDomainFilter] = React.useState<string>("All");
+  const [sortKey, setSortKey] = React.useState<"domain" | "state" | "confidence">("domain");
 
   React.useEffect(() => {
     log("transformation_dialogue_load", {
       system_count: items.length,
       domain_count: new Set(items.map((i) => i.domain)).size,
     });
+    // Pre-apply AI suggestions
+    const initial: Record<string, Selection> = {};
+    items.forEach((item) => {
+      const suggest = item.aiSuggestion;
+      if (suggest && item.confidence >= 0.5) {
+        initial[item.id] = { action: suggest };
+        log("ai_inference_applied", {
+          system_id: item.id,
+          label: item.label,
+          ai_suggestion: suggest,
+          confidence: item.confidence,
+        });
+      }
+    });
+    if (Object.keys(initial).length) {
+      setSelections((prev) => ({ ...initial, ...prev }));
+    }
   }, [items, log]);
 
   const handleAction = (id: string, action: ActionType) => {
@@ -71,6 +91,14 @@ export default function TransformationDialogueClient({ projectId, items }: Props
       },
     }));
     const item = items.find((i) => i.id === id);
+    if (item?.aiSuggestion && item.aiSuggestion !== action) {
+      log("user_override_ai_inference", {
+        system_id: id,
+        label: item.label,
+        previous_suggestion: item.aiSuggestion,
+        new_action: action,
+      });
+    }
     log("transformation_action_select", {
       system_id: id,
       label: item?.label,
@@ -143,6 +171,7 @@ export default function TransformationDialogueClient({ projectId, items }: Props
           mapped_system: sel.mappedSystem ?? "",
           effort: sel.effort ?? null,
           timeline_months: sel.timelineMonths ?? null,
+          ai_suggestion: item?.aiSuggestion ?? null,
         };
       });
 
@@ -184,6 +213,38 @@ export default function TransformationDialogueClient({ projectId, items }: Props
         <Metric label="Avg. effort" value={avgEffort ?? "—"} />
       </section>
 
+      <section className="mt-6 flex flex-wrap items-center gap-3 text-sm text-slate-700">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</span>
+          <select
+            value={domainFilter}
+            onChange={(e) => setDomainFilter(e.target.value)}
+            className="rounded-full border border-slate-200 px-3 py-1 text-sm"
+          >
+            <option value="All">All Domains</option>
+            {Array.from(new Set(items.map((i) => i.domain)))
+              .sort()
+              .map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sort</span>
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as any)}
+            className="rounded-full border border-slate-200 px-3 py-1 text-sm"
+          >
+            <option value="domain">Domain</option>
+            <option value="state">State</option>
+            <option value="confidence">Confidence</option>
+          </select>
+        </div>
+      </section>
+
       {error && <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>}
 
       <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -196,7 +257,7 @@ export default function TransformationDialogueClient({ projectId, items }: Props
         </div>
 
         <div className="space-y-4">
-          {groupByDomain(items).map(({ domain, systems }) => (
+          {groupByDomain(items, domainFilter, sortKey).map(({ domain, systems }) => (
             <div key={domain} className="rounded-xl border border-slate-200">
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2">
                 <div className="text-sm font-semibold text-slate-800">{domain}</div>
@@ -212,6 +273,14 @@ export default function TransformationDialogueClient({ projectId, items }: Props
                         <div className="text-xs text-slate-600">
                           State: {sys.state} · Confidence: {sys.confidence.toFixed(2)}
                         </div>
+                        {sys.aiSuggestion && sys.confidence >= 0.5 && (
+                          <div className="text-[11px] text-emerald-700">
+                            AI suggests: {actionLabels[sys.aiSuggestion]}
+                          </div>
+                        )}
+                        {sys.confidence < 0.5 && (
+                          <div className="text-[11px] text-amber-700">Needs review (low confidence)</div>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2 md:col-span-2">
                         {(Object.keys(actionLabels) as ActionType[]).map((action) => (
@@ -346,9 +415,21 @@ function Metric({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function groupByDomain(items: TransformationItem[]) {
+function groupByDomain(
+  items: TransformationItem[],
+  domainFilter: string,
+  sortKey: "domain" | "state" | "confidence",
+) {
+  const filtered = domainFilter === "All" ? items : items.filter((i) => i.domain === domainFilter);
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortKey === "domain") return a.domain.localeCompare(b.domain);
+    if (sortKey === "state") return a.state.localeCompare(b.state);
+    if (sortKey === "confidence") return (b.confidence ?? 0) - (a.confidence ?? 0);
+    return 0;
+  });
+
   const map = new Map<string, TransformationItem[]>();
-  items.forEach((item) => {
+  sorted.forEach((item) => {
     const list = map.get(item.domain) ?? [];
     list.push(item);
     map.set(item.domain, list);
