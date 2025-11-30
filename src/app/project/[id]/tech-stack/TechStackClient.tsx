@@ -449,7 +449,8 @@ export function TechStackClient({ projectId }: Props) {
         .filter((n) => n && n.trim().length > 0),
     );
 
-    if (invNormSet.size === 0 && diagNormSet.size === 0) {
+    // Require both sources to build a diff; otherwise clear.
+    if (invNormSet.size === 0 || diagNormSet.size === 0) {
       setDiffStats(null);
       return;
     }
@@ -591,7 +592,8 @@ export function TechStackClient({ projectId }: Props) {
 
   // Kick AI when diff changes
   useEffect(() => {
-    if (!diffStats) {
+    // Only run Truth Pass when both inventory + diagram sources exist and diff is present.
+    if (!diffStats || inventorySystemsNorm.length === 0 || diagramSystems.length === 0) {
       setTruthRows([]);
       return;
     }
