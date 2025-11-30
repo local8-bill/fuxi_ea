@@ -4,6 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 import { getDigitalEnterpriseView } from "@/domain/services/digitalEnterpriseStore";
 import { harmonizeSystems } from "@/domain/services/harmonization";
+import fs from "node:fs/promises";
+import path from "node:path";
+
+const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
+const CONFIRMED_CONNECTIONS = path.join(DATA_ROOT, "connections", "derived_edges.json");
 
 export async function GET(req: NextRequest) {
   const auth = requireAuth(req);
@@ -21,12 +26,13 @@ export async function GET(req: NextRequest) {
     // Harmonization produces unified graph; fallback to stored Lucid view if harmonization fails.
     try {
       const graph = await harmonizeSystems({ mode });
+      const merged = await mergeConfirmedEdges(graph);
       return NextResponse.json(
         {
           ok: true,
           projectId,
-          nodes: graph.nodes,
-          edges: graph.edges,
+          nodes: merged.nodes,
+          edges: merged.edges,
         },
         { status: 200 },
       );
@@ -54,5 +60,32 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     console.error("[DE-VIEW] GET error", err);
     return jsonError(500, "Failed to load digital enterprise view", err?.message);
+  }
+}
+
+async function mergeConfirmedEdges(graph: Awaited<ReturnType<typeof harmonizeSystems>>) {
+  try {
+    const raw = await fs.readFile(CONFIRMED_CONNECTIONS, "utf8");
+    const parsed = JSON.parse(raw);
+    const edges = parsed?.edges ?? [];
+    if (!Array.isArray(edges) || edges.length === 0) return graph;
+    const nodeIds = new Set(graph.nodes.map((n) => n.id));
+    const mergedEdges = [...graph.edges];
+    for (const e of edges) {
+      if (!e?.source || !e?.target) continue;
+      if (!nodeIds.has(e.source) || !nodeIds.has(e.target)) continue;
+      const id = e.id ?? `${e.source}->${e.target}`;
+      if (mergedEdges.find((ex) => ex.id === id)) continue;
+      mergedEdges.push({
+        id,
+        source: e.source,
+        target: e.target,
+        state: "confirmed",
+        confidence: e.confidence ?? 0.7,
+      });
+    }
+    return { ...graph, edges: mergedEdges };
+  } catch {
+    return graph;
   }
 }
