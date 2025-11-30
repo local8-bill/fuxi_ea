@@ -6,6 +6,7 @@ export const workspaceEnum = z.enum([
   "digital_enterprise",
   "portfolio",
   "insights",
+  "harmonization_review",
 ]);
 
 export const eventType = z.string().min(1);
