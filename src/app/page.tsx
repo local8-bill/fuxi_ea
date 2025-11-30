@@ -51,14 +51,23 @@ export default function StartPage() {
   const [project, setProject] = React.useState("");
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
-  const handleLaunch = () => {
+  const handleLaunch = async () => {
     const trimmed = project.trim();
     if (!trimmed) {
       setErrorMsg("Please enter a project name.");
       return;
     }
     setErrorMsg(null);
-    router.push(`/project/${trimmed}/scoring`);
+    try {
+      await fetch("/api/projects/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: trimmed }),
+      });
+    } catch {
+      // non-blocking; still navigate
+    }
+    router.push(`/project/${trimmed}/intake`);
   };
 
   return (
@@ -94,10 +103,10 @@ export default function StartPage() {
               </button>
             </div>
             {errorMsg && (
-            <p className="mt-2 text-xs text-red-600">
-              {errorMsg}
-            </p>
-          )}
+              <p className="mt-2 text-xs text-red-600">
+                {errorMsg}
+              </p>
+            )}
           </div>
         </section>
 
