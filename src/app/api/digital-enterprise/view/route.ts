@@ -7,8 +7,6 @@ import { harmonizeSystems } from "@/domain/services/harmonization";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-export const runtime = "nodejs";
-
 const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
 const CONFIRMED_CONNECTIONS = path.join(DATA_ROOT, "connections", "derived_edges.json");
 
