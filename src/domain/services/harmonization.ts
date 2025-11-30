@@ -153,9 +153,13 @@ function normalizeRecord(row: Record<string, any>, source: Source) {
   return { name, domain, upstream, downstream, disposition, source };
 }
 
-function buildRawRecords(mode: HarmonizeMode): { records: RawRecord[]; headerMapping: Record<string, string[]> } {
+function buildRawRecords(
+  mode: HarmonizeMode,
+): { records: RawRecord[]; headerMapping: Record<string, string[]>; hasFuture: boolean; hasCurrent: boolean } {
   const records: RawRecord[] = [];
   const headerMapping: Record<string, string[]> = {};
+  let hasFuture = false;
+  let hasCurrent = false;
 
   const datasets: Array<{ rows: any[]; source: Source }> = [];
 
@@ -173,19 +177,23 @@ function buildRawRecords(mode: HarmonizeMode): { records: RawRecord[]; headerMap
   if (includeCurrent) {
     datasets.push({ rows: lucid, source: "Lucid" });
     datasets.push({ rows: inventory, source: "Inventory" });
+    if ((lucid?.length ?? 0) > 0 || (inventory?.length ?? 0) > 0) hasCurrent = true;
   }
   if (includeFuture) {
     datasets.push({ rows: futureJson, source: "Future" });
+    if ((futureJson?.length ?? 0) > 0) hasFuture = true;
   }
 
   // CSV datasets with flexible headers
   if (includeCurrent) {
     const currentCsvRows = parseCsvFile(CURRENT_CSV);
     if (currentCsvRows.length) datasets.push({ rows: currentCsvRows, source: "Inventory" });
+    if (currentCsvRows.length) hasCurrent = true;
   }
   if (includeFuture) {
     const futureCsvRows = parseCsvFile(FUTURE_CSV);
     if (futureCsvRows.length) datasets.push({ rows: futureCsvRows, source: "Future" });
+    if (futureCsvRows.length) hasFuture = true;
   }
 
   const expectedFields: Record<string, string[]> = {
@@ -224,7 +232,7 @@ function buildRawRecords(mode: HarmonizeMode): { records: RawRecord[]; headerMap
       });
     }
   }
-  return { records, headerMapping };
+  return { records, headerMapping, hasFuture, hasCurrent };
 }
 
 function requireCacheSafe(file: string): any[] | null {
@@ -241,7 +249,12 @@ function stateFromPresence(
   inInventory: boolean,
   inFuture: boolean,
   changed: boolean,
+  hasFuture: boolean,
 ): HarmonizedSystem["state"] {
+  if (!hasFuture) {
+    // Single-source scenario: keep as unchanged rather than removed.
+    return "unchanged";
+  }
   if (inFuture && !inLucid && !inInventory) return "added";
   if (!inFuture && (inLucid || inInventory)) return "removed";
   if (changed) return "modified";
@@ -250,7 +263,7 @@ function stateFromPresence(
 
 export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise<HarmonizedGraph> {
   const mode: HarmonizeMode = opts?.mode ?? "all";
-  const { records, headerMapping } = buildRawRecords(mode);
+  const { records, headerMapping, hasFuture, hasCurrent } = buildRawRecords(mode);
   await appendTelemetry({ event_type: "harmonization_start", data: { header_mapping: headerMapping, mode } });
   const expectedCount = 5; // label/system/domain/upstream/downstream
   Object.entries(headerMapping).forEach(([source, mappings]) => {
@@ -299,7 +312,7 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
     const inLucid = entry.sources.includes("Lucid");
     const inInventory = entry.sources.includes("Inventory");
     const inFuture = entry.sources.includes("Future");
-    const state = stateFromPresence(inLucid, inInventory, inFuture, entry.changed);
+    const state = stateFromPresence(inLucid, inInventory, inFuture, entry.changed, hasFuture);
     const confidence =
       0.5 +
       (inFuture ? 0.2 : 0) +
