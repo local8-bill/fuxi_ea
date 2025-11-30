@@ -1,0 +1,60 @@
+"use server";
+
+import { NextResponse } from "next/server";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { normalizeTelemetryPayload } from "@/lib/telemetry/schema";
+
+const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
+const CONNECTION_DIR = path.join(DATA_ROOT, "connections");
+const CONNECTION_FILE = path.join(CONNECTION_DIR, "confirmed_connections.json");
+const TELEMETRY_FILE = path.join(DATA_ROOT, "telemetry_events.ndjson");
+
+export async function POST(req: Request) {
+  try {
+    const body = (await req.json().catch(() => null)) as {
+      projectId?: string;
+      decisions?: Array<{
+        id: string;
+        decision: "confirmed" | "rejected";
+        reason?: string;
+        source: string;
+        target: string;
+        confidence: number;
+      }>;
+    } | null;
+
+    if (!body || !Array.isArray(body.decisions)) {
+      return NextResponse.json({ ok: false, error: "Invalid payload" }, { status: 400 });
+    }
+
+    await fs.mkdir(CONNECTION_DIR, { recursive: true });
+    await fs.writeFile(
+      CONNECTION_FILE,
+      JSON.stringify({ projectId: body.projectId ?? "", decisions: body.decisions }, null, 2),
+      "utf8",
+    );
+
+    await appendTelemetry({
+      session_id: "server",
+      workspace_id: "connection_confirmation",
+      event_type: "connection_decisions_saved",
+      data: { project_id: body.projectId, decisions: body.decisions.length },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
+    console.error("[CONNECTIONS] Failed to persist decisions", err);
+    return NextResponse.json({ ok: false, error: "Failed to persist decisions" }, { status: 500 });
+  }
+}
+
+async function appendTelemetry(event: any) {
+  try {
+    const normalized = normalizeTelemetryPayload(event);
+    await fs.mkdir(path.dirname(TELEMETRY_FILE), { recursive: true });
+    await fs.appendFile(TELEMETRY_FILE, JSON.stringify(normalized) + "\n", "utf8");
+  } catch (err) {
+    console.warn("[CONNECTIONS][telemetry] failed", err);
+  }
+}
