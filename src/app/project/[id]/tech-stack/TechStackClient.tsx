@@ -706,6 +706,14 @@ export function TechStackClient({ projectId }: Props) {
       setInventorySystemsNorm(Array.from(normSet));
       setInventoryDisplayByNorm(displayMap);
 
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        await fetch("/api/ingestion/inventory", { method: "POST", body: formData });
+      } catch (err) {
+        console.warn("[TECH-STACK] Failed to persist inventory upload", err);
+      }
+
       console.log("[TECH-STACK] Inventory parsed locally", {
         rowCount: stats.rowCount,
         uniqueSystems: stats.uniqueSystems,
