@@ -51,7 +51,10 @@ const COLORS = {
 type LayerMode = "stack" | "domain" | "integration" | "disposition" | "roi" | "ai";
 
 function normalizeDomainValue(d?: string | null): string {
-  const v = (d || "Other").toString().trim().toLowerCase();
+  const raw = (d ?? "").toString().trim();
+  if (raw) return raw;
+  // Only fallback to heuristics when no domain is provided.
+  const v = raw.toLowerCase();
   if (v.includes("commerce") || v.includes("omni") || v.includes("order") || v.includes("cart")) return "Commerce";
   if (v.includes("order management")) return "Order Management";
   if (v.includes("erp") || v.includes("sap") || v.includes("oracle") || v.includes("finance")) return "ERP";
