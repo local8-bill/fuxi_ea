@@ -7,6 +7,7 @@ import ReactFlow, {
   Node,
   Edge,
   OnInit,
+  useStore,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import type { LivingMapData, SimulationMode } from "@/types/livingMap";
@@ -346,6 +347,9 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const btnBase =
     "rounded-full px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300";
 
+  // Track viewport transform so domain overlays move with pan/zoom.
+  const [tx, ty, tz] = useStore((s) => s.transform);
+
   return (
     <div className="w-full">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -497,7 +501,13 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
 
       <div className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm relative overflow-hidden" style={{ height }}>
         {layer === "domain" && domainBoxes.length > 0 && (
-          <div className="absolute inset-0 pointer-events-none">
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              transform: `translate(${tx}px, ${ty}px) scale(${tz})`,
+              transformOrigin: "0 0",
+            }}
+          >
             {domainBoxes.map((box, idx) => (
               <div
                 key={box.label + idx}
