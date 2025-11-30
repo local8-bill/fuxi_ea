@@ -81,6 +81,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     Array<{ label: string; x: number; width: number; height: number }>
   >([]);
   const [transform, setTransform] = useState<[number, number, number]>([0, 0, 1]);
+  const [showDomainLegend, setShowDomainLegend] = useState<boolean>(false);
 
   React.useEffect(() => {
     const handler = () => setShowOtherDomain((prev) => !prev);
@@ -439,13 +440,22 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
       <div className="mb-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
         {layer === "domain" && (
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-800">Domains</span>
-            {[...domainColors.entries()].map(([name, c]) => (
-              <span key={name} className="fx-pill">
-                <span className="fx-legend-dot" style={{ backgroundColor: c }} />
-                {name}
-              </span>
-            ))}
+            <button
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+              onClick={() => setShowDomainLegend((v) => !v)}
+            >
+              Domains ({domainColors.size}) ▾
+            </button>
+            {showDomainLegend && (
+              <div className="flex flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
+                {[...domainColors.entries()].map(([name, c]) => (
+                  <span key={name} className="fx-pill">
+                    <span className="fx-legend-dot" style={{ backgroundColor: c }} />
+                    {name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {layer === "disposition" && (
