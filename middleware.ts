@@ -1,32 +1,24 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import fs from "node:fs/promises";
-import path from "node:path";
-
-const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
-const PROJECTS_ROOT = path.join(DATA_ROOT, "projects");
 
 const stepOrder = ["intake", "tech-stack", "connection-confirmation", "digital-enterprise"] as const;
 
-function projectFile(projectId: string) {
-  return path.join(PROJECTS_ROOT, projectId, "project.json");
-}
-
-async function readStep(projectId: string): Promise<string | null> {
+async function fetchIncompleteStep(req: NextRequest, projectId: string): Promise<string | null> {
   try {
-    const raw = await fs.readFile(projectFile(projectId), "utf8");
-    const json = JSON.parse(raw);
-    if (json?.steps) {
-      for (const step of stepOrder) {
-        const stat = json.steps[step];
-        if (!stat || stat.status !== "complete") return step;
-      }
-      return "digital-enterprise";
+    const url = new URL(`/api/projects/state?projectId=${encodeURIComponent(projectId)}`, req.url);
+    const res = await fetch(url.toString(), { cache: "no-store" });
+    if (!res.ok) return null;
+    const json = (await res.json()) as any;
+    const steps = json?.state?.steps;
+    if (!steps) return null;
+    for (const step of stepOrder) {
+      const stat = steps[step];
+      if (!stat || stat.status !== "complete") return step;
     }
+    return "digital-enterprise";
   } catch {
     return null;
   }
-  return null;
 }
 
 export async function middleware(request: NextRequest) {
@@ -34,11 +26,11 @@ export async function middleware(request: NextRequest) {
   const pathname = url.pathname;
   const match = pathname.match(/^\/project\/([^/]+)\/(tech-stack|connection-confirmation|digital-enterprise)/);
   if (!match) return NextResponse.next();
+
   const projectId = match[1];
   const step = match[2];
-  const incomplete = await readStep(projectId);
+  const incomplete = await fetchIncompleteStep(request, projectId);
   if (!incomplete) {
-    // No state; send to intake
     const redirect = new URL(`/project/${projectId}/intake`, url);
     return NextResponse.redirect(redirect);
   }
