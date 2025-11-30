@@ -6,6 +6,7 @@ import { useConnectionConfirmation } from "@/hooks/useConnectionConfirmation";
 import type { HarmonizedSystem } from "@/domain/services/harmonization";
 import type { ConnectionSuggestion } from "@/domain/services/connectionInference";
 import { ConnectionPanel } from "@/components/ConnectionPanel";
+import { useProjectState } from "@/hooks/useProjectState";
 
 type Props = {
   projectId: string;
@@ -15,6 +16,7 @@ type Props = {
 
 export default function ConnectionConfirmationClient({ projectId, suggestions, nodes }: Props) {
   const { log } = useTelemetry("connection_confirmation", { projectId });
+  const { markComplete } = useProjectState(projectId, "connections");
   const {
     threshold,
     setThreshold,
@@ -93,6 +95,7 @@ export default function ConnectionConfirmationClient({ projectId, suggestions, n
       setError(err?.message || "Failed to persist decisions");
     } finally {
       setSaving(false);
+      markComplete();
     }
   };
 

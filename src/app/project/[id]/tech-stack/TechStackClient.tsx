@@ -14,6 +14,7 @@ import { normalizeSystemName } from "@/domain/services/systemNormalization";
 import { useTelemetry } from "@/hooks/useTelemetry";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useAdaptiveUIState } from "@/hooks/useAdaptiveUIState";
+import { useProjectState } from "@/hooks/useProjectState";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -224,6 +225,7 @@ function loadProjectIntake(projectId: string): ProjectIntake | null {
 
 export function TechStackClient({ projectId }: Props) {
   const { log: telemetryLog } = useTelemetry("tech_stack", { projectId });
+  const { markComplete } = useProjectState(projectId, "tech_stack");
   const {
     showContextBar,
     contextMessage,
@@ -410,6 +412,9 @@ export function TechStackClient({ projectId }: Props) {
 
     setProgress(nextProgress);
     setCtaEnabled(viewStage !== "upload" && (diagramSystems.length > 0 || !!diffStats));
+    if (viewStage === "graph") {
+      markComplete();
+    }
 
     if (viewStage === "graph") {
       setContextMessage("Graph view unlocked — continue to Digital Enterprise when ready.");
