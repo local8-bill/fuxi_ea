@@ -13,18 +13,8 @@ const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi"
 const HARMONIZED_FILE = path.join(DATA_ROOT, "harmonized", "enterprise_graph.json");
 
 function normalizeDomainValue(d?: string | null): string {
-  const v = (d || "Other").toString().trim().toLowerCase();
-  if (v.includes("commerce") || v.includes("omni") || v.includes("order") || v.includes("cart")) return "Commerce";
-  if (v.includes("order management")) return "Order Management";
-  if (v.includes("erp") || v.includes("sap") || v.includes("oracle") || v.includes("finance")) return "ERP";
-  if (v.includes("crm") || v.includes("salesforce") || v.includes("customer")) return "CRM";
-  if (v.includes("data") || v.includes("lake") || v.includes("warehouse")) return "Data";
-  if (v.includes("integration") || v.includes("api") || v.includes("connector") || v.includes("mulesoft") || v.includes("boomi"))
-    return "Integration";
-  if (v.includes("hr") || v.includes("people") || v.includes("workday")) return "HR";
-  if (v.includes("logistics") || v.includes("supply")) return "Logistics";
-  if (v.includes("core") || v.includes("platform")) return "Core Platform";
-  if (v.includes("billing")) return "Finance";
+  const raw = (d ?? "").toString().trim();
+  if (raw) return raw;
   return "Other";
 }
 
