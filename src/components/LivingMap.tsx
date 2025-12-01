@@ -86,8 +86,6 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const [focusDomain, setFocusDomain] = useState<string | null>(null);
   const [crossDomainOnly, setCrossDomainOnly] = useState<boolean>(false);
   const [edgeFilter, setEdgeFilter] = useState<"all" | "derived" | "inferred" | "unresolved" | "placeholder">("all");
-  const [hoverNode, setHoverNode] = useState<string | null>(null);
-  const [lockedFocusNode, setLockedFocusNode] = useState<string | null>(null);
 
   React.useEffect(() => {
     const handler = () => setShowOtherDomain((prev) => !prev);
@@ -288,16 +286,6 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const normalizedSearch = (searchTerm ?? "").toLowerCase();
 
   const coloredNodes = useMemo(() => {
-    const focusId = lockedFocusNode || hoverNode || null;
-    const connected = new Set<string>();
-    if (focusId) {
-      const up = neighbors.up.get(focusId) ?? new Set();
-      const down = neighbors.down.get(focusId) ?? new Set();
-      up.forEach((id) => connected.add(id));
-      down.forEach((id) => connected.add(id));
-      connected.add(focusId);
-    }
-
     return laidOutNodes.map((n) => {
       const meta = simData.nodes.find((m) => m.id === n.id);
       const healthScore = meta?.health ?? 60;
@@ -330,7 +318,6 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
       const matchesSearch =
         normalizedSearch.length > 1 &&
         (meta?.label?.toLowerCase().includes(normalizedSearch) || meta?.domain?.toLowerCase().includes(normalizedSearch));
-      const isConnected = focusId ? connected.has(n.id) : true;
       const baseBorder = "#e2e8f0";
       const highlightBorder = "#cbd5e1";
       const useColor = layer === "stack" || layer === "integration" ? baseBorder : color;
@@ -340,10 +327,10 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         style: {
           ...n.style,
           border: isSelected || matchesSearch ? `2px solid ${highlightBorder}` : `1px solid ${useColor}`,
-          boxShadow: isSelected || matchesSearch ? `0 4px 12px ${shadowColor}` : `0 2px 8px ${shadowColor}`,
-          opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.7 : 1,
-          background: "#ffffff",
-        },
+            boxShadow: isSelected || matchesSearch ? `0 4px 12px ${shadowColor}` : `0 2px 8px ${shadowColor}`,
+            opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.7 : 1,
+            background: "#ffffff",
+          },
         data: {
           ...n.data,
           meta,
@@ -359,7 +346,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         },
       };
     });
-  }, [laidOutNodes, simData.nodes, domainColors, layer, selectedNodeId, normalizedSearch, neighbors, hoverNode, lockedFocusNode]);
+  }, [laidOutNodes, simData.nodes, domainColors, layer, selectedNodeId, normalizedSearch]);
 
   const onNodeClick = (_: any, node: Node) => {
     if (state.mode === "simulate") {
@@ -633,22 +620,6 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         <ReactFlow
           onInit={(inst) => setFlowInstance(inst)}
           onMove={(_, vp: Viewport) => setTransform([vp.x, vp.y, vp.zoom])}
-          onNodeMouseEnter={(_, node) => setHoverNode(node.id)}
-          onNodeMouseLeave={() => setHoverNode(null)}
-          onNodeClick={(evt, node) => {
-            if (evt.shiftKey) {
-              setLockedFocusNode(node.id);
-              return;
-            }
-            if (lockedFocusNode) setLockedFocusNode(null);
-            if (state.mode === "simulate") {
-              toggleNode(node.id);
-              return;
-            }
-            if (onSelectNode) {
-              onSelectNode(node.id);
-            }
-          }}
           nodesDraggable={layer !== "domain"}
           nodesConnectable={layer !== "domain"}
           elementsSelectable={layer !== "domain"}
