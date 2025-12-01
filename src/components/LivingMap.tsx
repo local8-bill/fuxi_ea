@@ -85,6 +85,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const [hiddenDomains, setHiddenDomains] = useState<Set<string>>(new Set());
   const [focusDomain, setFocusDomain] = useState<string | null>(null);
   const [crossDomainOnly, setCrossDomainOnly] = useState<boolean>(false);
+  const [domainSort, setDomainSort] = useState<"name" | "count">("name");
 
   React.useEffect(() => {
     const handler = () => setShowOtherDomain((prev) => !prev);
@@ -223,6 +224,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     let boxes: Array<{ label: string; x: number; width: number; height: number }> = [];
     // Group by domain: place nodes in columns by domain key.
   if (layer === "domain") {
+    const domainCounts: Record<string, number> = {};
     const domains = Array.from(
       new Set(
         baseNodes
@@ -230,26 +232,38 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
             const meta = simData.nodes.find((m) => m.id === n.id);
             const norm = normalizeDomainValue(meta?.domain);
             if ((!showOtherDomain && norm === "Other") || hiddenDomains.has(norm)) return null;
+            domainCounts[norm] = (domainCounts[norm] ?? 0) + 1;
             return norm;
           })
           .filter(Boolean),
       ),
-    ).sort();
+    );
+    domains.sort((a, b) => {
+      if (domainSort === "count") {
+        return (domainCounts[b] ?? 0) - (domainCounts[a] ?? 0) || a.localeCompare(b);
+      }
+      return a.localeCompare(b);
+    });
     const domainIndex = new Map<string, number>();
     domains.forEach((d, idx) => domainIndex.set(d || "Other", idx));
 
-    const hGap = 260; // narrower columns to reduce whitespace
-    const vGap = 140; // tighter vertical spacing
+    const colsPerRow = 3;
+    const hGap = 280; // column width
+    const vGap = 120; // tighter vertical spacing inside domain
     const maxRows = 12;
+    const rowHeight = 1200;
     const counts: Record<string, number> = {};
 
     boxes = domains.map((d, idx) => {
       const isFocus = focusDomain === d || !focusDomain;
+      const col = idx % colsPerRow;
+      const rowIdx = Math.floor(idx / colsPerRow);
       return {
         label: d,
-        x: idx * hGap - 20,
+        x: col * hGap + col * 40,
+        y: rowIdx * rowHeight,
         width: hGap - 40,
-        height: isFocus ? 1600 : 1200,
+        height: isFocus ? rowHeight : rowHeight - 200,
       };
     });
 
@@ -259,15 +273,17 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         const domain = normalizeDomainValue(meta?.domain);
         if ((!showOtherDomain && domain === "Other") || hiddenDomains.has(domain)) return null;
         if (focusDomain && domain !== focusDomain) return null;
-        const col = domainIndex.get(domain) ?? 0;
+        const idx = domainIndex.get(domain) ?? 0;
+        const col = idx % colsPerRow;
+        const rowIdx = Math.floor(idx / colsPerRow);
         counts[domain] = (counts[domain] ?? 0) + 1;
         const row = (counts[domain] - 1) % maxRows;
         const rowBlock = Math.floor((counts[domain] - 1) / maxRows);
         return {
           ...n,
           position: {
-            x: col * hGap + rowBlock * 40,
-            y: 80 + row * vGap,
+            x: col * hGap + col * 40 + rowBlock * 30,
+            y: rowIdx * rowHeight + 80 + row * vGap,
           },
         };
       })
@@ -488,6 +504,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
                         if (hidden) next.delete(name);
                         else next.add(name);
                         setHiddenDomains(next);
+                        if (focusDomain === name && hidden) setFocusDomain(null);
                       }}
                       className={
                         "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold " +
@@ -504,6 +521,32 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
                 })}
               </div>
             )}
+          </div>
+        )}
+        {layer === "domain" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-slate-700">Sort</span>
+            <select
+              value={domainSort}
+              onChange={(e) => setDomainSort(e.target.value as any)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+            >
+              <option value="name">A → Z</option>
+              <option value="count">By node count</option>
+            </select>
+            <span className="text-xs font-semibold text-slate-700">Focus</span>
+            <select
+              value={focusDomain ?? ""}
+              onChange={(e) => setFocusDomain(e.target.value || null)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+            >
+              <option value="">All domains</option>
+              {[...domainColors.keys()].map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
           </div>
         )}
         {layer === "disposition" && (
