@@ -84,7 +84,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const [showDomainLegend, setShowDomainLegend] = useState<boolean>(false);
   const [hiddenDomains, setHiddenDomains] = useState<Set<string>>(new Set());
   const [focusDomain, setFocusDomain] = useState<string | null>(null);
-  const [crossDomainOnly, setCrossDomainOnly] = useState<boolean>(false);
+  const [crossDomainOnly, setCrossDomainOnly] = useState<boolean>(true);
   const [edgeFilter, setEdgeFilter] = useState<"all" | "derived" | "inferred" | "unresolved" | "placeholder">("all");
 
   React.useEffect(() => {
@@ -393,7 +393,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
       ...e,
       confidence,
       data: { ...(e.data || {}), edgeType: kind, confidence },
-      type: "straight",
+      type: "smoothstep",
       style: {
         ...(e.style || {}),
         strokeWidth: baseWidth,
