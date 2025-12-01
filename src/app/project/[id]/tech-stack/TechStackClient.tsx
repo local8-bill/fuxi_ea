@@ -250,6 +250,7 @@ export function TechStackClient({ projectId }: Props) {
   const [inventoryFileName, setInventoryFileName] = useState<string | null>(null);
   const [lucidFileName, setLucidFileName] = useState<string | null>(null);
   const [uploadedInventoryFiles, setUploadedInventoryFiles] = useState<Array<{ name: string; size: number }>>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [inventoryRows, setInventoryRows] = useState<number>(0);
   const [normalizedApps, setNormalizedApps] = useState<number>(0);
   const [viewStage, setViewStage] = useState<ViewStage>("upload");
@@ -715,6 +716,8 @@ export function TechStackClient({ projectId }: Props) {
         formData.append("file", file);
         await fetch("/api/ingestion/inventory", { method: "POST", body: formData });
         setUploadedInventoryFiles((prev) => [...prev, { name: file.name, size: file.size }]);
+        setToastMessage(`Uploaded ${file.name}`);
+        setTimeout(() => setToastMessage(null), 3000);
       } catch (err) {
         console.warn("[TECH-STACK] Failed to persist inventory upload", err);
       }
@@ -1033,6 +1036,12 @@ export function TechStackClient({ projectId }: Props) {
         label={uploadingLucid ? "Uploading..." : "Upload Lucid CSV"}
         onFileSelected={handleLucidUpload}
       />
+
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-emerald-800 shadow-lg">
+          {toastMessage}
+        </div>
+      )}
 
       {/* Inventory / artifact metrics */}
       <div className="mb-8 grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
