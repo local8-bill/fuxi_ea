@@ -169,6 +169,8 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [graphLoading, setGraphLoading] = useState<boolean>(true);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [graphMode, setGraphMode] = useState<"all" | "current" | "future">("all");
+  const timelineStages = useMemo(() => ["Current", "Stage 1", "Future"], []);
+  const [timelineStage, setTimelineStage] = useState<number>(0);
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -209,6 +211,17 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       edges: ((data.edges ?? []) as LivingEdge[]).filter((e): e is LivingEdge => !!e && !!(e as any).source && !!(e as any).target),
     };
   }, [graphData, aiInsights.insights]);
+
+  const filteredLivingMapData = useMemo<LivingMapData>(() => {
+    const stage = timelineStage;
+    const visibleNodes = livingMapData.nodes.filter((n) => {
+      if (stage === 0) return n.state !== "added";
+      return n.state !== "removed";
+    });
+    const keep = new Set(visibleNodes.map((n) => n.id));
+    const visibleEdges = livingMapData.edges.filter((e) => keep.has(e.source) && keep.has(e.target));
+    return { nodes: visibleNodes, edges: visibleEdges };
+  }, [livingMapData, timelineStage]);
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_TELEMETRY_DEBUG === "true") {
@@ -417,8 +430,8 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   }, [livingMapData.nodes]);
 
   const selectedNode = useMemo(
-    () => livingMapData.nodes.find((n) => n.id === selectedNodeId) ?? null,
-    [livingMapData.nodes, selectedNodeId]
+    () => filteredLivingMapData.nodes.find((n) => n.id === selectedNodeId) ?? null,
+    [filteredLivingMapData.nodes, selectedNodeId]
   );
 
   useEffect(() => {
@@ -756,7 +769,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                   Unchanged
                 </span>
                 <span className="ml-2 text-[0.75rem] text-slate-500">
-                  {livingMapData.nodes.length} nodes · {livingMapData.edges.length} edges
+                  {filteredLivingMapData.nodes.length} nodes · {filteredLivingMapData.edges.length} edges
                 </span>
                 <button
                   type="button"
@@ -771,7 +784,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                 </button>
               </div>
               <LivingMap
-                data={livingMapData}
+                data={filteredLivingMapData}
                 height={720}
                 selectedNodeId={selectedNodeId ?? undefined}
                 onSelectNode={setSelectedNodeId}
@@ -780,20 +793,75 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             </>
           )}
           <div className="mt-4 flex flex-col gap-3">
-            <div className="flex items-center gap-3 text-xs text-slate-600">
-              <label className="flex items-center gap-2">
-                <span className="font-semibold text-slate-800">Timeline (months)</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={24}
-                    value={roiSim.month}
-                    onChange={(e) => roiSim.setMonth(Number(e.target.value))}
-                  />
-                  <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                    {roiSim.month}
-                  </span>
-                </label>
+            <div className="flex flex-col gap-2 text-xs text-slate-600">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-semibold text-slate-800">Timeline</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={timelineStages.length - 1}
+                  value={timelineStage}
+                  onChange={(e) => {
+                    const next = Number(e.target.value);
+                    setTimelineStage(next);
+                    const visibleNodes = filteredLivingMapData.nodes.length;
+                    const visibleEdges = filteredLivingMapData.edges.length;
+                    telemetry.log(
+                      "timeline_stage_changed",
+                      { stage: timelineStages[next], nodes_visible: visibleNodes, edges_visible: visibleEdges },
+                      simplificationScoreRef.current,
+                    );
+                    window.dispatchEvent(
+                      new CustomEvent("timeline_stage_changed", {
+                        detail: { stage: timelineStages[next], nodes: visibleNodes, edges: visibleEdges },
+                      }),
+                    );
+                  }}
+                />
+                <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                  {timelineStages[timelineStage]}
+                </span>
+                <div className="flex items-center gap-2">
+                  {timelineStages.map((stage, idx) => (
+                    <button
+                      key={stage}
+                      onClick={() => {
+                        setTimelineStage(idx);
+                        const visibleNodes = filteredLivingMapData.nodes.length;
+                        const visibleEdges = filteredLivingMapData.edges.length;
+                        telemetry.log(
+                          "timeline_stage_changed",
+                          { stage, nodes_visible: visibleNodes, edges_visible: visibleEdges },
+                          simplificationScoreRef.current,
+                        );
+                        window.dispatchEvent(
+                          new CustomEvent("timeline_stage_changed", {
+                            detail: { stage, nodes: visibleNodes, edges: visibleEdges },
+                          }),
+                        );
+                      }}
+                      className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                        timelineStage === idx ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
+                      }`}
+                    >
+                      {stage}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-semibold text-slate-800">ROI demo timeline</span>
+                {/* Demo slider retained for fallback */}
+                <input
+                  type="range"
+                  min={0}
+                  max={24}
+                  value={roiSim.month}
+                  onChange={(e) => roiSim.setMonth(Number(e.target.value))}
+                />
+                <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                  {roiSim.month}
+                </span>
               </div>
               <NodeInsightPanel node={selectedNode} />
             </div>
