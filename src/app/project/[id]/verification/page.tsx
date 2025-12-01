@@ -27,6 +27,17 @@ export default async function VerificationPage({ params }: PageProps): Promise<R
 
   const steps = ["intake", "tech-stack", "connection-confirmation", "digital-enterprise"] as const;
 
+  const directives = [
+    { id: "D033", title: "Harmonization addendum & preview", status: "complete", note: "Domain fidelity + preview layer" },
+    { id: "D034", title: "Transformation dialogue", status: "complete", note: "Dialogue UI + telemetry" },
+    { id: "D035", title: "Connection confirmation", status: "complete", note: "Confirm/undo, rationale saved" },
+    { id: "D036", title: "Unified project flow", status: "complete", note: "Middleware gating + flow bar" },
+    { id: "D037", title: "Graph visuals", status: "complete", note: "Edge palette, legend, focus, keep-in-future" },
+    { id: "D038", title: "Ship pack prep", status: "complete", note: "Refactor/build fixes, harmonization UX" },
+    { id: "D039", title: "Pre-D040 cleanup", status: "complete", note: "Merged to main, tag v0.6.5-pre-d040" },
+    { id: "D040", title: "Transformation sequencer", status: "pending", note: "Next: mock data pilot" },
+  ];
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
       <h1 className="text-2xl font-bold text-slate-900">Verification Dashboard</h1>
@@ -62,6 +73,46 @@ export default async function VerificationPage({ params }: PageProps): Promise<R
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold text-slate-900">Directive Status</h2>
+        <p className="text-sm text-slate-600">Summary through D039; D040 planned.</p>
+        <div className="mt-3 overflow-auto rounded-xl border border-slate-200">
+          <table className="min-w-full divide-y divide-slate-200 text-sm">
+            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Directive</th>
+                <th className="px-4 py-3">Title</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Notes</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {directives.map((d) => (
+                <tr key={d.id} className="bg-white">
+                  <td className="px-4 py-3 font-semibold text-slate-900">{d.id}</td>
+                  <td className="px-4 py-3 text-slate-800">{d.title}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        "rounded-full px-2 py-1 text-xs font-semibold " +
+                        (d.status === "complete"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : d.status === "pending"
+                          ? "bg-slate-100 text-slate-700"
+                          : "bg-amber-100 text-amber-800")
+                      }
+                    >
+                      {d.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">{d.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
