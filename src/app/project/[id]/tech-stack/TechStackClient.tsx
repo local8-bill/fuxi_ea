@@ -249,6 +249,7 @@ export function TechStackClient({ projectId }: Props) {
   // Inventory / artifacts
   const [inventoryFileName, setInventoryFileName] = useState<string | null>(null);
   const [lucidFileName, setLucidFileName] = useState<string | null>(null);
+  const [uploadedInventoryFiles, setUploadedInventoryFiles] = useState<Array<{ name: string; size: number }>>([]);
   const [inventoryRows, setInventoryRows] = useState<number>(0);
   const [normalizedApps, setNormalizedApps] = useState<number>(0);
   const [viewStage, setViewStage] = useState<ViewStage>("upload");
@@ -713,6 +714,7 @@ export function TechStackClient({ projectId }: Props) {
         const formData = new FormData();
         formData.append("file", file);
         await fetch("/api/ingestion/inventory", { method: "POST", body: formData });
+        setUploadedInventoryFiles((prev) => [...prev, { name: file.name, size: file.size }]);
       } catch (err) {
         console.warn("[TECH-STACK] Failed to persist inventory upload", err);
       }
@@ -1011,6 +1013,19 @@ export function TechStackClient({ projectId }: Props) {
         onFileSelected={handleInventoryUpload}
         className="mb-4"
       />
+
+      {uploadedInventoryFiles.length > 0 && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Uploaded inventory files</div>
+          <div className="flex flex-wrap gap-2">
+            {uploadedInventoryFiles.map((f) => (
+              <span key={`${f.name}-${f.size}`} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs shadow-sm">
+                {f.name} ({Math.round(f.size / 1024)} KB)
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <FileUploadPanel
         title="UPLOAD LUCID CSV"
