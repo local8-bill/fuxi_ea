@@ -270,7 +270,6 @@ function buildResolver(keys: string[]) {
     return null;
   };
 }
-}
 
 function stateFromPresence(
   inLucid: boolean,
