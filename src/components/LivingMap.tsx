@@ -138,15 +138,15 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
       const downstreamLabels = Array.from(downstreamIds).map((id) => labelById.get(id) ?? id);
       const upstreamCount = upstreamIds.size;
       const downstreamCount = downstreamIds.size;
-      const tooltip = [
-        `AI Readiness: ${Math.round(n.aiReadiness ?? 0)}%`,
-        `Opportunity: ${Math.round(n.opportunityScore ?? n.roiScore ?? 0)}%`,
-        n.disposition ? `Disposition: ${n.disposition}` : null,
-        upstreamLabels.length ? `Upstream: ${upstreamLabels.join(", ")}` : null,
-        downstreamLabels.length ? `Downstream: ${downstreamLabels.join(", ")}` : null,
-      ]
-        .filter(Boolean)
-        .join(" • ");
+        const tooltip = [
+          `AI Readiness: ${Math.round(n.aiReadiness ?? 0)}%`,
+          `Opportunity: ${Math.round(n.opportunityScore ?? n.roiScore ?? 0)}%`,
+          n.disposition ? `Disposition: ${n.disposition}` : null,
+          `Upstream: ${upstreamLabels.length ? upstreamLabels.join(", ") : "0"}`,
+          `Downstream: ${downstreamLabels.length ? downstreamLabels.join(", ") : "0"}`,
+        ]
+          .filter(Boolean)
+          .join(" • ");
 
         return {
           id: n.id,
@@ -154,12 +154,14 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
             label: (
               <div title={tooltip}>
                 <div className="text-xs font-semibold text-slate-900">{n.label}</div>
-                {(upstreamCount > 0 || downstreamCount > 0) && (
-                  <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold text-slate-500">
-                    {upstreamCount > 0 && <span>↑{upstreamCount}</span>}
-                    {downstreamCount > 0 && <span>↓{downstreamCount}</span>}
-                  </div>
-                )}
+                <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold text-slate-500">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5">
+                    ↑ {upstreamCount}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5">
+                    ↓ {downstreamCount}
+                  </span>
+                </div>
               </div>
             ),
             meta: n,
