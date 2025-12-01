@@ -83,8 +83,10 @@ function buildLivingMapData(view: { nodes?: any[]; edges?: any[] }): LivingMapDa
   const edges = Array.isArray(view.edges) ? view.edges : [];
   const degree = new Map<string, number>();
   edges.forEach((e: any) => {
-    if (e?.sourceId) degree.set(e.sourceId, (degree.get(e.sourceId) ?? 0) + 1);
-    if (e?.targetId) degree.set(e.targetId, (degree.get(e.targetId) ?? 0) + 1);
+    const src = e?.sourceId ?? e?.source;
+    const tgt = e?.targetId ?? e?.target;
+    if (src) degree.set(src, (degree.get(src) ?? 0) + 1);
+    if (tgt) degree.set(tgt, (degree.get(tgt) ?? 0) + 1);
   });
 
   const livingNodes: LivingMapData["nodes"] = nodes.map((n: any) => {
@@ -105,8 +107,8 @@ function buildLivingMapData(view: { nodes?: any[]; edges?: any[] }): LivingMapDa
 
   const livingEdges: LivingMapData["edges"] = edges.map((e: any, idx: number) => ({
     id: String(e?.id ?? `edge-${idx}`),
-    source: String(e?.sourceId ?? ""),
-    target: String(e?.targetId ?? ""),
+    source: String(e?.sourceId ?? e?.source ?? ""),
+    target: String(e?.targetId ?? e?.target ?? ""),
     weight: 1,
     kind: "api",
   }));
