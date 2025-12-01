@@ -86,6 +86,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const [focusDomain, setFocusDomain] = useState<string | null>(null);
   const [crossDomainOnly, setCrossDomainOnly] = useState<boolean>(true);
   const [edgeFilter, setEdgeFilter] = useState<"all" | "derived" | "inferred" | "unresolved" | "placeholder">("all");
+  const [hideIsolates, setHideIsolates] = useState<boolean>(true);
 
   React.useEffect(() => {
     const handler = () => setShowOtherDomain((prev) => !prev);
@@ -406,7 +407,8 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     };
   }), [baseEdges, layer]);
 
-  const visibleNodes = useMemo(() => {
+  // First pass: domain visibility only (no isolate filter yet)
+  const domainFilteredNodes = useMemo(() => {
     if (layer !== "domain") return coloredNodes;
     return coloredNodes.filter((n) => {
       const meta = (n.data as any)?.meta;
@@ -417,16 +419,17 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     });
   }, [coloredNodes, layer, showOtherDomain, hiddenDomains]);
 
-  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
   const domainByNode = useMemo(() => {
     const map = new Map<string, string>();
     simData.nodes.forEach((n) => map.set(n.id, normalizeDomainValue((n as any).domain)));
     return map;
   }, [simData.nodes]);
 
+  const domainFilteredIds = useMemo(() => new Set(domainFilteredNodes.map((n) => n.id)), [domainFilteredNodes]);
+
   const visibleEdges = useMemo(() => {
     return styledEdges.filter((e: any) => {
-      if (!visibleNodeIds.has(e.source) || !visibleNodeIds.has(e.target)) return false;
+      if (!domainFilteredIds.has(e.source) || !domainFilteredIds.has(e.target)) return false;
       if (edgeFilter !== "all" && (e.data?.edgeType as any) !== edgeFilter) return false;
       if (layer === "domain" && crossDomainOnly) {
         const srcDom = domainByNode.get(e.source);
@@ -436,7 +439,24 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
       }
       return true;
     });
-  }, [styledEdges, visibleNodeIds, layer, crossDomainOnly, domainByNode, edgeFilter]);
+  }, [styledEdges, domainFilteredIds, layer, crossDomainOnly, domainByNode, edgeFilter]);
+
+  const degreeByNode = useMemo(() => {
+    const deg = new Map<string, number>();
+    visibleEdges.forEach((e) => {
+      deg.set(e.source, (deg.get(e.source) ?? 0) + 1);
+      deg.set(e.target, (deg.get(e.target) ?? 0) + 1);
+    });
+    return deg;
+  }, [visibleEdges]);
+
+  const visibleNodes = useMemo(() => {
+    const base = layer !== "domain" ? coloredNodes : domainFilteredNodes;
+    if (!hideIsolates) return base;
+    return base.filter((n) => (degreeByNode.get(n.id) ?? 0) > 0);
+  }, [coloredNodes, domainFilteredNodes, hideIsolates, degreeByNode, layer]);
+
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
 
   const btnBase =
     "rounded-full px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300";
@@ -482,6 +502,13 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
               className={`${btnBase} ${!focusDomain ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
             >
               All domains
+            </button>
+            <button
+              onClick={() => setHideIsolates((v) => !v)}
+              aria-label="Toggle isolates"
+              className={`${btnBase} ${hideIsolates ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+            >
+              {hideIsolates ? "Hide isolates" : "Show isolates"}
             </button>
           </div>
         )}
