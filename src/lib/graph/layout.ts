@@ -26,7 +26,10 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[], direction: Direct
   }
 
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: direction, nodesep: 50, ranksep: 80 });
+  const density = Math.max(1, edges.length / Math.max(1, nodes.length));
+  const ranksep = Math.min(200, Math.max(80, 70 * density));
+  const nodesep = Math.min(140, Math.max(50, 40 * density));
+  g.setGraph({ rankdir: direction, nodesep, ranksep });
   g.setDefaultEdgeLabel(() => ({ weight: 1 }));
 
   nodes.forEach((n) => {

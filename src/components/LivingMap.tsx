@@ -85,6 +85,9 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const [hiddenDomains, setHiddenDomains] = useState<Set<string>>(new Set());
   const [focusDomain, setFocusDomain] = useState<string | null>(null);
   const [crossDomainOnly, setCrossDomainOnly] = useState<boolean>(false);
+  const [edgeFilter, setEdgeFilter] = useState<"all" | "derived" | "inferred" | "unresolved" | "placeholder">("all");
+  const [hoverNode, setHoverNode] = useState<string | null>(null);
+  const [lockedFocusNode, setLockedFocusNode] = useState<string | null>(null);
 
   React.useEffect(() => {
     const handler = () => setShowOtherDomain((prev) => !prev);
@@ -284,71 +287,79 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
 
   const normalizedSearch = (searchTerm ?? "").toLowerCase();
 
-  const coloredNodes = useMemo(
-    () =>
-      laidOutNodes.map((n) => {
-        const meta = simData.nodes.find((m) => m.id === n.id);
-        const healthScore = meta?.health ?? 60;
-        const aiScore = meta?.aiReadiness ?? 55;
-        const roiScore = meta?.roiScore ?? aiScore;
-        const domainColor = domainColors.get(meta?.domain ?? "Other") ?? COLORS.neutral;
-        const dispositionColor = meta?.disposition ? COLORS.disposition[meta.disposition] : COLORS.neutral;
+  const coloredNodes = useMemo(() => {
+    const focusId = lockedFocusNode || hoverNode || null;
+    const connected = new Set<string>();
+    if (focusId) {
+      const up = neighbors.up.get(focusId) ?? new Set();
+      const down = neighbors.down.get(focusId) ?? new Set();
+      up.forEach((id) => connected.add(id));
+      down.forEach((id) => connected.add(id));
+      connected.add(focusId);
+    }
 
-        let color = COLORS.neutral;
-        switch (layer) {
-          case "domain":
-            color = domainColor;
-            break;
-          case "disposition":
-            color = dispositionColor;
-            break;
-          case "ai":
-            color = aiScore >= 75 ? "#22c55e" : aiScore >= 50 ? "#eab308" : "#a855f7";
-            break;
-          case "roi":
-            color = roiScore >= 75 ? "#22c55e" : roiScore >= 50 ? "#eab308" : "#a855f7";
-            break;
-          case "stack":
-          case "integration":
-          default:
-            color = healthScore >= 75 ? COLORS.healthy : healthScore >= 50 ? COLORS.warning : COLORS.danger;
-        }
+    return laidOutNodes.map((n) => {
+      const meta = simData.nodes.find((m) => m.id === n.id);
+      const healthScore = meta?.health ?? 60;
+      const aiScore = meta?.aiReadiness ?? 55;
+      const roiScore = meta?.roiScore ?? aiScore;
+      const domainColor = domainColors.get(meta?.domain ?? "Other") ?? COLORS.neutral;
+      const dispositionColor = meta?.disposition ? COLORS.disposition[meta.disposition] : COLORS.neutral;
 
-        const isSelected = selectedNodeId === n.id;
-        const matchesSearch =
-          normalizedSearch.length > 1 &&
-          (meta?.label?.toLowerCase().includes(normalizedSearch) ||
-            meta?.domain?.toLowerCase().includes(normalizedSearch));
-        const baseBorder = "#e2e8f0";
-        const highlightBorder = "#cbd5e1";
-        const useColor = layer === "stack" || layer === "integration" ? baseBorder : color;
-        const shadowColor = layer === "stack" || layer === "integration" ? "rgba(15,23,42,0.06)" : `${color}33`;
-        return {
-          ...n,
-          style: {
-            ...n.style,
-            border: isSelected || matchesSearch ? `2px solid ${highlightBorder}` : `1px solid ${useColor}`,
-            boxShadow: isSelected || matchesSearch ? `0 4px 12px ${shadowColor}` : `0 2px 8px ${shadowColor}`,
-            opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.7 : 1,
-            background: "#ffffff",
-          },
-          data: {
-            ...n.data,
-            meta,
-            tooltip: [
-              meta?.label,
-              meta?.domain ? `Domain: ${meta.domain}` : null,
-              meta?.disposition ? `Disposition: ${meta.disposition}` : null,
-              `AI: ${Math.round(aiScore)}% · ROI: ${Math.round(roiScore)}%`,
-              meta?.aiSummary ? `Note: ${meta.aiSummary}` : null,
-            ]
-              .filter(Boolean)
-              .join(" • "),
-          },
-        };
-      }),
-    [laidOutNodes, simData.nodes, domainColors, layer, selectedNodeId, normalizedSearch],
-  );
+      let color = COLORS.neutral;
+      switch (layer) {
+        case "domain":
+          color = domainColor;
+          break;
+        case "disposition":
+          color = dispositionColor;
+          break;
+        case "ai":
+          color = aiScore >= 75 ? "#22c55e" : aiScore >= 50 ? "#eab308" : "#a855f7";
+          break;
+        case "roi":
+          color = roiScore >= 75 ? "#22c55e" : roiScore >= 50 ? "#eab308" : "#a855f7";
+          break;
+        case "stack":
+        case "integration":
+        default:
+          color = healthScore >= 75 ? COLORS.healthy : healthScore >= 50 ? COLORS.warning : COLORS.danger;
+      }
+
+      const isSelected = selectedNodeId === n.id;
+      const matchesSearch =
+        normalizedSearch.length > 1 &&
+        (meta?.label?.toLowerCase().includes(normalizedSearch) || meta?.domain?.toLowerCase().includes(normalizedSearch));
+      const isConnected = focusId ? connected.has(n.id) : true;
+      const baseBorder = "#e2e8f0";
+      const highlightBorder = "#cbd5e1";
+      const useColor = layer === "stack" || layer === "integration" ? baseBorder : color;
+      const shadowColor = layer === "stack" || layer === "integration" ? "rgba(15,23,42,0.06)" : `${color}33`;
+      return {
+        ...n,
+        style: {
+          ...n.style,
+          border: isSelected || matchesSearch ? `2px solid ${highlightBorder}` : `1px solid ${useColor}`,
+          boxShadow: isSelected || matchesSearch ? `0 4px 12px ${shadowColor}` : `0 2px 8px ${shadowColor}`,
+          opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.7 : focusId && !isConnected ? 0.25 : 1,
+          background: "#ffffff",
+        },
+        data: {
+          ...n.data,
+          meta,
+          tooltip: [
+            meta?.label,
+            meta?.domain ? `Domain: ${meta.domain}` : null,
+            meta?.disposition ? `Disposition: ${meta.disposition}` : null,
+            `AI: ${Math.round(aiScore)}% · ROI: ${Math.round(roiScore)}%`,
+            meta?.aiSummary ? `Note: ${meta.aiSummary}` : null,
+          ]
+            .filter(Boolean)
+            .join(" • "),
+        },
+      };
+    });
+  }, [laidOutNodes, simData.nodes, domainColors, layer, selectedNodeId, normalizedSearch, neighbors, hoverNode, lockedFocusNode]);
 
   const onNodeClick = (_: any, node: Node) => {
     if (state.mode === "simulate") {
@@ -369,18 +380,35 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     }
   }, [flowInstance, coloredNodes.length, layout, direction, layer, showOtherDomain]);
 
-  const styledEdges = baseEdges.map((e) => {
-    const stroke = edgeKindColor((e as any).data?.kind);
+  const styledEdges = baseEdges.map((e: any) => {
+    const kind = (e.data?.edgeType as any) ?? (e.data?.inferred ? "inferred" : (e.confidence ?? 0) < 0.4 ? "unresolved" : "derived");
+    const stroke =
+      kind === "derived"
+        ? "#2563EB"
+        : kind === "inferred"
+        ? "#A855F7"
+        : kind === "unresolved"
+        ? "#FB923C"
+        : "#374151";
+    const dash =
+      kind === "derived"
+        ? undefined
+        : kind === "inferred"
+        ? "5 4"
+        : kind === "unresolved"
+        ? "2 4"
+        : "2 6";
     const baseWidth = layer === "integration" ? 2 : 1.6;
     return {
       ...e,
+      data: { ...(e.data || {}), edgeType: kind },
       type: "straight",
       style: {
         ...(e.style || {}),
         strokeWidth: baseWidth,
         stroke,
         opacity: 0.8,
-        strokeDasharray: "5 4",
+        strokeDasharray: dash,
         strokeLinecap: "round" as const,
         strokeLinejoin: "round" as const,
       },
@@ -406,17 +434,18 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   }, [simData.nodes]);
 
   const visibleEdges = useMemo(() => {
-    return styledEdges.filter((e) => {
+    return styledEdges.filter((e: any) => {
       if (!visibleNodeIds.has(e.source) || !visibleNodeIds.has(e.target)) return false;
+      if (edgeFilter !== "all" && (e.data?.edgeType as any) !== edgeFilter) return false;
       if (layer === "domain" && crossDomainOnly) {
         const srcDom = domainByNode.get(e.source);
         const tgtDom = domainByNode.get(e.target);
         if (!srcDom || !tgtDom) return false;
-        return srcDom !== tgtDom;
+        if (srcDom === tgtDom) return false;
       }
       return true;
     });
-  }, [styledEdges, visibleNodeIds, layer, crossDomainOnly, domainByNode]);
+  }, [styledEdges, visibleNodeIds, layer, crossDomainOnly, domainByNode, edgeFilter]);
 
   const btnBase =
     "rounded-full px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300";
@@ -463,6 +492,22 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
             >
               All domains
             </button>
+          </div>
+        )}
+        {(layer === "domain" || layer === "integration") && (
+          <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+            {(["all", "derived", "inferred", "unresolved"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setEdgeFilter(f)}
+                aria-label={`Show ${f} edges`}
+                className={`${btnBase} ${
+                  edgeFilter === f ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {f === "all" ? "All edges" : f}
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -588,6 +633,22 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         <ReactFlow
           onInit={(inst) => setFlowInstance(inst)}
           onMove={(_, vp: Viewport) => setTransform([vp.x, vp.y, vp.zoom])}
+          onNodeMouseEnter={(_, node) => setHoverNode(node.id)}
+          onNodeMouseLeave={() => setHoverNode(null)}
+          onNodeClick={(evt, node) => {
+            if (evt.shiftKey) {
+              setLockedFocusNode(node.id);
+              return;
+            }
+            if (lockedFocusNode) setLockedFocusNode(null);
+            if (state.mode === "simulate") {
+              toggleNode(node.id);
+              return;
+            }
+            if (onSelectNode) {
+              onSelectNode(node.id);
+            }
+          }}
           nodesDraggable={layer !== "domain"}
           nodesConnectable={layer !== "domain"}
           elementsSelectable={layer !== "domain"}
@@ -600,7 +661,6 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
               : visibleNodes
           }
           edges={visibleEdges}
-          onNodeClick={onNodeClick}
           fitView
           defaultEdgeOptions={{ type: "straight" }}
           proOptions={{ hideAttribution: true }}
@@ -608,6 +668,23 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
           <Controls />
           <Background gap={16} color="#e2e8f0" />
         </ReactFlow>
+        <div className="pointer-events-none absolute bottom-3 right-3 rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-[11px] text-slate-700 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full" style={{ background: "#2563EB" }} />
+              Derived
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full" style={{ background: "#A855F7" }} />
+              Inferred
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full" style={{ background: "#FB923C" }} />
+              Unresolved
+            </span>
+          </div>
+          <div className="mt-1 text-[10px] text-slate-500">Shift+click to lock focus; toggle edge filters above.</div>
+        </div>
       </div>
     </div>
   );
