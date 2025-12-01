@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 
 // Placeholder: would pull from graph storage once populated.

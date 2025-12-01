@@ -1,14 +1,13 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { normalizeTelemetryPayload } from "@/lib/telemetry/schema";
+import { recordTelemetry } from "@/lib/telemetry/server";
+
+export const runtime = "nodejs";
 
 const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
 const CONNECTION_DIR = path.join(DATA_ROOT, "connections");
 const CONNECTION_FILE = path.join(CONNECTION_DIR, "confirmed_connections.json");
-const TELEMETRY_FILE = path.join(DATA_ROOT, "telemetry_events.ndjson");
 const TRANSFORMED_EDGE_FILE = path.join(CONNECTION_DIR, "derived_edges.json");
 
 export async function POST(req: Request) {
@@ -59,7 +58,7 @@ export async function POST(req: Request) {
       "utf8",
     );
 
-    await appendTelemetry({
+    await recordTelemetry({
       session_id: "server",
       workspace_id: "connection_confirmation",
       event_type: "connection_decisions_saved",
@@ -70,15 +69,5 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error("[CONNECTIONS] Failed to persist decisions", err);
     return NextResponse.json({ ok: false, error: "Failed to persist decisions" }, { status: 500 });
-  }
-}
-
-async function appendTelemetry(event: any) {
-  try {
-    const normalized = normalizeTelemetryPayload(event);
-    await fs.mkdir(path.dirname(TELEMETRY_FILE), { recursive: true });
-    await fs.appendFile(TELEMETRY_FILE, JSON.stringify(normalized) + "\n", "utf8");
-  } catch (err) {
-    console.warn("[CONNECTIONS][telemetry] failed", err);
   }
 }

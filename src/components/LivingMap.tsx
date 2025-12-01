@@ -8,6 +8,7 @@ import ReactFlow, {
   Edge,
   OnInit,
   Viewport,
+  type ReactFlowInstance,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import type { LivingMapData, SimulationMode } from "@/types/livingMap";
@@ -71,15 +72,10 @@ function normalizeDomainValue(d?: string | null): string {
 }
 
 export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, searchTerm }: LivingMapProps) {
-  const { data: simData, state, setMode, toggleNode } = useSimulationEngine(data);
-  const [layout, setLayout] = useState<"flow" | "dagre">("dagre");
-  const [direction, setDirection] = useState<"LR" | "TB">("TB");
+  const { data: simData, state, toggleNode } = useSimulationEngine(data);
   const [layer, setLayer] = useState<LayerMode>("domain");
-  const [flowInstance, setFlowInstance] = useState<ReturnType<OnInit> | null>(null);
+  const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [showOtherDomain, setShowOtherDomain] = useState<boolean>(true);
-  const [domainBoxes, setDomainBoxes] = useState<
-    Array<{ label: string; x: number; width: number; height: number }>
-  >([]);
   const [transform, setTransform] = useState<[number, number, number]>([0, 0, 1]);
   const [showDomainLegend, setShowDomainLegend] = useState<boolean>(false);
   const [hiddenDomains, setHiddenDomains] = useState<Set<string>>(new Set());
@@ -93,6 +89,12 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     window.addEventListener("livingmap:toggle-other", handler);
     return () => window.removeEventListener("livingmap:toggle-other", handler);
   }, []);
+
+  const metaById = useMemo(() => {
+    const map = new Map<string, any>();
+    simData.nodes.forEach((n) => map.set(n.id, n));
+    return map;
+  }, [simData.nodes]);
 
   const domainColors = useMemo(() => {
     const palette = COLORS.domains;
@@ -134,20 +136,23 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   }, [simData.edges]);
   const baseNodes: Node[] = useMemo(
     () =>
-    simData.nodes.map((n, idx) => {
-      const domainKey = normalizeDomainValue((n as any).domain);
-      const upstreamIds = neighbors.up.get(n.id) ?? new Set();
-      const downstreamIds = neighbors.down.get(n.id) ?? new Set();
-      const upstreamLabels = Array.from(upstreamIds).map((id) => labelById.get(id) ?? id);
-      const downstreamLabels = Array.from(downstreamIds).map((id) => labelById.get(id) ?? id);
-      const upstreamCount = upstreamIds.size;
-      const downstreamCount = downstreamIds.size;
-        const tooltip = [
-          `AI Readiness: ${Math.round(n.aiReadiness ?? 0)}%`,
-          `Opportunity: ${Math.round(n.opportunityScore ?? n.roiScore ?? 0)}%`,
-          n.disposition ? `Disposition: ${n.disposition}` : null,
-          `Upstream: ${upstreamLabels.length ? upstreamLabels.join(", ") : "0"}`,
-          `Downstream: ${downstreamLabels.length ? downstreamLabels.join(", ") : "0"}`,
+      simData.nodes.map((n, idx) => {
+        const meta = metaById.get(n.id) ?? n;
+        const domainKey = normalizeDomainValue((meta as any).domain);
+        const upstreamIds = neighbors.up.get(n.id) ?? new Set();
+        const downstreamIds = neighbors.down.get(n.id) ?? new Set();
+        const upstreamLabels = Array.from(upstreamIds).map((id) => labelById.get(id) ?? id);
+        const downstreamLabels = Array.from(downstreamIds).map((id) => labelById.get(id) ?? id);
+        const upstreamCount = upstreamIds.size;
+        const downstreamCount = downstreamIds.size;
+        const tooltipParts = [
+          meta.disposition ? `Disposition: ${meta.disposition}` : null,
+          Number.isFinite(meta.aiReadiness) ? `AI Readiness: ${Math.round(meta.aiReadiness)}%` : null,
+          Number.isFinite(meta.opportunityScore ?? meta.roiScore)
+            ? `Opportunity: ${Math.round(meta.opportunityScore ?? meta.roiScore)}%`
+            : null,
+          upstreamLabels.length ? `Upstream: ${upstreamLabels.join(", ")}` : null,
+          downstreamLabels.length ? `Downstream: ${downstreamLabels.join(", ")}` : null,
         ]
           .filter(Boolean)
           .join(" • ");
@@ -156,7 +161,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
           id: n.id,
           data: {
             label: (
-              <div title={tooltip}>
+              <div title={tooltipParts || undefined}>
                 <div className="text-xs font-semibold text-slate-900">{n.label}</div>
                 <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold text-slate-500">
                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5">
@@ -168,7 +173,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
                 </div>
               </div>
             ),
-            meta: n,
+            meta,
           },
           position: { x: 120 * (idx % 5), y: 120 * Math.floor(idx / 5) },
           style: {
@@ -182,7 +187,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
           },
         };
       }),
-    [simData.nodes, state.mode],
+    [simData.nodes, state.mode, labelById, neighbors.up, neighbors.down, metaById],
   );
 
   const edgeKindColor = (kind?: string) => {
@@ -200,36 +205,24 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     }
   };
 
-  const baseEdges: Edge[] = useMemo(
+  const rawEdges: Edge[] = useMemo(
     () =>
       simData.edges.map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
-        label: undefined,
-        data: { kind: e.kind },
-        type: "straight",
-        style: {
-          strokeWidth: 1.6,
-          stroke: edgeKindColor(e.kind),
-          opacity: 0.8,
-          strokeDasharray: "5 4",
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-        },
+        data: { kind: e.kind, edgeType: (e as any).edgeType, inferred: (e as any).inferred, confidence: (e as any).confidence },
       })),
     [simData.edges],
   );
 
-  const laidOutNodes = useMemo(() => {
-    let boxes: Array<{ label: string; x: number; width: number; height: number }> = [];
-    // Group by domain: place nodes in columns by domain key.
-  if (layer === "domain") {
+  const domainLayout = useMemo(() => {
+    if (layer !== "domain") return { nodes: baseNodes, boxes: [] as Array<{ label: string; x: number; width: number; height: number }> };
     const domains = Array.from(
       new Set(
         baseNodes
           .map((n) => {
-            const meta = simData.nodes.find((m) => m.id === n.id);
+            const meta = metaById.get(n.id);
             const norm = normalizeDomainValue(meta?.domain);
             if ((!showOtherDomain && norm === "Other") || hiddenDomains.has(norm)) return null;
             return norm;
@@ -240,12 +233,12 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     const domainIndex = new Map<string, number>();
     domains.forEach((d, idx) => domainIndex.set(d || "Other", idx));
 
-    const hGap = 260; // narrower columns to reduce whitespace
-    const vGap = 140; // tighter vertical spacing
+    const hGap = 260;
+    const vGap = 140;
     const maxRows = 12;
     const counts: Record<string, number> = {};
 
-    boxes = domains.map((d, idx) => {
+    const boxes = domains.map((d, idx) => {
       const isFocus = focusDomain === d || !focusDomain;
       return {
         label: d,
@@ -257,7 +250,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
 
     const laidOut = baseNodes
       .map((n) => {
-        const meta = simData.nodes.find((m) => m.id === n.id);
+        const meta = metaById.get(n.id);
         const domain = normalizeDomainValue(meta?.domain);
         if ((!showOtherDomain && domain === "Other") || hiddenDomains.has(domain)) return null;
         if (focusDomain && domain !== focusDomain) return null;
@@ -274,26 +267,29 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         };
       })
       .filter(Boolean) as Node[];
-    setDomainBoxes(boxes);
-      return laidOut;
-    }
 
-    if (layout === "dagre") {
-      return applyDagreLayout(baseNodes, baseEdges, direction).nodes;
-    }
-    return baseNodes;
-  }, [layout, baseNodes, baseEdges, direction, layer, simData.nodes, showOtherDomain]);
+    return { nodes: laidOut, boxes };
+  }, [layer, baseNodes, metaById, showOtherDomain, hiddenDomains, focusDomain]);
+
+  const dagreNodes = useMemo(
+    () => applyDagreLayout(baseNodes, rawEdges, "TB").nodes,
+    [baseNodes, rawEdges],
+  );
+
+  const laidOutNodes = layer === "domain" ? domainLayout.nodes : dagreNodes;
+  const domainBoxes = domainLayout.boxes;
 
   const normalizedSearch = (searchTerm ?? "").toLowerCase();
 
   const coloredNodes = useMemo(() => {
     return laidOutNodes.map((n) => {
-      const meta = simData.nodes.find((m) => m.id === n.id);
+      const meta = metaById.get(n.id);
       const healthScore = meta?.health ?? 60;
       const aiScore = meta?.aiReadiness ?? 55;
       const roiScore = meta?.roiScore ?? aiScore;
       const domainColor = domainColors.get(meta?.domain ?? "Other") ?? COLORS.neutral;
-      const dispositionColor = meta?.disposition ? COLORS.disposition[meta.disposition] : COLORS.neutral;
+      const dispositionKey = meta?.disposition as keyof typeof COLORS.disposition | undefined;
+      const dispositionColor = dispositionKey ? COLORS.disposition[dispositionKey] ?? COLORS.neutral : COLORS.neutral;
 
       let color = COLORS.neutral;
       switch (layer) {
@@ -347,7 +343,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         },
       };
     });
-  }, [laidOutNodes, simData.nodes, domainColors, layer, selectedNodeId, normalizedSearch]);
+  }, [laidOutNodes, metaById, domainColors, layer, selectedNodeId, normalizedSearch]);
 
   const onNodeClick = (_: any, node: Node) => {
     if (state.mode === "simulate") {
@@ -360,15 +356,15 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   };
 
   React.useEffect(() => {
-    if (flowInstance && coloredNodes.length > 0) {
+    if (flowInstance && typeof flowInstance.fitView === "function" && coloredNodes.length > 0) {
       // Defer to next frame to ensure nodes are mounted
       requestAnimationFrame(() => {
         flowInstance.fitView({ padding: 0.3 });
       });
     }
-  }, [flowInstance, coloredNodes.length, layout, direction, layer, showOtherDomain]);
+  }, [flowInstance, coloredNodes.length]);
 
-  const styledEdges = useMemo(() => baseEdges.map((e: any) => {
+  const styledEdges = useMemo(() => rawEdges.map((e: any) => {
     const confidence = typeof e?.confidence === "number" ? e.confidence : (e.data?.confidence as number) ?? 0.6;
     const kind =
       (e.data?.edgeType as any) ??
@@ -405,7 +401,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         strokeLinejoin: "round" as const,
       },
     };
-  }), [baseEdges, layer]);
+  }), [rawEdges, layer]);
 
   // First pass: domain visibility only (no isolate filter yet)
   const domainFilteredNodes = useMemo(() => {
@@ -457,6 +453,30 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   }, [coloredNodes, domainFilteredNodes, hideIsolates, degreeByNode, layer]);
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
+  const laidOutById = useMemo(() => {
+    const map = new Map<string, Node>();
+    (laidOutNodes as Node[]).forEach((n) => map.set(n.id, n));
+    return map;
+  }, [laidOutNodes]);
+
+  const positionedNodes = useMemo(
+    () =>
+      visibleNodes.map((n) => {
+        const mapped = laidOutById.get(n.id);
+        return { ...n, position: mapped?.position ?? n.position };
+      }),
+    [visibleNodes, laidOutById],
+  );
+
+  const visibleDomains = useMemo(() => {
+    const set = new Set<string>();
+    visibleNodes.forEach((n) => {
+      const meta = (n.data as any)?.meta;
+      const domain = normalizeDomainValue(meta?.domain);
+      if (domain) set.add(domain);
+    });
+    return set;
+  }, [visibleNodes]);
 
   const btnBase =
     "rounded-full px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300";
@@ -630,9 +650,11 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
               transformOrigin: "0 0",
             }}
           >
-            {domainBoxes.map((box, idx) => (
+            {domainBoxes
+              .filter((box) => box.label && visibleDomains.has(box.label))
+              .map((box, idx) => (
               <div
-                key={box.label + idx}
+                key={`${box.label ?? "domain"}-${idx}`}
                 className="absolute rounded-2xl border border-slate-200/70 bg-slate-50/40"
                 style={{
                   left: box.x,
@@ -642,7 +664,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
                 }}
               >
                 <div className="absolute -top-3 left-3 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 border border-slate-200 shadow-sm">
-                  {box.label}
+                  {box.label ?? "Other"}
                 </div>
               </div>
             ))}
@@ -654,14 +676,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
           nodesDraggable={layer !== "domain"}
           nodesConnectable={layer !== "domain"}
           elementsSelectable={layer !== "domain"}
-          nodes={
-            layout === "dagre"
-              ? visibleNodes.map((n) => {
-                  const mapped = laidOutNodes.find((ln) => ln.id === n.id);
-                  return { ...n, position: mapped?.position ?? n.position };
-                })
-              : visibleNodes
-          }
+          nodes={positionedNodes as Node[]}
           edges={visibleEdges}
           fitView
           defaultEdgeOptions={{ type: "straight" }}

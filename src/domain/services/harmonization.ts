@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { recordTelemetry } from "@/lib/telemetry/server";
 
 type Source = "Lucid" | "Inventory" | "Future";
 
@@ -30,7 +31,6 @@ const DATA_ROOT =
   path.join(process.cwd(), ".fuxi", "data");
 const INGESTED_DIR = path.join(DATA_ROOT, "ingested");
 const HARMONIZED_DIR = path.join(DATA_ROOT, "harmonized");
-const TELEMETRY_FILE = path.join(DATA_ROOT, "telemetry_events.ndjson");
 const CONFLICT_LOG = path.join(DATA_ROOT, "logs", "harmonization_conflicts.log");
 const CURRENT_CSV = path.join(INGESTED_DIR, "enterprise_current_state.csv");
 const FUTURE_CSV = path.join(INGESTED_DIR, "enterprise_future_state.csv");
@@ -42,25 +42,6 @@ async function readJson<T>(file: string): Promise<T | null> {
     return JSON.parse(raw) as T;
   } catch {
     return null;
-  }
-}
-
-async function appendTelemetry(event: {
-  event_type: string;
-  data?: Record<string, unknown>;
-}) {
-  try {
-    await fs.mkdir(path.dirname(TELEMETRY_FILE), { recursive: true });
-    const payload = {
-      session_id: "server",
-      workspace_id: "digital_enterprise",
-      event_type: event.event_type,
-      timestamp: new Date().toISOString(),
-      data: event.data,
-    };
-    await fs.appendFile(TELEMETRY_FILE, JSON.stringify(payload) + "\n", "utf8");
-  } catch {
-    // swallow telemetry errors
   }
 }
 
@@ -291,7 +272,11 @@ function stateFromPresence(
 export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise<HarmonizedGraph> {
   const mode: HarmonizeMode = opts?.mode ?? "all";
   const { records, headerMapping, hasFuture, hasCurrent } = buildRawRecords(mode);
-  await appendTelemetry({ event_type: "harmonization_start", data: { header_mapping: headerMapping, mode } });
+  await recordTelemetry({
+    workspace_id: "digital_enterprise",
+    event_type: "harmonization_start",
+    data: { header_mapping: headerMapping, mode },
+  });
   const expectedCount = 5; // label/system/domain/upstream/downstream
   Object.entries(headerMapping).forEach(([source, mappings]) => {
     const coverage = mappings.length / expectedCount;
@@ -340,12 +325,10 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
     const inInventory = entry.sources.includes("Inventory");
     const inFuture = entry.sources.includes("Future");
     const state = stateFromPresence(inLucid, inInventory, inFuture, entry.changed, hasFuture);
-    const confidence =
-      0.5 +
-      (inFuture ? 0.2 : 0) +
-      (inInventory ? 0.15 : 0) +
-      (inLucid ? 0.1 : 0) -
-      (entry.changed ? 0.05 : 0);
+    // Confidence: base on evidence count; simple additive then clamped.
+    const evidence = [inInventory, inLucid, inFuture].filter(Boolean).length;
+    let confidence = 0.4 + evidence * 0.2;
+    if (entry.changed) confidence -= 0.05;
 
     nodes.push({
       id: entry.key,
@@ -392,7 +375,8 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
     "utf8",
   );
 
-  await appendTelemetry({
+  await recordTelemetry({
+    workspace_id: "digital_enterprise",
     event_type: "harmonization_complete",
     data: { total_nodes: totalNodes, total_edges: totalEdges, avg_confidence: avgConfidence },
   });

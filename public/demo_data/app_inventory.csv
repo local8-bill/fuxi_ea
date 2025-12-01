@@ -1,0 +1,11 @@
+System,Domain,Type,Owner,Dependencies_Upstream,Dependencies_Downstream
+Commerce Engine,Commerce,SaaS,A. Patel,,OMS;PIM
+OMS,Order Mgmt,SaaS,B. Chen,Commerce Engine,WMS;ERP Core
+PIM,Product,SaaS,L. Nguyen,Commerce Engine,MDM
+ERP Core,Finance,On-Prem,T. Rivera,OMS,Data Hub
+CRM Cloud,Customer,SaaS,J. Singh,,Data Hub
+Data Hub,Data,Service,S. Alvarez,ERP Core;CRM Cloud,AI Insights
+MDM,Master Data,SaaS,R. Owens,PIM,Data Hub
+POS,Retail,App,M. Zhao,,WMS
+WMS,Logistics,SaaS,A. Patel,OMS;POS,ERP Core
+AI Insights,Analytics,Service,L. Nguyen,Data Hub,

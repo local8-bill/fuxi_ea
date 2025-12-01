@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parseLucidCsv } from "@/domain/services/lucidIngestion";
 import type { InventoryRow } from "@/domain/model/modernization";
+import { recordTelemetry } from "@/lib/telemetry/server";
 
 /**
  * Best-effort CSV parser — used for .csv/.txt or XLSX fallback.
@@ -184,36 +185,10 @@ export type NormalizedSystemRecord = {
   confidence: number;
 };
 
-type TelemetryShape = {
-  event_type: string;
-  workspace_id: string;
-  data?: Record<string, unknown>;
-  simplification_score?: number;
-};
-
 const INGEST_DIR =
   process.env.FUXI_DATA_ROOT ??
   path.join(process.cwd(), ".fuxi", "data");
 const LUCID_OUT = path.join(INGEST_DIR, "ingested", "lucid_clean.json");
-const TELEMETRY_FILE = path.join(INGEST_DIR, "telemetry_events.ndjson");
-
-async function appendTelemetry(event: TelemetryShape) {
-  try {
-    await fs.mkdir(path.dirname(TELEMETRY_FILE), { recursive: true });
-    const payload = {
-      session_id: "server",
-      project_id: undefined,
-      workspace_id: event.workspace_id,
-      event_type: event.event_type,
-      timestamp: new Date().toISOString(),
-      data: event.data,
-      simplification_score: event.simplification_score,
-    };
-    await fs.appendFile(TELEMETRY_FILE, JSON.stringify(payload) + "\n", "utf8");
-  } catch (err) {
-    console.warn("[Lucid normalize][telemetry] failed", err);
-  }
-}
 
 function normalizeName(name: string): string {
   return name
@@ -255,7 +230,7 @@ function inferIntegrationType(label: string): string | null {
 }
 
 export async function normalizeLucidData(rawCsv: string): Promise<NormalizedSystemRecord[]> {
-  await appendTelemetry({
+  await recordTelemetry({
     workspace_id: "digital_enterprise",
     event_type: "lucid_parse_start",
     data: { file_name: "upload", record_count: rawCsv?.length ?? 0 },
@@ -306,7 +281,7 @@ export async function normalizeLucidData(rawCsv: string): Promise<NormalizedSyst
     };
   });
 
-  await appendTelemetry({
+  await recordTelemetry({
     workspace_id: "digital_enterprise",
     event_type: "lucid_filtered",
     data: { filtered_count: nodes.length - canonicals.length, retained_count: canonicals.length },
@@ -315,7 +290,7 @@ export async function normalizeLucidData(rawCsv: string): Promise<NormalizedSyst
   await fs.mkdir(path.dirname(LUCID_OUT), { recursive: true });
   await fs.writeFile(LUCID_OUT, JSON.stringify(normalized, null, 2), "utf8");
 
-  await appendTelemetry({
+  await recordTelemetry({
     workspace_id: "digital_enterprise",
     event_type: "lucid_complete",
     data: {

@@ -1,57 +1,11 @@
-﻿Raw_Label,Logical_Name,Disposition_Color,Disposition_Interpretation,Layer,Domain,System_Type,Dependencies_Upstream,Dependencies_Downstream,Notes
-SFCC,SFCC — Order Capture (Consumer),Black,Existing,Application,Commerce,SaaS,Consumer Web Channels,Order Mgmt (Consumer); Oracle EBS - Order Mgmt,Current consumer storefront + order capture.
-Order Mgmt (Consumer),Order Management — Consumer Cluster,Black,Existing,Application,Order Management,Composite,SFCC; CC UI; Store UI,Oracle EBS - Order Mgmt; HighJump WMS,"Composite OMS including DOMS AWS, Legacy DOMS, UI layers, sourcing."
-CC UI,Contact Center UI — Order Tools,Black,Existing,Channel,Customer Service,Application,Contact Center,Order Mgmt (Consumer),"Order lookup, modification, returns."
-Store UI,Store UI — Order Tools,Black,Existing,Channel,Retail Stores,Application,Store Ops Devices,Order Mgmt (Consumer); POS,Store-based order lookup & returns.
-DOMS AWS,DOMS on AWS — OMS Engine,Black,Existing,Application,Order Management,Custom Hosted,SFCC; CC UI; Store UI,Oracle EBS; HighJump; Sourcing,Current ecommerce order management.
-Legacy DOMS,Legacy DOMS — OMS Engine,Black,Existing,Application,Order Management,Legacy,Stores; Store UI,Oracle EBS; HighJump; Sourcing,Legacy store OMS.
-Price Lists,Price Lists — Current,Black,Existing,Application,Pricing,Data/Service,DOMS AWS; Legacy DOMS,SFCC; Oracle EBS - Pricing,Provides price books to commerce + ERP.
-Sourcing,Sourcing Engine — Current State,Black,Existing,Application,Fulfillment,Service,DOMS AWS; Legacy DOMS,HighJump; 3PL,Determines fulfillment locations.
-POS,POS — Predict Springs,Black,Existing,Application,Retail Stores,SaaS,Store UI,POSLog; ReSA; Oracle EBS,Store sales & returns.
-POSLog,POSLog — Transaction Log,Black,Existing,Integration,Retail Stores,Log Store,POS,ReSA; RMS,Downstream auditing + inventory.
-ReSA,ReSA — Sales Audit,Black,Existing,Application,Finance,Application,POSLog,Oracle EBS - Financials,Sales audit→GL.
-SIM,SIM — Store Inventory Mgmt,Black,Existing,Application,Inventory,Application,Stores; POS; RMS,Oracle EBS,Store-level adjustments & transfers.
-RMS,RMS — Retail Merchandising System,Black,Existing,Application,Merchandising,Application,Oracle EBS - Purchasing,SIM; Reporting,Merch hierarchy + inventory.
-Halo,Halo — RFID & Inventory Ops,Black,Existing,Application,Store Operations,Application,Store Ops Devices,SIM; RMS,"Cycle count, RFID, receiving."
-Oracle EBS,Oracle E-Business Suite — ERP,Black,Existing,ERP,Enterprise Back Office,ERP Suite,OMS; POS; RMS,Reporting; WMS; Nexus,"Finance, PO, Customer, Location, Order Mgmt, Pricing, Inventory."
-Financials,Oracle EBS — Financials,Black,Existing,Application,Finance,ERP Module,ReSA; POS,Reporting,GL/AR/AP/FA.
-Purchasing,Oracle EBS — Purchasing,Black,Existing,Application,Procurement,ERP Module,Vendors,RMS; Inventory Mgmt,POs + ASNs.
-Customer & Vendor,Oracle EBS — Customer & Vendor,Black,Existing,Application,Customer / Vendor,ERP Module,Order Mgmt; Financials,Reporting,Master data.
-Order Mgmt,Oracle EBS — Order Mgmt,Black,Existing,Application,Order Management,ERP Module,DOMS AWS; Legacy DOMS,Inventory Mgmt; Financials,Order processing + sourcing.
-Adv Pricing,Oracle EBS — Advanced Pricing,Black,Existing,Application,Pricing,ERP Module,Price Lists,Order Mgmt,B2B pricing + promos.
-Location,Oracle EBS — Location,Black,Existing,Application,Enterprise Data,ERP Module,RMS,WMS; 3PL; Nexus,Stores + warehouse master data.
-Inventory Mgmt,Oracle EBS — Inventory Mgmt,Black,Existing,Application,Inventory,ERP Module,Order Mgmt; Purchasing,HighJump; 3PL,WH inventory + transfers.
-Genysis,Genysis — EBS Satellite,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-DOE,Deckers Order Entry — DOE,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-SOMT,Sales Order Mod Tool — SOMT,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-WebADI,WebADI — Oracle XLS Loader,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-PMT,PMT — Product Move Tool,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-Flex PLM,Flex PLM — Product Design & Specs,Black,Existing,Application,Product,SaaS,,PIM (Salsify); Vendor EDI,"Design, specs, pricing."
-PIM (Salsify),PIM — Product Information Management,Black,Existing,Application,Product,SaaS,Flex PLM,SFCC; Oracle EBS; Vendors,Product data enrichment.
-HiJump,HighJump WMS — US Sites,Black,Existing,Warehouse,Warehouse Management,WMS,Oracle EBS; Sourcing; PMT,3PL; Carriers,Multiple WMS instances.
-3PL,Third-Party Logistics Providers,Black,Existing,Warehouse,Fulfillment,Partner,HighJump; EBS,Carriers,Multiple external logistics partners.
-IRIS,IRIS — WH Transfers,Black,Existing,Integration,Logistics,Integration Tool,EBS - Inventory Mgmt,HighJump,Warehouse-to-warehouse transfers.
-Nexus,Nexus — Trade Management,Black,Existing,Application,Trade / Tax / Logistics,Application,Oracle EBS,Brokers,Trade mgmt & brokers.
-Redshift/Tableau,Redshift + Tableau — Reporting Stack,Black,Existing,Analytics,Reporting,BI,EBS; RMS; POS,,Reporting warehouse.
-Deckers B2B,Deckers B2B Order Capture,Black,Existing,Application,B2B Commerce,Portal,B2B Customers,Oracle EBS - Order Mgmt,"B2B order creation, review, approval."
-Merkle,Merkle — Partner Integration,Black,Existing,Partner,Loyalty,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-COVEO,COVEO — Partner Integration,Black,Existing,Partner,Search,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Feedonomics,Feedonomics — Partner Integration,Black,Existing,Partner,Feeds,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Cloudinary,Cloudinary — Partner Integration,Black,Existing,Partner,Content Delivery,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Rudderstack,Rudderstack — Partner Integration,Black,Existing,Partner,Event Routing,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Cordial,Cordial — Partner Integration,Black,Existing,Partner,Email,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Chase,Chase — Partner Integration,Black,Existing,Partner,Payments,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Forter,Forter — Partner Integration,Black,Existing,Partner,Fraud,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Annex,Annex — Partner Integration,Black,Existing,Partner,Loyalty,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-GTM,GTM — Partner Integration,Black,Existing,Partner,Telemetry,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Tealium,Tealium — Partner Integration,Black,Existing,Partner,Tagging,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-CoreMedia,CoreMedia — Partner Integration,Black,Existing,Partner,Content,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Builder.io,Builder.io — Partner Integration,Black,Existing,Partner,Content,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-DynamicYield,DynamicYield — Partner Integration,Black,Existing,Partner,Personalization,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Adyen,Adyen — Partner Integration,Black,Existing,Partner,Payments,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Avalara,Avalara — Partner Integration,Black,Existing,Partner,Tax,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-One Source,One Source — Partner Integration,Black,Existing,Partner,Tax,SaaS Partner,Oracle EBS,,External B2B partner.
-Vertex,Vertex — Partner Integration,Black,Existing,Partner,Tax,SaaS Partner,Oracle EBS,,External B2B partner.
-SPS Commerce,SPS Commerce — Partner Integration,Black,Existing,Partner,EDI,SaaS Partner,Oracle EBS,,External B2B partner.
-BlackLine,BlackLine — Partner Integration,Black,Existing,Partner,Finance,SaaS Partner,Oracle EBS,,External B2B partner.
-V Trader,V Trader — Partner Integration,Black,Existing,Partner,Finance,SaaS Partner,Oracle EBS,,External B2B partner.
+System,Domain,Disposition,Upstream,Downstream
+Commerce Engine,Commerce,Existing,,OMS;PIM
+OMS,Order Mgmt,Existing,Commerce Engine,WMS;ERP Core
+ERP Core,Finance,Existing,OMS,Data Hub
+PIM,Product,Existing,Commerce Engine,MDM
+POS,Retail,Existing,,WMS
+WMS,Logistics,Existing,OMS;POS,ERP Core
+CRM Cloud,Customer,Existing,,ERP Core
+MDM,Master Data,Existing,PIM,Data Hub
+Data Hub,Data,Existing,ERP Core;MDM,AI Insights
+AI Insights,Analytics,New,Data Hub,

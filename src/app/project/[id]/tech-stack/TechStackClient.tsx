@@ -673,9 +673,12 @@ export function TechStackClient({ projectId }: Props) {
         fileName: file.name,
       });
 
-      if (!file.name.toLowerCase().endsWith(".csv")) {
+      const name = file.name.toLowerCase();
+      const isCsv = name.endsWith(".csv");
+      const isXlsx = name.endsWith(".xlsx") || name.endsWith(".xls");
+      if (!isCsv && !isXlsx) {
         throw new Error(
-          "Unsupported file type. Please export your Excel inventory as CSV and upload the .csv file.",
+          "Unsupported file type. Please upload CSV or Excel (.xls/.xlsx) inventory.",
         );
       }
 

@@ -8,7 +8,7 @@ import {
   type SystemImpact,
 } from "@/components/digital-enterprise/SystemImpactPanel";
 import { LivingMap } from "@/components/LivingMap";
-import type { LivingMapData } from "@/types/livingMap";
+import type { LivingMapData, LivingNode, LivingEdge } from "@/types/livingMap";
 import { useROISimulation } from "@/hooks/useROISimulation";
 import { ROIChart } from "@/components/ROIChart";
 import { EventLogPanel } from "@/components/EventLogPanel";
@@ -174,15 +174,16 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const aiInsights = useAIInsights(graphData?.nodes ?? []);
-  const livingMapData: LivingMapData = useMemo(() => {
+  const livingMapData = useMemo<LivingMapData>(() => {
     const data = graphData ?? { nodes: [], edges: [] };
+    const safeNodes = ((data.nodes ?? []) as LivingNode[]).filter((n): n is LivingNode => !!n);
     const dispositions: Array<NonNullable<LivingMapData["nodes"][number]["disposition"]>> = [
       "keep",
       "modernize",
       "replace",
       "retire",
     ];
-    const enrichedNodes = (data.nodes ?? [])
+    const enrichedNodes = safeNodes
       .map((n, idx) => {
         const labelRaw = (n as any).system_name ?? (n as any).label ?? "";
         const label = labelRaw || String(n.id ?? "Unknown");
@@ -196,16 +197,16 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           aiReadiness: insight?.aiReadiness ?? n.aiReadiness,
           opportunityScore: insight?.opportunityScore ?? n.opportunityScore,
           riskScore: insight?.riskScore ?? n.riskScore,
-          roiScore: insight?.roiScore ?? n.roiScore,
+          roiScore: n.roiScore ?? n.opportunityScore,
           aiSummary: insight?.summary ?? n.aiSummary,
           disposition: (insight?.disposition as any) ?? n.disposition ?? dispositions[idx % dispositions.length],
         };
       })
-      .filter((n): n is LivingMapData["nodes"][number] => !!n && !!n.label);
+      .filter(Boolean) as LivingNode[];
 
     return {
       nodes: enrichedNodes,
-      edges: data.edges ?? [],
+      edges: ((data.edges ?? []) as LivingEdge[]).filter((e): e is LivingEdge => !!e && !!(e as any).source && !!(e as any).target),
     };
   }, [graphData, aiInsights.insights]);
 

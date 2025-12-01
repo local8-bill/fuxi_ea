@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 
 // Placeholder: returns empty path set until graph store is populated.

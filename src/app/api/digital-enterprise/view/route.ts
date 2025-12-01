@@ -1,11 +1,11 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 import { getDigitalEnterpriseView } from "@/domain/services/digitalEnterpriseStore";
 import { harmonizeSystems } from "@/domain/services/harmonization";
 import fs from "node:fs/promises";
 import path from "node:path";
+
+export const runtime = "nodejs";
 
 const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
 const CONFIRMED_CONNECTIONS = path.join(DATA_ROOT, "connections", "derived_edges.json");
@@ -80,7 +80,7 @@ async function mergeConfirmedEdges(graph: Awaited<ReturnType<typeof harmonizeSys
         id,
         source: e.source,
         target: e.target,
-        state: "confirmed",
+        state: "unchanged",
         confidence: e.confidence ?? 0.7,
       });
     }

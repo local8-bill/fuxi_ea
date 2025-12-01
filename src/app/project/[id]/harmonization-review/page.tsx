@@ -2,7 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ReactElement } from "react";
 import type { HarmonizedGraph } from "@/domain/services/harmonization";
-import { HarmonizationReviewClient, type ReviewMetrics, type DeltaRow } from "./HarmonizationReviewClient";
+import {
+  HarmonizationReviewClient,
+  type ReviewMetrics,
+  type DeltaRow,
+  type DomainComparison,
+} from "./HarmonizationReviewClient";
 
 // Next 16: params is a Promise and must be awaited.
 interface PageProps {
@@ -27,9 +32,18 @@ async function readHarmonizedGraph(): Promise<HarmonizedGraph | null> {
   }
 }
 
-function buildMetrics(graph: HarmonizedGraph): { metrics: ReviewMetrics; deltaRows: DeltaRow[] } {
+function buildMetrics(graph: HarmonizedGraph): {
+  metrics: ReviewMetrics;
+  deltaRows: DeltaRow[];
+  comparisons: DomainComparison[];
+} {
   const nodes = graph.nodes ?? [];
   const edges = graph.edges ?? [];
+
+  const domainByNode = new Map<string, string>();
+  nodes.forEach((n) => {
+    domainByNode.set(n.id, normalizeDomainValue(n.domain));
+  });
 
   const stateCounts = nodes.reduce(
     (acc, n) => {
@@ -50,6 +64,52 @@ function buildMetrics(graph: HarmonizedGraph): { metrics: ReviewMetrics; deltaRo
 
   const avgConfidence =
     nodes.reduce((sum, n) => sum + (n.confidence ?? 0), 0) / Math.max(1, nodes.length);
+
+  const comparisonsMap = new Map<
+    string,
+    { current: Array<{ id: string; label: string }>; future: Array<{ id: string; label: string }> }
+  >();
+
+  nodes.forEach((n) => {
+    const domain = normalizeDomainValue(n.domain);
+    if (!comparisonsMap.has(domain)) {
+      comparisonsMap.set(domain, { current: [], future: [] });
+    }
+    const entry = comparisonsMap.get(domain)!;
+    const sources = (n.source_origin ?? []) as string[];
+    const target = sources.includes("Future") ? entry.future : entry.current;
+    target.push({ id: n.id, label: n.label });
+  });
+
+  const comparisons: DomainComparison[] = Array.from(comparisonsMap.entries())
+    .map(([domain, { current, future }]) => {
+      const currentIds = new Set(current.map((n) => n.id));
+      const futureIds = new Set(future.map((n) => n.id));
+      const currentOnly = current.filter((n) => !futureIds.has(n.id)).map((n) => ({ ...n, domain }));
+      const futureOnly = future.filter((n) => !currentIds.has(n.id)).map((n) => ({ ...n, domain }));
+
+      // Edge counts touching this domain
+      let edgeCount = 0;
+      let crossDomain = 0;
+      edges.forEach((e) => {
+        const srcDom = domainByNode.get(e.source);
+        const tgtDom = domainByNode.get(e.target);
+        if (srcDom === domain || tgtDom === domain) {
+          edgeCount += 1;
+          if (srcDom && tgtDom && srcDom !== tgtDom) crossDomain += 1;
+        }
+      });
+
+      return {
+        domain,
+        current: { count: current.length, nodes: current.sort((a, b) => a.label.localeCompare(b.label)) },
+        future: { count: future.length, nodes: future.sort((a, b) => a.label.localeCompare(b.label)) },
+        currentOnly,
+        futureOnly,
+        edges: { total: edgeCount, crossDomain },
+      };
+    })
+    .sort((a, b) => b.current.count + b.future.count - (a.current.count + a.future.count));
 
   const deltaRows: DeltaRow[] = nodes
     .filter((n) => n.state !== "unchanged")
@@ -74,7 +134,7 @@ function buildMetrics(graph: HarmonizedGraph): { metrics: ReviewMetrics; deltaRo
       .sort((a, b) => b.count - a.count),
   };
 
-  return { metrics, deltaRows };
+  return { metrics, deltaRows, comparisons };
 }
 
 export default async function HarmonizationReviewPage({ params }: PageProps): Promise<ReactElement> {
@@ -94,13 +154,14 @@ export default async function HarmonizationReviewPage({ params }: PageProps): Pr
     );
   }
 
-  const { metrics, deltaRows } = buildMetrics(graph);
+  const { metrics, deltaRows, comparisons } = buildMetrics(graph);
 
   return (
     <HarmonizationReviewClient
       projectId={projectId}
       metrics={metrics}
       deltaRows={deltaRows}
+      domainComparisons={comparisons}
     />
   );
 }

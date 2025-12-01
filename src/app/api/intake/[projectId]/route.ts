@@ -1,8 +1,8 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
+
+export const runtime = "nodejs";
 
 const DATA_DIR = path.join(process.cwd(), ".fuxi", "data");
 const INTAKE_FILE = path.join(DATA_DIR, "intake.json");
@@ -19,17 +19,17 @@ async function writeAll(data: any) {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { projectId: string } },
+  context: { params: Promise<{ projectId: string }> },
 ) {
-  const projectId = params?.projectId;
+  const { projectId } = await context.params;
   if (!projectId) return NextResponse.json({ ok: false, error: "missing_project" }, { status: 400 });
   const all = await readAll();
   const entry = all[projectId];
   return NextResponse.json({ ok: true, intake: entry ?? null });
 }
 
-export async function POST(req: Request, { params }: { params: { projectId: string } }) {
-  const projectId = params?.projectId;
+export async function POST(req: Request, context: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await context.params;
   if (!projectId) return NextResponse.json({ ok: false, error: "missing_project" }, { status: 400 });
   const body = await req.json();
   if (!body || typeof body !== "object") {

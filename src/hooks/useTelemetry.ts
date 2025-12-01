@@ -2,21 +2,14 @@
 
 import React from "react";
 import { v4 as uuidv4 } from "uuid";
+import type { TelemetryEvent } from "@/lib/telemetry/schema";
 
 type TelemetryOptions = {
   projectId?: string;
   debug?: boolean;
 };
 
-type TelemetryPayload = {
-  session_id: string;
-  project_id?: string;
-  workspace_id: string;
-  event_type: string;
-  timestamp: string;
-  data?: Record<string, unknown>;
-  simplification_score?: number;
-};
+type TelemetryPayload = TelemetryEvent;
 
 const SESSION_KEY = "fuxi:session-id";
 
@@ -65,7 +58,7 @@ export function useTelemetry(workspaceId: string, opts?: TelemetryOptions) {
       const payload: TelemetryPayload = {
         session_id: sessionId,
         project_id: opts?.projectId,
-        workspace_id: workspaceId,
+        workspace_id: workspaceId as TelemetryEvent["workspace_id"],
         event_type: eventType,
         timestamp: new Date().toISOString(),
         data,

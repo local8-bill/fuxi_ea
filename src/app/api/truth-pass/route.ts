@@ -1,5 +1,3 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";

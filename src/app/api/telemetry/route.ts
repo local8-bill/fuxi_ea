@@ -1,9 +1,9 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { normalizeTelemetryPayload, workspaceEnum } from "@/lib/telemetry/validation";
+
+export const runtime = "nodejs";
 
 type TelemetryPayload = {
   session_id: string;
@@ -75,15 +75,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid JSON payload" }, { status: 400 });
     }
 
-    let parsed: TelemetryPayload;
-    try {
-      parsed = normalizeTelemetryPayload(json);
-    } catch (err: any) {
-      const message = err?.message || "Invalid telemetry payload";
-      return NextResponse.json({ ok: false, error: message }, { status: 400 });
-    }
+    const parsed = normalizeTelemetryPayload({
+      session_id: json.session_id,
+      project_id: json.project_id,
+      workspace_id: (json.workspace_id as any) ?? "digital_enterprise",
+      event_type: json.event_type,
+      timestamp: json.timestamp,
+      data: json.data,
+      simplification_score: json.simplification_score,
+    });
     if (!workspaceEnum.options.includes(parsed.workspace_id as any)) {
-      return NextResponse.json({ ok: false, error: "Invalid workspace" }, { status: 400 });
+      parsed.workspace_id = "digital_enterprise";
     }
 
     await fs.mkdir(DATA_DIR, { recursive: true });

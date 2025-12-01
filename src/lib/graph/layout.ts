@@ -47,7 +47,7 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[], direction: Direct
     );
 
   // Ensure every dagre edge has a weight to avoid runtime errors
-  g.edges().forEach((edge) => {
+  g.edges().forEach((edge: { v: string; w: string }) => {
     const label = g.edge(edge);
     if (!label || typeof (label as any).weight !== "number") {
       g.setEdge(edge.v, edge.w, { ...(label || {}), weight: 1 });

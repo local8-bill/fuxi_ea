@@ -1,8 +1,8 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
+
+export const runtime = "nodejs";
 
 const EVENTS_FILE = path.join(process.cwd(), ".fuxi", "data", "telemetry_events.ndjson");
 

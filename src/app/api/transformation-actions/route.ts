@@ -1,14 +1,13 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { normalizeTelemetryPayload } from "@/lib/telemetry/schema";
+import { recordTelemetry } from "@/lib/telemetry/server";
+
+export const runtime = "nodejs";
 
 const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
 const TRANSFORMATION_DIR = path.join(DATA_ROOT, "transformation");
 const TRANSFORMATION_FILE = path.join(TRANSFORMATION_DIR, "transformation_actions.json");
-const TELEMETRY_FILE = path.join(DATA_ROOT, "telemetry_events.ndjson");
 
 type ActionPayload = {
   system_id: string;
@@ -37,7 +36,7 @@ export async function POST(req: Request) {
       "utf8",
     );
 
-    await appendTelemetry({
+    await recordTelemetry({
       session_id: "server",
       workspace_id: "transformation_dialogue",
       event_type: "transformation_plan_confirm",
@@ -48,15 +47,5 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error("[TRANSFORMATION] Failed to save actions", err);
     return NextResponse.json({ ok: false, error: "Failed to save actions" }, { status: 500 });
-  }
-}
-
-async function appendTelemetry(event: any) {
-  try {
-    const normalized = normalizeTelemetryPayload(event);
-    await fs.mkdir(path.dirname(TELEMETRY_FILE), { recursive: true });
-    await fs.appendFile(TELEMETRY_FILE, JSON.stringify(normalized) + "\n", "utf8");
-  } catch (err) {
-    console.warn("[TRANSFORMATION][telemetry] failed", err);
   }
 }
