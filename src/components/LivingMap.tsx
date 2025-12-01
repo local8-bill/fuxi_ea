@@ -399,10 +399,24 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   }, [coloredNodes, layer, showOtherDomain, hiddenDomains]);
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
-  const visibleEdges = useMemo(
-    () => styledEdges.filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)),
-    [styledEdges, visibleNodeIds],
-  );
+  const domainByNode = useMemo(() => {
+    const map = new Map<string, string>();
+    simData.nodes.forEach((n) => map.set(n.id, normalizeDomainValue((n as any).domain)));
+    return map;
+  }, [simData.nodes]);
+
+  const visibleEdges = useMemo(() => {
+    return styledEdges.filter((e) => {
+      if (!visibleNodeIds.has(e.source) || !visibleNodeIds.has(e.target)) return false;
+      if (layer === "domain" && crossDomainOnly) {
+        const srcDom = domainByNode.get(e.source);
+        const tgtDom = domainByNode.get(e.target);
+        if (!srcDom || !tgtDom) return false;
+        return srcDom !== tgtDom;
+      }
+      return true;
+    });
+  }, [styledEdges, visibleNodeIds, layer, crossDomainOnly, domainByNode]);
 
   const btnBase =
     "rounded-full px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300";
@@ -414,67 +428,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     <div className="w-full">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
-          {(["inspect", "simulate", "optimize"] as SimulationMode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              aria-label={`Set mode to ${m}`}
-              className={`${btnBase} ${
-                state.mode === m ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-
-        <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
-          <button
-            onClick={() => setLayout("flow")}
-            aria-label="Set layout to free"
-            className={`${btnBase} ${
-              layout === "flow" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
-            }`}
-          >
-            Free
-          </button>
-          <button
-            onClick={() => setLayout("dagre")}
-            aria-label="Set layout to dagre"
-            className={`${btnBase} ${
-              layout === "dagre" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
-            }`}
-          >
-            Dagre
-          </button>
-        </div>
-
-        {layout === "dagre" && (
-          <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
-            <button
-              onClick={() => setDirection("TB")}
-              aria-label="Top-down layout"
-              className={`${btnBase} ${
-                direction === "TB" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
-              }`}
-            >
-              Vertical
-            </button>
-            <button
-              onClick={() => setDirection("LR")}
-              aria-label="Left-right layout"
-              className={`${btnBase} ${
-                direction === "LR" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
-              }`}
-            >
-              Horizontal
-            </button>
-          </div>
-        )}
-
-        <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
           {([
-            ["stack", "Stack"],
             ["domain", "Domain"],
             ["integration", "Integration"],
             ["disposition", "Disposition"],
@@ -493,6 +447,24 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
             </button>
           ))}
         </div>
+        {layer === "domain" && (
+          <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+            <button
+              onClick={() => setCrossDomainOnly((v) => !v)}
+              aria-label="Toggle cross-domain edges"
+              className={`${btnBase} ${crossDomainOnly ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+            >
+              Cross-domain only
+            </button>
+            <button
+              onClick={() => setFocusDomain(null)}
+              aria-label="Show all domains"
+              className={`${btnBase} ${!focusDomain ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+            >
+              All domains
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
