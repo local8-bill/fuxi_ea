@@ -341,7 +341,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
           ...n.style,
           border: isSelected || matchesSearch ? `2px solid ${highlightBorder}` : `1px solid ${useColor}`,
           boxShadow: isSelected || matchesSearch ? `0 4px 12px ${shadowColor}` : `0 2px 8px ${shadowColor}`,
-          opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.7 : focusId && !isConnected ? 0.25 : 1,
+          opacity: normalizedSearch && !matchesSearch && !isSelected ? 0.7 : 1,
           background: "#ffffff",
         },
         data: {
