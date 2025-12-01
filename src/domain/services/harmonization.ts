@@ -240,8 +240,34 @@ function requireCacheSafe(file: string): any[] | null {
     const raw = readFileSync(file, "utf8");
     return JSON.parse(raw);
   } catch {
+  return null;
+}
+
+function jaccard(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const setA = new Set(a.split(" "));
+  const setB = new Set(b.split(" "));
+  const inter = Array.from(setA).filter((t) => setB.has(t)).length;
+  const union = new Set([...setA, ...setB]).size || 1;
+  return inter / union;
+}
+
+function buildResolver(keys: string[]) {
+  return (candidate: string): string | null => {
+    const norm = normalizeKey(candidate);
+    if (keys.includes(norm)) return norm;
+    let best: { key: string; score: number } | null = null;
+    for (const k of keys) {
+      const score = jaccard(norm, k);
+      if (!best || score > best.score) {
+        best = { key: k, score };
+      }
+    }
+    if (best && best.score >= 0.5) return best.key;
     return null;
-  }
+  };
+}
 }
 
 function stateFromPresence(
@@ -334,15 +360,18 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
   const nodeKeys = new Set(nodes.map((n) => n.id));
   const edgeSet = new Set<string>();
   const edges: HarmonizedGraph["edges"] = [];
+  const resolver = buildResolver(Array.from(nodeKeys));
   for (const req of edgeRequests) {
-    if (!nodeKeys.has(req.from) || !nodeKeys.has(req.to)) continue;
-    const edgeId = `${req.from}->${req.to}`;
+    const from = resolver(req.from);
+    const to = resolver(req.to);
+    if (!from || !to) continue;
+    const edgeId = `${from}->${to}`;
     if (edgeSet.has(edgeId)) continue;
     edgeSet.add(edgeId);
     edges.push({
       id: edgeId,
-      source: req.from,
-      target: req.to,
+      source: from,
+      target: to,
       state: "unchanged",
       confidence: 0.6,
     });
