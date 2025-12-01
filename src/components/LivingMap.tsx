@@ -347,6 +347,23 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     };
   });
 
+  const visibleNodes = useMemo(() => {
+    if (layer !== "domain") return coloredNodes;
+    return coloredNodes.filter((n) => {
+      const meta = (n.data as any)?.meta;
+      const domain = normalizeDomainValue(meta?.domain);
+      if (!showOtherDomain && domain === "Other") return false;
+      if (hiddenDomains.has(domain)) return false;
+      return true;
+    });
+  }, [coloredNodes, layer, showOtherDomain, hiddenDomains]);
+
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
+  const visibleEdges = useMemo(
+    () => styledEdges.filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)),
+    [styledEdges, visibleNodeIds],
+  );
+
   const btnBase =
     "rounded-full px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300";
 
@@ -564,13 +581,13 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
           elementsSelectable={layer !== "domain"}
           nodes={
             layout === "dagre"
-              ? coloredNodes.map((n) => {
+              ? visibleNodes.map((n) => {
                   const mapped = laidOutNodes.find((ln) => ln.id === n.id);
                   return { ...n, position: mapped?.position ?? n.position };
                 })
-              : coloredNodes
+              : visibleNodes
           }
-          edges={styledEdges}
+          edges={visibleEdges}
           onNodeClick={onNodeClick}
           fitView
           defaultEdgeOptions={{ type: "straight" }}
