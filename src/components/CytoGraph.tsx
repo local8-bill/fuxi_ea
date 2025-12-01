@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import domainColors from "@/config/domainColors.json";
 import type { HarmonizedGraph } from "@/domain/services/harmonization";
 
-type LayoutMode = "cose" | "dagre" | "concentric";
+type LayoutMode = "sbgn" | "cose" | "dagre" | "concentric";
 
 type CytoGraphProps = {
   graph: HarmonizedGraph;
@@ -14,11 +14,17 @@ type CytoGraphProps = {
 export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any>(null);
-  const [layout, setLayout] = useState<LayoutMode>("cose");
+  const [layout, setLayout] = useState<LayoutMode>("sbgn");
+
+  const domainOrder = useMemo(
+    () => ["Data", "Core Platform", "ERP", "MDM", "Integration", "Commerce", "CRM", "OMS", "Experience", "Analytics"],
+    [],
+  );
 
   const elements = useMemo(() => {
     const nodes = (graph.nodes ?? []).map((n) => {
       const domain = (n.domain ?? "Other").toString();
+      const lane = domainOrder.indexOf(domain);
       return {
         data: {
           id: n.id,
@@ -27,6 +33,7 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
           parent: `domain-${domain}`,
           state: n.state ?? "unchanged",
           confidence: n.confidence ?? 0.6,
+          lane,
         },
       };
     });
@@ -61,8 +68,26 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
       const cytoscape = (await import("cytoscape")).default;
       const dagre = (await import("cytoscape-dagre")).default;
       const coseBilkent = (await import("cytoscape-cose-bilkent")).default;
+      const cola = (await import("cytoscape-cola")).default;
       dagre(cytoscape);
       coseBilkent(cytoscape);
+      cola(cytoscape);
+      const layoutConfig: any =
+        layout === "dagre"
+          ? { name: "dagre", rankDir: "TB" }
+          : layout === "concentric"
+          ? { name: "concentric" }
+          : layout === "cose"
+          ? { name: "cose-bilkent" }
+          : {
+              name: "cola",
+              flow: { axis: "x", minSeparation: 180 },
+              nodeSpacing: 60,
+              avoidOverlap: true,
+              animate: false,
+              fit: true,
+            };
+
       cy = cytoscape({
         container: containerRef.current,
         elements,
@@ -70,19 +95,17 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
           {
             selector: "node",
             style: {
-              "background-color": (ele: any) => {
-                const state = ele.data("state");
-                switch (state) {
-                  case "added":
-                    return "#22c55e";
-                  case "removed":
-                    return "#ef4444";
-                  case "modified":
-                    return "#eab308";
-                  default:
-                    return "#94a3b8";
-                }
+              "background-color": "#f8fafc",
+              "background-opacity": (ele: any) => {
+                const c = ele.data("confidence") ?? 0.6;
+                return Math.max(0.35, Math.min(1, c));
               },
+              "border-color": (ele: any) => {
+                const d = ele.data("domain") || "Other";
+                // @ts-ignore
+                return domainColors[d] ?? domainColors["Other"] ?? "#cbd5e1";
+              },
+              "border-width": 2,
               "label": "data(label)",
               "font-size": "10px",
               "text-valign": "center",
@@ -90,8 +113,6 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
               "text-wrap": "wrap",
               "text-max-width": "120px",
               "color": "#0f172a",
-              "border-width": 1,
-              "border-color": "#e2e8f0",
             },
           },
           {
@@ -107,7 +128,9 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
               "font-size": "11px",
               "text-valign": "top",
               "text-halign": "center",
-              "text-margin-y": "-8px",
+              // @ts-ignore text-margin-y accepts numeric offset
+              "text-margin-y": -8,
+              // @ts-ignore padding supports px shorthand
               "padding": "10px",
               "border-width": 2,
               "border-color": "#cbd5e1",
@@ -118,13 +141,14 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
           {
             selector: "edge",
             style: {
-              "curve-style": "bezier",
-              "width": 2,
+              "curve-style": "taxi",
+              "taxi-direction": "horizontal",
+              "width": 1.5,
               "line-color": (ele: any) => {
                 const t = ele.data("edgeType");
                 if (t === "inferred") return "#a855f7";
                 if (t === "unresolved") return "#fb923c";
-                return "#2563eb";
+                return "#94a3b8";
               },
               "line-style": (ele: any) => {
                 const t = ele.data("edgeType");
@@ -137,13 +161,23 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
                 const t = ele.data("edgeType");
                 if (t === "inferred") return "#a855f7";
                 if (t === "unresolved") return "#fb923c";
-                return "#2563eb";
+                return "#94a3b8";
               },
             },
           },
         ],
-        layout: layout === "dagre" ? { name: "dagre", rankDir: "TB" } : layout === "concentric" ? { name: "concentric" } : { name: "cose-bilkent" },
+        layout: layoutConfig,
       });
+      // Seed initial positions by domain lane to reinforce left-to-right flow.
+      const laneWidth = 260;
+      cy.nodes()
+        .filter((n: any) => !n.data("isDomain"))
+        .forEach((n: any, idx: number) => {
+          const lane = n.data("lane");
+          const x = (lane >= 0 ? lane : domainOrder.length) * laneWidth + (idx % 5) * 10;
+          const y = (idx % 20) * 40;
+          n.position({ x, y });
+        });
       cyRef.current = cy;
     }
     init();
@@ -153,24 +187,26 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
         cyRef.current = null;
       }
     };
-  }, [elements, layout]);
+  }, [elements, layout, domainOrder]);
 
   const applyLayout = (mode: LayoutMode) => {
     setLayout(mode);
     if (!cyRef.current) return;
-    const layoutCfg =
+    const layoutCfg: any =
       mode === "dagre"
         ? { name: "dagre", rankDir: "TB" }
         : mode === "concentric"
         ? { name: "concentric" }
-        : { name: "cose-bilkent" };
+        : mode === "cose"
+        ? { name: "cose-bilkent" }
+        : { name: "cola", flow: { axis: "x", minSeparation: 180 }, nodeSpacing: 60, avoidOverlap: true, animate: false, fit: true };
     cyRef.current.layout(layoutCfg).run();
   };
 
   return (
     <div>
       <div className="mb-3 flex items-center gap-2">
-        {(["cose", "dagre", "concentric"] as LayoutMode[]).map((m) => (
+        {(["sbgn", "cose", "dagre", "concentric"] as LayoutMode[]).map((m) => (
           <button
             key={m}
             onClick={() => applyLayout(m)}
@@ -178,7 +214,7 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
               layout === m ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
             }`}
           >
-            {m}
+            {m === "sbgn" ? "SBGN" : m}
           </button>
         ))}
       </div>
