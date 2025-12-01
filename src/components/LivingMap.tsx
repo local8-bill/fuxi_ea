@@ -83,6 +83,8 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
   const [transform, setTransform] = useState<[number, number, number]>([0, 0, 1]);
   const [showDomainLegend, setShowDomainLegend] = useState<boolean>(false);
   const [hiddenDomains, setHiddenDomains] = useState<Set<string>>(new Set());
+  const [focusDomain, setFocusDomain] = useState<string | null>(null);
+  const [crossDomainOnly, setCrossDomainOnly] = useState<boolean>(false);
 
   React.useEffect(() => {
     const handler = () => setShowOtherDomain((prev) => !prev);
@@ -236,24 +238,27 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     const domainIndex = new Map<string, number>();
     domains.forEach((d, idx) => domainIndex.set(d || "Other", idx));
 
-    // Widen columns and add vertical padding so domains feel less cramped.
-    const hGap = 420;
-    const vGap = 180;
-    const maxRows = 10;
+    const hGap = 260; // narrower columns to reduce whitespace
+    const vGap = 140; // tighter vertical spacing
+    const maxRows = 12;
     const counts: Record<string, number> = {};
 
-    boxes = domains.map((d, idx) => ({
-      label: d,
-      x: idx * hGap - 40,
-      width: hGap - 80,
-      height: 1200, // generous vertical space
-    }));
+    boxes = domains.map((d, idx) => {
+      const isFocus = focusDomain === d || !focusDomain;
+      return {
+        label: d,
+        x: idx * hGap - 20,
+        width: hGap - 40,
+        height: isFocus ? 1600 : 1200,
+      };
+    });
 
     const laidOut = baseNodes
       .map((n) => {
         const meta = simData.nodes.find((m) => m.id === n.id);
         const domain = normalizeDomainValue(meta?.domain);
         if ((!showOtherDomain && domain === "Other") || hiddenDomains.has(domain)) return null;
+        if (focusDomain && domain !== focusDomain) return null;
         const col = domainIndex.get(domain) ?? 0;
         counts[domain] = (counts[domain] ?? 0) + 1;
         const row = (counts[domain] - 1) % maxRows;
@@ -261,8 +266,8 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         return {
           ...n,
           position: {
-            x: col * hGap + rowBlock * 60,
-            y: 120 + row * vGap, // add top padding
+            x: col * hGap + rowBlock * 40,
+            y: 80 + row * vGap,
           },
         };
       })
