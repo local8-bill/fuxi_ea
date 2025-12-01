@@ -109,14 +109,39 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     }
     return seen;
   }, [simData.nodes]);
+
+  const labelById = useMemo(() => {
+    const map = new Map<string, string>();
+    simData.nodes.forEach((n) => map.set(n.id, n.label || n.id));
+    return map;
+  }, [simData.nodes]);
+
+  const neighbors = useMemo(() => {
+    const up = new Map<string, Set<string>>();
+    const down = new Map<string, Set<string>>();
+    simData.edges.forEach((e) => {
+      if (!e.source || !e.target) return;
+      if (!down.has(e.source)) down.set(e.source, new Set());
+      if (!up.has(e.target)) up.set(e.target, new Set());
+      down.get(e.source)!.add(e.target);
+      up.get(e.target)!.add(e.source);
+    });
+    return { up, down };
+  }, [simData.edges]);
   const baseNodes: Node[] = useMemo(
     () =>
       simData.nodes.map((n, idx) => {
         const domainKey = normalizeDomainValue((n as any).domain);
+        const upstreamIds = neighbors.up.get(n.id) ?? new Set();
+        const downstreamIds = neighbors.down.get(n.id) ?? new Set();
+        const upstreamLabels = Array.from(upstreamIds).map((id) => labelById.get(id) ?? id);
+        const downstreamLabels = Array.from(downstreamIds).map((id) => labelById.get(id) ?? id);
         const tooltip = [
           `AI Readiness: ${Math.round(n.aiReadiness ?? 0)}%`,
           `Opportunity: ${Math.round(n.opportunityScore ?? n.roiScore ?? 0)}%`,
           n.disposition ? `Disposition: ${n.disposition}` : null,
+          upstreamLabels.length ? `Upstream: ${upstreamLabels.join(", ")}` : null,
+          downstreamLabels.length ? `Downstream: ${downstreamLabels.join(", ")}` : null,
         ]
           .filter(Boolean)
           .join(" • ");
