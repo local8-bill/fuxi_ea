@@ -111,6 +111,8 @@ function buildLivingMapData(view: { nodes?: any[]; edges?: any[] }): LivingMapDa
     target: String(e?.targetId ?? e?.target ?? ""),
     weight: 1,
     kind: "api",
+    confidence: typeof e?.confidence === "number" ? e.confidence : undefined,
+    inferred: Boolean(e?.data?.inferred || e?.inferred),
   }));
 
   return { nodes: livingNodes, edges: livingEdges };
