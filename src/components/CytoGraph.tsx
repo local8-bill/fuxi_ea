@@ -14,6 +14,7 @@ type CytoGraphProps = {
 export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any>(null);
+  const fitOnNextLayout = useRef<boolean>(true);
   const [layout, setLayout] = useState<LayoutMode>("sbgn");
   const zoomBy = (factor: number) => {
     if (!cyRef.current) return;
@@ -121,11 +122,14 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
             "height": 64,
             "text-wrap": "wrap",
             "text-max-width": "150px",
-            "font-size": "12px",
+            "font-size": "mapData(confidence, 0, 1, 10, 14)",
             "text-valign": "center",
             "text-halign": "center",
             "color": "#0f172a",
             "shape": "round-rectangle",
+            "shadow-color": "#000",
+            "shadow-blur": 0,
+            "shadow-opacity": 0,
           },
         },
         {
@@ -145,19 +149,27 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
             "padding": "12px",
             "min-width": 420,
             "min-height": 280,
+            "shadow-color": "rgba(0,0,0,0.08)",
+            "shadow-blur": 12,
+            "shadow-offset-x": 0,
+            "shadow-offset-y": 6,
             "text-valign": "top",
             "text-halign": "center",
             // @ts-ignore
             "text-margin-y": -10,
             "font-size": "14px",
+            "color": "#1f2937",
           },
         },
         {
           selector: "edge",
           style: {
-            "curve-style": "unbundled-bezier",
-            "control-point-step-size": 60,
-            "width": 1.5,
+            "curve-style": "bezier",
+            "control-point-step-size": 30,
+            "width": (ele: any) => {
+              const c = ele.data("confidence") ?? 0.6;
+              return 1 + c * 1.5;
+            },
             "opacity": 0.85,
             "line-color": (ele: any) => {
               const t = ele.data("edgeType");
@@ -178,6 +190,16 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
               if (t === "unresolved") return "#fb923c";
               return "#94a3b8";
             },
+            },
+          },
+        {
+          selector: "node:hover",
+          style: {
+            "shadow-color": "rgba(255,255,255,0.9)",
+            "shadow-blur": 18,
+            "shadow-opacity": 1,
+            "shadow-offset-x": 0,
+            "shadow-offset-y": 0,
           },
         },
       ];
@@ -200,14 +222,14 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
           : {
               name: "cola",
               flow: { axis: "x", minSeparation: 200 },
-              nodeSpacing: 80,
+              nodeSpacing: (node: any) => 80 + node.degree(false) * 8,
               avoidOverlap: true,
               nestingFactor: 1.2,
               animate: false,
               fit: true,
-              edgeLengthVal: 240,
-              spacingFactor: 1.9,
-              nodeRepulsion: 6500,
+              edgeLengthVal: 260,
+              spacingFactor: 2,
+              nodeRepulsion: 7000,
               padding: 40,
             };
 
@@ -220,7 +242,10 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
       // Apply tint/palette on top of the chosen stylesheet.
       cy.style().fromJson(baseStyle).update();
       cy.once("layoutstop", () => {
-        cy.fit(cy.elements(), 30);
+        if (fitOnNextLayout.current) {
+          cy.fit(cy.elements(), 30);
+          fitOnNextLayout.current = false;
+        }
       });
       // Seed initial positions by domain lane to reinforce left-to-right flow.
       const laneWidth = 380;
@@ -233,10 +258,30 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
           n.position({ x, y });
         });
       cyRef.current = cy;
+      // Fit on resize
+      const resizeObserver = new ResizeObserver(() => {
+        cy.fit(cy.elements(), 30);
+      });
+      resizeObserver.observe(containerRef.current);
+      cy._resizeObserver = resizeObserver;
+      // Keyboard shortcut: Shift+F to fit
+      const onKey = (e: KeyboardEvent) => {
+        if (e.shiftKey && (e.key === "f" || e.key === "F")) {
+          cy.fit(cy.elements(), 30);
+        }
+      };
+      window.addEventListener("keydown", onKey);
+      cy._onKey = onKey;
     }
     init();
     return () => {
       if (cyRef.current) {
+        if (cyRef.current._resizeObserver) {
+          cyRef.current._resizeObserver.disconnect();
+        }
+        if (cyRef.current._onKey) {
+          window.removeEventListener("keydown", cyRef.current._onKey);
+        }
         cyRef.current.destroy();
         cyRef.current = null;
       }
@@ -244,6 +289,7 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
   }, [elements, layout, domainOrder]);
 
   const applyLayout = (mode: LayoutMode) => {
+    fitOnNextLayout.current = true;
     setLayout(mode);
     if (!cyRef.current) return;
     const layoutCfg: any =
@@ -256,19 +302,19 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
         : {
             name: "cola",
             flow: { axis: "x", minSeparation: 200 },
-            nodeSpacing: 80,
+            nodeSpacing: (node: any) => 80 + node.degree(false) * 8,
             avoidOverlap: true,
             nestingFactor: 1.2,
             animate: false,
             fit: true,
-            edgeLengthVal: 240,
-            spacingFactor: 1.9,
-            nodeRepulsion: 6500,
+            edgeLengthVal: 260,
+            spacingFactor: 2,
+            nodeRepulsion: 7000,
             padding: 40,
           };
     cyRef.current.layout(layoutCfg).run();
     cyRef.current.once("layoutstop", () => {
-      cyRef.current.fit(cyRef.current.elements(), 80);
+      cyRef.current.fit(cyRef.current.elements(), 30);
     });
   };
 
@@ -307,7 +353,35 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
           </button>
         </div>
       </div>
-      <div ref={containerRef} style={{ height }} className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm" />
+      <div
+        ref={containerRef}
+        style={{
+          height,
+          backgroundColor: "#f9fafb",
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, rgba(148,163,184,0.15) 1px, transparent 0)",
+          backgroundSize: "20px 20px",
+        }}
+        className="relative w-full rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+      >
+        <div className="pointer-events-none absolute bottom-3 right-3 rounded-xl bg-white/80 px-3 py-2 text-xs text-slate-700 shadow-lg backdrop-blur">
+          <div className="font-semibold text-slate-800">Legend</div>
+          <div className="mt-1 flex gap-3">
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#94a3b8]" />
+              <span>Derived</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#a855f7]" />
+              <span>Inferred</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#fb923c]" />
+              <span>Unresolved</span>
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
