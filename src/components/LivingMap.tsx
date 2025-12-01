@@ -367,8 +367,11 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     }
   }, [flowInstance, coloredNodes.length, layout, direction, layer, showOtherDomain]);
 
-  const styledEdges = baseEdges.map((e: any) => {
-    const kind = (e.data?.edgeType as any) ?? (e.data?.inferred ? "inferred" : (e.confidence ?? 0) < 0.4 ? "unresolved" : "derived");
+  const styledEdges = useMemo(() => baseEdges.map((e: any) => {
+    const confidence = typeof e?.confidence === "number" ? e.confidence : (e.data?.confidence as number) ?? 0.6;
+    const kind =
+      (e.data?.edgeType as any) ??
+      (e.data?.inferred || e.inferred ? "inferred" : confidence < 0.4 ? "unresolved" : "derived");
     const stroke =
       kind === "derived"
         ? "#2563EB"
@@ -388,7 +391,8 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
     const baseWidth = layer === "integration" ? 2 : 1.6;
     return {
       ...e,
-      data: { ...(e.data || {}), edgeType: kind },
+      confidence,
+      data: { ...(e.data || {}), edgeType: kind, confidence },
       type: "straight",
       style: {
         ...(e.style || {}),
@@ -400,7 +404,7 @@ export function LivingMap({ data, height = 720, selectedNodeId, onSelectNode, se
         strokeLinejoin: "round" as const,
       },
     };
-  });
+  }), [baseEdges, layer]);
 
   const visibleNodes = useMemo(() => {
     if (layer !== "domain") return coloredNodes;
