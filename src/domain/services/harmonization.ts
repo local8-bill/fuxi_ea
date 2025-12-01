@@ -240,7 +240,8 @@ function requireCacheSafe(file: string): any[] | null {
     const raw = readFileSync(file, "utf8");
     return JSON.parse(raw);
   } catch {
-  return null;
+    return null;
+  }
 }
 
 function jaccard(a: string, b: string): number {
@@ -254,9 +255,10 @@ function jaccard(a: string, b: string): number {
 }
 
 function buildResolver(keys: string[]) {
+  const keySet = new Set(keys);
   return (candidate: string): string | null => {
     const norm = normalizeKey(candidate);
-    if (keys.includes(norm)) return norm;
+    if (keySet.has(norm)) return norm;
     let best: { key: string; score: number } | null = null;
     for (const k of keys) {
       const score = jaccard(norm, k);
