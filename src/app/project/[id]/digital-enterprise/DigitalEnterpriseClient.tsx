@@ -213,15 +213,9 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   }, [graphData, aiInsights.insights]);
 
   const filteredLivingMapData = useMemo<LivingMapData>(() => {
-    const stage = timelineStage;
-    const visibleNodes = livingMapData.nodes.filter((n) => {
-      if (stage === 0) return n.state !== "added";
-      return n.state !== "removed";
-    });
-    const keep = new Set(visibleNodes.map((n) => n.id));
-    const visibleEdges = livingMapData.edges.filter((e) => keep.has(e.source) && keep.has(e.target));
-    return { nodes: visibleNodes, edges: visibleEdges };
-  }, [livingMapData, timelineStage]);
+    // Temporarily show the full graph on all stages to avoid hiding domains/nodes.
+    return livingMapData;
+  }, [livingMapData]);
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_TELEMETRY_DEBUG === "true") {
@@ -601,66 +595,42 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           <p className="text-xs text-amber-800">{assistMessage}</p>
         </Card>
       )}
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            <p className="text-[0.7rem] text-slate-500">Layer view:</p>
-            {(["domains", "systems", "integrations"] as const).map((depth) => (
-              <button
-                key={depth}
-                type="button"
-                onClick={() => setGraphDepth(depth)}
-                className={
-                  "rounded-full border px-3 py-1 text-[0.7rem] font-semibold " +
-                  (graphDepth === depth
-                    ? "bg-slate-900 text-white border-slate-900"
-                    : "bg-slate-100 text-slate-700 border-slate-200")
-                }
-              >
-                {depth === "domains"
-                  ? "Domains"
-                  : depth === "systems"
-                  ? "Systems"
-                  : "Integrations"}
-              </button>
-            ))}
-            {autoCollapsed && (
-              <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-[0.7rem] font-medium text-amber-800">
-                Dense graph — domains collapsed
-              </span>
-            )}
-            <div className="ml-auto flex flex-wrap items-center gap-2 text-[0.7rem]">
-              <span className="text-slate-500">Mode:</span>
-              {(["all", "current", "future"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => {
-                    setGraphMode(m);
-                    void loadGraph();
-                  }}
-                  className={
-                    "rounded-full border px-3 py-1 font-semibold " +
-                    (graphMode === m
-                      ? "bg-slate-900 text-white border-slate-900"
-                      : "bg-white text-slate-700 border-slate-200")
-                  }
-                >
-                  {m === "all" ? "Delta" : m === "current" ? "Current" : "Future"}
-                </button>
-              ))}
-            </div>
-          </div>
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <p className="text-[0.7rem] text-slate-500">Layer view:</p>
+        {(["domains", "systems", "integrations"] as const).map((depth) => (
+          <button
+            key={depth}
+            type="button"
+            onClick={() => setGraphDepth(depth)}
+            className={
+              "rounded-full border px-3 py-1 text-[0.7rem] font-semibold " +
+              (graphDepth === depth
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-slate-100 text-slate-700 border-slate-200")
+            }
+          >
+            {depth === "domains"
+              ? "Domains"
+              : depth === "systems"
+              ? "Systems"
+              : "Integrations"}
+          </button>
+        ))}
+        {autoCollapsed && (
+          <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-[0.7rem] font-medium text-amber-800">
+            Dense graph — domains collapsed
+          </span>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2 text-[0.7rem] text-slate-500">
+          Mode controls removed (timeline now drives filtering)
+        </div>
+      </div>
 
       {loading && (
-        <div className="mt-10 text-sm text-gray-500">
-          Loading digital enterprise metrics…
-        </div>
+        <div className="mt-10 text-sm text-gray-500">Loading digital enterprise metrics…</div>
       )}
 
-      {!loading && error && (
-        <div className="mt-10 text-sm text-red-500">
-          {error}
-        </div>
-      )}
+      {!loading && error && <div className="mt-10 text-sm text-red-500">{error}</div>}
 
       {!loading && !error && hasData && stats && (
         <>
@@ -683,197 +653,184 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             />
           </section>
 
-          {/* Top systems table */}
-        <section className="mt-12">
-          <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
-          <p className="text-xs text-gray-500 mb-4">
-            Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
-          </p>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-            <label className="flex items-center gap-2">
-              <span className="text-slate-700 font-semibold">Search</span>
-              <input
-                className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-slate-900 focus:outline-none"
-                placeholder="System or domain"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </label>
-          </div>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-700">Edge kinds:</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#2563eb" }} />API</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />Data</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />Workflow</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />Manual/Other</span>
-          </div>
-          {graphError && (
-            <Card className="mb-3 border-rose-200 bg-rose-50">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-[0.65rem] tracking-[0.22em] text-rose-700 uppercase mb-1">
-                    GRAPH LOAD ERROR
-                  </p>
-                  <p className="text-xs text-rose-800">
-                    {graphError || "Failed to load Digital Enterprise graph."}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-                  onClick={() => {
-                    setGraphEnabled(false);
-                    setGraphData(null);
-                    void loadGraph();
-                  }}
-                >
-                  Retry
-                </button>
-              </div>
-            </Card>
-          )}
-          {!graphEnabled && !graphError && (
-            <Card className="mb-3 border-amber-200 bg-amber-50">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
-                    GRAPH LOADING PAUSED
-                  </p>
-                  <p className="text-xs text-amber-800">
-                    Enable the graph to explore nodes. This reduces React dev-mode re-render churn.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-                  onClick={() => setGraphEnabled(true)}
-                >
-                  Load graph
-                </button>
-              </div>
-            </Card>
-          )}
-            {graphEnabled && graphData && (
-            <>
-              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-                  Added
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
-                  Modified
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
-                  Removed
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
-                  Unchanged
-                </span>
-                <span className="ml-2 text-[0.75rem] text-slate-500">
-                  {filteredLivingMapData.nodes.length} nodes · {filteredLivingMapData.edges.length} edges
-                </span>
-                <button
-                  type="button"
-                  className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
-                  onClick={() => {
-                    // flip showOtherDomain via CSS custom event
-                    const evt = new CustomEvent("livingmap:toggle-other");
-                    window.dispatchEvent(evt);
-                  }}
-                >
-                  Toggle “Other”
-                </button>
-              </div>
-              <LivingMap
-                data={filteredLivingMapData}
-                height={720}
-                selectedNodeId={selectedNodeId ?? undefined}
-                onSelectNode={setSelectedNodeId}
-                searchTerm={search}
-              />
-            </>
-          )}
-          <div className="mt-4 flex flex-col gap-3">
-            <div className="flex flex-col gap-2 text-xs text-slate-600">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-semibold text-slate-800">Timeline</span>
+          {/* Living map and controls */}
+          <section className="mt-12">
+            <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
+            </p>
+
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+              <label className="flex items-center gap-2">
+                <span className="text-slate-700 font-semibold">Search</span>
                 <input
-                  type="range"
-                  min={0}
-                  max={timelineStages.length - 1}
-                  value={timelineStage}
-                  onChange={(e) => {
-                    const next = Number(e.target.value);
-                    setTimelineStage(next);
-                    const visibleNodes = filteredLivingMapData.nodes.length;
-                    const visibleEdges = filteredLivingMapData.edges.length;
-                    telemetry.log(
-                      "timeline_stage_changed",
-                      { stage: timelineStages[next], nodes_visible: visibleNodes, edges_visible: visibleEdges },
-                      simplificationScoreRef.current,
-                    );
-                    window.dispatchEvent(
-                      new CustomEvent("timeline_stage_changed", {
-                        detail: { stage: timelineStages[next], nodes: visibleNodes, edges: visibleEdges },
-                      }),
-                    );
-                  }}
+                  className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-slate-900 focus:outline-none"
+                  placeholder="System or domain"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                 />
-                <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                  {timelineStages[timelineStage]}
-                </span>
-                <div className="flex items-center gap-2">
-                  {timelineStages.map((stage, idx) => (
-                    <button
-                      key={stage}
-                      onClick={() => {
-                        setTimelineStage(idx);
-                        const visibleNodes = filteredLivingMapData.nodes.length;
-                        const visibleEdges = filteredLivingMapData.edges.length;
-                        telemetry.log(
-                          "timeline_stage_changed",
-                          { stage, nodes_visible: visibleNodes, edges_visible: visibleEdges },
-                          simplificationScoreRef.current,
-                        );
-                        window.dispatchEvent(
-                          new CustomEvent("timeline_stage_changed", {
-                            detail: { stage, nodes: visibleNodes, edges: visibleEdges },
-                          }),
-                        );
-                      }}
-                      className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-                        timelineStage === idx ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
-                      }`}
-                    >
-                      {stage}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-semibold text-slate-800">ROI demo timeline</span>
-                {/* Demo slider retained for fallback */}
-                <input
-                  type="range"
-                  min={0}
-                  max={24}
-                  value={roiSim.month}
-                  onChange={(e) => roiSim.setMonth(Number(e.target.value))}
-                />
-                <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                  {roiSim.month}
-                </span>
-              </div>
-              <NodeInsightPanel node={selectedNode} />
+              </label>
             </div>
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+              <span className="font-semibold text-slate-700">Edge kinds:</span>
+              <span className="fx-pill">
+                <span className="fx-legend-dot" style={{ backgroundColor: "#2563eb" }} />
+                API
+              </span>
+              <span className="fx-pill">
+                <span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />
+                Data
+              </span>
+              <span className="fx-pill">
+                <span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />
+                Workflow
+              </span>
+              <span className="fx-pill">
+                <span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />
+                Manual/Other
+              </span>
+            </div>
+
+            {graphError && (
+              <Card className="mb-3 border-rose-200 bg-rose-50">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[0.65rem] tracking-[0.22em] text-rose-700 uppercase mb-1">
+                      GRAPH LOAD ERROR
+                    </p>
+                    <p className="text-xs text-rose-800">{graphError || "Failed to load Digital Enterprise graph."}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                    onClick={() => {
+                      setGraphEnabled(false);
+                      setGraphData(null);
+                      void loadGraph();
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              </Card>
+            )}
+
+            {!graphEnabled && !graphError && (
+              <Card className="mb-3 border-amber-200 bg-amber-50">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">GRAPH LOADING PAUSED</p>
+                    <p className="text-xs text-amber-800">
+                      Enable the graph to explore nodes. This reduces React dev-mode re-render churn.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                    onClick={() => setGraphEnabled(true)}
+                  >
+                    Load graph
+                  </button>
+                </div>
+              </Card>
+            )}
+
+            <section className="mt-6">
+              {graphEnabled && graphData && (
+                <>
+                  <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+                      Added
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
+                      Modified
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
+                      Removed
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+                      Unchanged
+                    </span>
+                    <span className="ml-2 text-[0.75rem] text-slate-500">
+                      {filteredLivingMapData.nodes.length} nodes · {filteredLivingMapData.edges.length} edges
+                    </span>
+                    <button
+                      type="button"
+                      className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
+                      onClick={() => {
+                        const evt = new CustomEvent("livingmap:toggle-other");
+                        window.dispatchEvent(evt);
+                      }}
+                    >
+                      Toggle “Other”
+                    </button>
+                  </div>
+
+                  <LivingMap
+                    data={filteredLivingMapData}
+                    height={720}
+                    selectedNodeId={selectedNodeId ?? undefined}
+                    onSelectNode={setSelectedNodeId}
+                    searchTerm={search}
+                  />
+
+                  <div className="mt-4 flex flex-col gap-3">
+                    <div className="flex flex-col gap-2 text-xs text-slate-600">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="font-semibold text-slate-800">Timeline</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={timelineStages.length - 1}
+                          value={timelineStage}
+                          onChange={(e) => {
+                            const next = Number(e.target.value);
+                            setTimelineStage(next);
+                            const visibleNodes = filteredLivingMapData.nodes.length;
+                            const visibleEdges = filteredLivingMapData.edges.length;
+                            telemetry.log(
+                              "timeline_stage_changed",
+                              { stage: timelineStages[next], nodes_visible: visibleNodes, edges_visible: visibleEdges },
+                              simplificationScoreRef.current,
+                            );
+                            window.dispatchEvent(
+                              new CustomEvent("timeline_stage_changed", {
+                                detail: { stage: timelineStages[next], nodes: visibleNodes, edges: visibleEdges },
+                              }),
+                            );
+                          }}
+                        />
+                        <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                          {timelineStages[timelineStage]}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-slate-800">ROI demo timeline</span>
+                        {/* Demo slider retained for fallback */}
+                        <input
+                          type="range"
+                          min={0}
+                          max={24}
+                          value={roiSim.month}
+                          onChange={(e) => roiSim.setMonth(Number(e.target.value))}
+                        />
+                        <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                          {roiSim.month}
+                        </span>
+                      </div>
+
+                      <NodeInsightPanel node={selectedNode} />
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
           </section>
 
           {/* ROI + Events */}
           <section className="mt-12 grid gap-4 lg:grid-cols-[2fr,1fr]">
-            <ROIChart
-              data={roiSim.timeline}
-              breakEvenMonth={roiSim.breakEvenMonth}
-              currentMonth={roiSim.month}
-            />
+            <ROIChart data={roiSim.timeline} breakEvenMonth={roiSim.breakEvenMonth} currentMonth={roiSim.month} />
             <EventLogPanel events={roiSim.filteredEvents} />
           </section>
 
@@ -890,26 +847,16 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
           {/* Top systems table */}
           <section className="mt-12">
-            <h2 className="text-sm font-semibold mb-1">
-              HIGHEST-CONNECTIVITY SYSTEMS
-            </h2>
-            <p className="text-xs text-gray-500 mb-4">
-              Top 10 systems by number of integrations in this ecosystem view.
-            </p>
+            <h2 className="text-sm font-semibold mb-1">HIGHEST-CONNECTIVITY SYSTEMS</h2>
+            <p className="text-xs text-gray-500 mb-4">Top 10 systems by number of integrations in this ecosystem view.</p>
 
             <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                      #
-                    </th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                      SYSTEM
-                    </th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                      INTEGRATIONS
-                    </th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">#</th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">SYSTEM</th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">INTEGRATIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -919,15 +866,8 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                     const key = s.systemId ?? s.id ?? `${name}-${idx}`;
 
                     return (
-                      <tr
-                        key={key}
-                        className={
-                          idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"
-                        }
-                      >
-                        <td className="px-4 py-2 text-xs text-gray-500">
-                          {idx + 1}
-                        </td>
+                      <tr key={key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
+                        <td className="px-4 py-2 text-xs text-gray-500">{idx + 1}</td>
                         <td className="px-4 py-2 text-xs">
                           <button
                             type="button"
@@ -937,18 +877,13 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                             {name}
                           </button>
                         </td>
-                        <td className="px-4 py-2 text-xs">
-                          {formatNumber(count)}
-                        </td>
+                        <td className="px-4 py-2 text-xs">{formatNumber(count)}</td>
                       </tr>
                     );
                   })}
                   {stats.topSystems.length === 0 && (
                     <tr>
-                      <td
-                        className="px-4 py-4 text-xs text-gray-500"
-                        colSpan={3}
-                      >
+                      <td className="px-4 py-4 text-xs text-gray-500" colSpan={3}>
                         No systems with integrations detected yet.
                       </td>
                     </tr>
@@ -960,12 +895,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
           {/* Impact panel */}
           <section className="mt-10">
-            <SystemImpactPanel
-              impact={impact}
-              loading={false}
-              error={null}
-              className="w-full"
-            />
+            <SystemImpactPanel impact={impact} loading={false} error={null} className="w-full" />
           </section>
         </>
       )}

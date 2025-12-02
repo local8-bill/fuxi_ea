@@ -396,11 +396,9 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
       edges: edges.filter((e) => keep.has(e.source) && keep.has(e.target)),
     };
   }
-  // delta = added/removed/modified; if no future present, return all nodes instead of empty.
-  const deltaNodes = nodes.filter((n) => n.state === "added" || n.state === "removed" || n.state === "modified");
-  const keep = new Set(deltaNodes.length > 0 ? deltaNodes.map((n) => n.id) : nodes.map((n) => n.id));
+  // default/all: return full graph
   return {
-    nodes: nodes.filter((n) => keep.has(n.id)),
-    edges: edges.filter((e) => keep.has(e.source) && keep.has(e.target)),
+    nodes,
+    edges,
   };
 }
