@@ -1,0 +1,87 @@
+name,level,domain,parent
+Product Creation,L1,Product Creation,
+Concept Creation,L2,Product Creation,Product Creation
+Product Design,L2,Product Creation,Product Creation
+Material Management,L2,Product Creation,Product Creation
+Product Costing,L2,Product Creation,Product Creation
+Technical Specifications,L2,Product Creation,Product Creation
+Sample Management,L2,Product Creation,Product Creation
+Product Lifecycle Maintenance,L2,Product Creation,Product Creation
+
+DTC Commerce,L1,DTC Commerce,
+Product Discovery,L2,DTC Commerce,DTC Commerce
+Search & Navigation,L2,DTC Commerce,DTC Commerce
+Product Detail Experience,L2,DTC Commerce,DTC Commerce
+Customer Reviews,L2,DTC Commerce,DTC Commerce
+Shopping Cart,L2,DTC Commerce,DTC Commerce
+Checkout,L2,DTC Commerce,DTC Commerce
+Payment Processing,L2,DTC Commerce,DTC Commerce
+Order Status Visibility,L2,DTC Commerce,DTC Commerce
+Returns Initiation (DTC),L2,DTC Commerce,DTC Commerce
+Customer Account Management,L2,DTC Commerce,DTC Commerce
+Wishlist,L2,DTC Commerce,DTC Commerce
+Omnichannel Inventory View (DTC),L2,DTC Commerce,DTC Commerce
+Store Finder,L2,DTC Commerce,DTC Commerce
+
+Retail,L1,Retail,
+POS Transactions,L2,Retail,Retail
+Store Inventory View,L2,Retail,Retail
+Clienteling,L2,Retail,Retail
+Associate Tools,L2,Retail,Retail
+Returns Processing (Store),L2,Retail,Retail
+Store Fulfillment,L2,Retail,Retail
+In-Store Pickup,L2,Retail,Retail
+End-of-Day Reconciliation,L2,Retail,Retail
+
+Sales & Wholesale,L1,Sales & Wholesale,
+B2B Portal,L2,Sales & Wholesale,Sales & Wholesale
+Wholesale Assortment Planning,L2,Sales & Wholesale,Sales & Wholesale
+Wholesale Order Capture,L2,Sales & Wholesale,Sales & Wholesale
+Wholesale Availability Check,L2,Sales & Wholesale,Sales & Wholesale
+Wholesale Order Confirmation,L2,Sales & Wholesale,Sales & Wholesale
+EDI Integration,L2,Sales & Wholesale,Sales & Wholesale
+Wholesale Channel Messaging,L2,Sales & Wholesale,Sales & Wholesale
+
+Supply Chain & Operations,L1,Supply Chain & Operations,
+Demand Planning,L2,Supply Chain & Operations,Supply Chain & Operations
+Supply Planning,L2,Supply Chain & Operations,Supply Chain & Operations
+Production Scheduling,L2,Supply Chain & Operations,Supply Chain & Operations
+Inventory Management,L2,Supply Chain & Operations,Supply Chain & Operations
+Allocation,L2,Supply Chain & Operations,Supply Chain & Operations
+Replenishment,L2,Supply Chain & Operations,Supply Chain & Operations
+Logistics Execution,L2,Supply Chain & Operations,Supply Chain & Operations
+Warehouse Operations,L2,Supply Chain & Operations,Supply Chain & Operations
+Receiving,L3,Supply Chain & Operations,Warehouse Operations
+Picking & Packing,L3,Supply Chain & Operations,Warehouse Operations
+Shipping,L3,Supply Chain & Operations,Warehouse Operations
+Reverse Logistics,L3,Supply Chain & Operations,Warehouse Operations
+
+Marketing & Loyalty,L1,Marketing & Loyalty,
+Campaign Management,L2,Marketing & Loyalty,Marketing & Loyalty
+Audience Segmentation,L2,Marketing & Loyalty,Marketing & Loyalty
+Email Automation,L2,Marketing & Loyalty,Marketing & Loyalty
+Social Media Management,L2,Marketing & Loyalty,Marketing & Loyalty
+Brand Asset Management,L2,Marketing & Loyalty,Marketing & Loyalty
+Digital Asset Management,L2,Marketing & Loyalty,Marketing & Loyalty
+Loyalty Programs,L2,Marketing & Loyalty,Marketing & Loyalty
+Marketing Analytics & Insights,L2,Marketing & Loyalty,Marketing & Loyalty
+
+Enterprise / Shared Services,L1,Enterprise / Shared Services,
+Finance,L2,Enterprise / Shared Services,Enterprise / Shared Services
+Accounting,L2,Enterprise / Shared Services,Enterprise / Shared Services
+Accounts Payable & Receivable,L2,Enterprise / Shared Services,Enterprise / Shared Services
+Payroll,L2,Enterprise / Shared Services,Enterprise / Shared Services
+HR Core,L2,Enterprise / Shared Services,Enterprise / Shared Services
+Talent Management,L2,Enterprise / Shared Services,Enterprise / Shared Services
+Master Data Management,L2,Enterprise / Shared Services,Enterprise / Shared Services
+
+Platform & Data,L1,Platform & Data,
+Integrations & APIs,L2,Platform & Data,Platform & Data
+Identity & Access Management,L2,Platform & Data,Platform & Data
+Security,L2,Platform & Data,Platform & Data
+Data Lake,L2,Platform & Data,Platform & Data
+Data Warehouse,L2,Platform & Data,Platform & Data
+Reporting & BI,L2,Platform & Data,Platform & Data
+Monitoring & Observability,L2,Platform & Data,Platform & Data
+DevOps & Release Management,L2,Platform & Data,Platform & Data
+Cloud Infrastructure,L2,Platform & Data,Platform & Data

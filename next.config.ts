@@ -1,8 +1,8 @@
-/* import type { NextConfig } from "next"; */
+import type { NextConfig } from "next";
 
- /* const nextConfig: NextConfig = { */
-  /* config options here */
-  /* reactCompiler: true, */
-/*}; 8?
+const nextConfig: NextConfig = {
+  reactStrictMode: true,
+  poweredByHeader: false,
+};
 
-/*export default nextConfig;*/
+export default nextConfig;

@@ -1,0 +1,17 @@
+{
+  "directive": "fuxi_dashboard_v0_1",
+  "status": "completed",
+  "branch": "feature/ui_wireframes_v0_1",
+  "artifacts": {
+    "page": "src/app/dashboard/page.tsx",
+    "components": [
+      "src/app/dashboard/components/DashboardHeader.tsx",
+      "src/app/dashboard/components/DashboardSection.tsx",
+      "src/app/dashboard/components/charts/DigitalEnterpriseChart.tsx",
+      "src/app/dashboard/components/charts/AIUtilizationChart.tsx"
+    ],
+    "mockData": "src/mock/dashboardData.ts"
+  },
+  "notes": "FDL-aligned dashboard with mock Digital Enterprise metrics, AI utilization charts, and insight feed. No new dependencies.",
+  "build": "npm run build"
+}

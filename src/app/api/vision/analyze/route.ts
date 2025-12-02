@@ -1,18 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { localVisionAdapter } from "@/adapters/vision/local";
+import { createRateLimiter, requireAuth, jsonError } from "@/lib/api/security";
 
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5MB safety cap
+const rateLimit = createRateLimiter({ windowMs: 60_000, max: 12, name: "vision-analyze" });
+
+export async function POST(req: NextRequest) {
+  const auth = requireAuth(req);
+  if (auth) return auth;
+
+  const limited = rateLimit(req);
+  if (limited) return limited;
+
   try {
     // A) Content-Type guard
     const ct = req.headers.get("content-type") || "";
     if (!/multipart\/form-data/i.test(ct)) {
       console.error("[VisionAPI] bad content-type:", ct);
-      return NextResponse.json(
-        { ok: false, step: "bad-content-type", contentType: ct },
-        { status: 415 }
-      );
+      return jsonError(415, "Unsupported content type");
     }
 
     // B) Parse form + file
@@ -20,10 +27,11 @@ export async function POST(req: Request) {
     const file = form.get("file") as File | null;
     if (!file) {
       console.error("[VisionAPI] missing 'file' field");
-      return NextResponse.json(
-        { ok: false, step: "missing-file" },
-        { status: 400 }
-      );
+      return jsonError(400, "Missing file");
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return jsonError(413, "Upload too large");
     }
 
     // C) Read file as ArrayBuffer (use 'bytes', not 'bytes.buffer')
@@ -36,9 +44,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, rows });
   } catch (e: any) {
     console.error("[VisionAPI] outer-catch:", e);
-    return NextResponse.json(
-      { ok: false, step: "outer-catch", error: e?.message || String(e) },
-      { status: 500 }
-    );
+    return jsonError(500, "Vision analysis failed", e?.message || String(e));
   }
 }

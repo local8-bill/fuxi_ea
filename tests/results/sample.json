@@ -1,0 +1,9 @@
+{
+  "suites": [
+    { "name": "model basis registry", "status": "pass", "runAt": "2025-11-26T00:00:00Z" },
+    { "name": "verification data loader", "status": "pass", "runAt": "2025-11-26T00:00:00Z" }
+  ],
+  "testsTotal": 2,
+  "testsPassing": 2,
+  "lastRun": "2025-11-26T00:00:00Z"
+}

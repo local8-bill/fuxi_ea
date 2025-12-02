@@ -4,7 +4,13 @@
 import * as React from "react";
 import type { Capability } from "@/domain/model/capability";
 import type { StoragePort } from "@/domain/ports/storage";
+import { alignViaApi } from "@/adapters/reasoning/client";
+import type { ReasoningAlignResult, ReasoningAlignRow } from "@/domain/ports/reasoning";
 import { localHeuristicAi, type Suggestion } from "@/domain/services/aiMapping";
+
+const clientAuthHeader = process.env.NEXT_PUBLIC_FUXI_API_TOKEN
+  ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_FUXI_API_TOKEN}` }
+  : undefined;
 
 type ImportKind = "csv" | "json";
 type Row = {
@@ -20,6 +26,7 @@ export type ImportPreview = {
   flatCount: number;
   issues: string[];
   suggestions: Record<string, Suggestion[]>;
+  aiResult?: ReasoningAlignResult;
 };
 
 const LEVELS = new Set(["l1", "l2", "l3"]);
@@ -132,7 +139,11 @@ function parseJson(input: string): Row[] {
 export async function extractFromVision(file: File): Promise<Row[]> {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch("/api/vision", { method: "POST", body: fd });
+  const res = await fetch("/api/vision", {
+    method: "POST",
+    body: fd,
+    headers: clientAuthHeader ?? undefined,
+  });
   if (!res.ok) throw new Error(`vision: ${res.status}`);
   const data = await res.json();
   const rows = Array.isArray(data?.rows) ? data.rows : [];
@@ -247,8 +258,33 @@ export function useMapIntelligence(ai = localHeuristicAi) {
           }
         }
 
-        setPreview({ roots, flatCount: rows.length, issues, suggestions });
-        return { roots, flatCount: rows.length, issues, suggestions };
+        let aiResult: ReasoningAlignResult | undefined;
+        try {
+          aiResult = await alignViaApi(
+            rows.map<ReasoningAlignRow>((r) => ({
+              id: r.id,
+              name: r.name,
+              level: r.level ?? "L1",
+              domain: r.domain,
+              parent: r.parent,
+            })),
+            existingL1Names
+          );
+        } catch (e: any) {
+          console.error("Auto AI align failed:", e);
+          setError((prev) => prev || (e?.message ?? "AI align failed"));
+          aiResult = { suggestions: [], issues: [e?.message ?? "AI align failed"] };
+        }
+
+        const nextPreview = {
+          roots,
+          flatCount: rows.length,
+          issues,
+          suggestions,
+          aiResult,
+        };
+        setPreview(nextPreview);
+        return nextPreview;
       } catch (e: any) {
         setError(e?.message ?? "Parse failed");
         throw e;

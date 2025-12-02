@@ -1,0 +1,141 @@
+{
+  "roots": [
+    {
+      "id": "product_creation",
+      "name": "Product Creation",
+      "domain": "Product Creation",
+      "children": [
+        { "id": "concept_development", "name": "Concept Development", "domain": "Product Creation", "children": [] },
+        { "id": "material_development", "name": "Material Development", "domain": "Product Creation", "children": [] },
+        { "id": "product_design", "name": "Product Design", "domain": "Product Creation", "children": [] },
+        { "id": "technical_specifications", "name": "Technical Specifications", "domain": "Product Creation", "children": [] },
+        { "id": "sample_management", "name": "Sample Management", "domain": "Product Creation", "children": [] },
+        { "id": "product_lifecycle_maintenance", "name": "Product Lifecycle Maintenance", "domain": "Product Creation", "children": [] }
+      ]
+    },
+
+    {
+      "id": "merch_planning",
+      "name": "Merchandising & Planning",
+      "domain": "Merchandising & Planning",
+      "children": [
+        { "id": "line_planning", "name": "Line Planning", "domain": "Merchandising & Planning", "children": [] },
+        { "id": "assortment_strategy", "name": "Assortment Strategy", "domain": "Merchandising & Planning", "children": [] },
+        { "id": "buying_order_placement", "name": "Buying & Order Placement", "domain": "Merchandising & Planning", "children": [] },
+        { "id": "pricing_strategy", "name": "Pricing Strategy", "domain": "Merchandising & Planning", "children": [] }
+      ]
+    },
+
+    {
+      "id": "dtc_commerce",
+      "name": "DTC Commerce",
+      "domain": "DTC Commerce",
+      "children": [
+        { "id": "product_discovery", "name": "Product Discovery", "domain": "DTC Commerce", "children": [] },
+        { "id": "search_navigation", "name": "Search & Navigation", "domain": "DTC Commerce", "children": [] },
+        { "id": "pdp_experience", "name": "Product Detail Experience", "domain": "DTC Commerce", "children": [] },
+        { "id": "cart_checkout", "name": "Cart & Checkout", "domain": "DTC Commerce", "children": [] },
+        { "id": "payment_processing", "name": "Payment Processing", "domain": "DTC Commerce", "children": [] },
+        { "id": "customer_account_profile", "name": "Customer Account & Profile", "domain": "DTC Commerce", "children": [] },
+        { "id": "dtc_loyalty_rewards", "name": "Loyalty & Rewards (DTC)", "domain": "DTC Commerce", "children": [] },
+        { "id": "dtc_order_tracking", "name": "DTC Order Tracking", "domain": "DTC Commerce", "children": [] }
+      ]
+    },
+
+    {
+      "id": "retail",
+      "name": "Retail",
+      "domain": "Retail",
+      "children": [
+        { "id": "pos_transactions", "name": "POS Transactions", "domain": "Retail", "children": [] },
+        { "id": "store_fulfillment", "name": "Store Fulfillment", "domain": "Retail", "children": [] },
+        { "id": "clienteling", "name": "Clienteling & Associate Tools", "domain": "Retail", "children": [] },
+        { "id": "store_inventory_visibility", "name": "Store Inventory Visibility", "domain": "Retail", "children": [] },
+        { "id": "returns_instore", "name": "Returns (In-Store)", "domain": "Retail", "children": [] }
+      ]
+    },
+
+    {
+      "id": "sales_wholesale",
+      "name": "Sales & Wholesale",
+      "domain": "Sales & Wholesale",
+      "children": [
+        { "id": "wholesale_order_capture", "name": "Wholesale Order Capture", "domain": "Sales & Wholesale", "children": [] },
+        { "id": "wholesale_assortment", "name": "Wholesale Assortment Planning", "domain": "Sales & Wholesale", "children": [] },
+        { "id": "wholesale_order_visibility", "name": "Wholesale Order Visibility", "domain": "Sales & Wholesale", "children": [] },
+        { "id": "edi_integration", "name": "EDI Integration", "domain": "Sales & Wholesale", "children": [] }
+      ]
+    },
+
+    {
+      "id": "supply_chain_ops",
+      "name": "Supply Chain & Operations",
+      "domain": "Supply Chain & Operations",
+      "children": [
+        { "id": "demand_planning", "name": "Demand Planning", "domain": "Supply Chain & Operations", "children": [] },
+        { "id": "supply_planning", "name": "Supply Planning", "domain": "Supply Chain & Operations", "children": [] },
+        { "id": "inventory_management", "name": "Inventory Management", "domain": "Supply Chain & Operations", "children": [] },
+        { "id": "allocation_replenishment", "name": "Allocation & Replenishment", "domain": "Supply Chain & Operations", "children": [] },
+
+        {
+          "id": "warehouse_operations",
+          "name": "Warehouse Operations",
+          "domain": "Supply Chain & Operations",
+          "children": [
+            { "id": "receiving", "name": "Receiving", "domain": "Supply Chain & Operations", "children": [] },
+            { "id": "picking_packing", "name": "Picking & Packing", "domain": "Supply Chain & Operations", "children": [] },
+            { "id": "shipping", "name": "Shipping", "domain": "Supply Chain & Operations", "children": [] },
+            { "id": "reverse_logistics", "name": "Reverse Logistics", "domain": "Supply Chain & Operations", "children": [] }
+          ]
+        },
+
+        { "id": "logistics_execution", "name": "Logistics Execution", "domain": "Supply Chain & Operations", "children": [] }
+      ]
+    },
+
+    {
+      "id": "marketing_engagement",
+      "name": "Marketing & Customer Engagement",
+      "domain": "Marketing & Customer Engagement",
+      "children": [
+        { "id": "campaign_management", "name": "Campaign Management", "domain": "Marketing & Customer Engagement", "children": [] },
+        { "id": "audience_segmentation", "name": "Audience Segmentation", "domain": "Marketing & Customer Engagement", "children": [] },
+        { "id": "crm_insights", "name": "CRM & Customer Insights", "domain": "Marketing & Customer Engagement", "children": [] },
+        { "id": "social_content", "name": "Social & Content Management", "domain": "Marketing & Customer Engagement", "children": [] },
+        { "id": "enterprise_loyalty", "name": "Loyalty Programs (Enterprise)", "domain": "Marketing & Customer Engagement", "children": [] },
+        { "id": "dam", "name": "Digital Asset Management", "domain": "Marketing & Customer Engagement", "children": [] }
+      ]
+    },
+
+    {
+      "id": "enterprise_shared",
+      "name": "Enterprise Shared Services",
+      "domain": "Enterprise Shared Services",
+      "children": [
+        { "id": "finance", "name": "Finance", "domain": "Enterprise Shared Services", "children": [] },
+        { "id": "accounting", "name": "Accounting", "domain": "Enterprise Shared Services", "children": [] },
+        { "id": "procurement", "name": "Procurement", "domain": "Enterprise Shared Services", "children": [] },
+        { "id": "hr_core", "name": "Talent & HR Core", "domain": "Enterprise Shared Services", "children": [] },
+        { "id": "payroll", "name": "Payroll", "domain": "Enterprise Shared Services", "children": [] },
+        { "id": "mdm", "name": "Master Data Management", "domain": "Enterprise Shared Services", "children": [] }
+      ]
+    },
+
+    {
+      "id": "platform_data_tech",
+      "name": "Platform, Data & Technology",
+      "domain": "Platform, Data & Technology",
+      "children": [
+        { "id": "iam", "name": "Identity & Access Management", "domain": "Platform, Data & Technology", "children": [] },
+        { "id": "security", "name": "Security", "domain": "Platform, Data & Technology", "children": [] },
+        { "id": "integrations_apis", "name": "Integrations & APIs", "domain": "Platform, Data & Technology", "children": [] },
+        { "id": "cloud_infrastructure", "name": "Cloud Infrastructure", "domain": "Platform, Data & Technology", "children": [] },
+        { "id": "devops", "name": "DevOps & CI/CD", "domain": "Platform, Data & Technology", "children": [] },
+        { "id": "observability", "name": "Monitoring & Observability", "domain": "Platform, Data & Technology", "children": [] },
+        { "id": "data_lake", "name": "Data Lake", "domain": "Platform, Data & Technology", "children": [] },
+        { "id": "data_warehouse", "name": "Data Warehouse", "domain": "Platform, Data & Technology", "children": [] },
+        { "id": "reporting_bi", "name": "Reporting & BI", "domain": "Platform, Data & Technology", "children": [] }
+      ]
+    }
+  ]
+}
