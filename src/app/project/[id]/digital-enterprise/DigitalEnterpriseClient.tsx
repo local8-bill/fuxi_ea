@@ -7,7 +7,7 @@ import {
   SystemImpactPanel,
   type SystemImpact,
 } from "@/components/digital-enterprise/SystemImpactPanel";
-import { LivingMap } from "@/components/LivingMap";
+import { CytoMap } from "@/components/CytoMap";
 import type { LivingMapData, LivingNode, LivingEdge } from "@/types/livingMap";
 import { useROISimulation } from "@/hooks/useROISimulation";
 import { ROIChart } from "@/components/ROIChart";
@@ -99,6 +99,7 @@ function buildLivingMapData(view: { nodes?: any[]; edges?: any[] }): LivingMapDa
       label,
       domain,
       integrationCount,
+      state: (n as any).state,
       health: stableScore(id, 55, 35),
       aiReadiness: stableScore(id + "-ai", 45, 45),
       roiScore: stableScore(id + "-roi", 35, 50),
@@ -113,6 +114,7 @@ function buildLivingMapData(view: { nodes?: any[]; edges?: any[] }): LivingMapDa
     kind: "api",
     confidence: typeof e?.confidence === "number" ? e.confidence : undefined,
     inferred: Boolean(e?.data?.inferred || e?.inferred),
+    state: (e as any).state,
   }));
 
   return { nodes: livingNodes, edges: livingEdges };
@@ -168,7 +170,17 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [graphData, setGraphData] = useState<LivingMapData | null>(null);
   const [graphLoading, setGraphLoading] = useState<boolean>(true);
   const [graphError, setGraphError] = useState<string | null>(null);
-  const [graphMode, setGraphMode] = useState<"all" | "current" | "future">("all");
+  const timelineStages = useMemo(() => ["Current", "Stage 1", "Future"], []);
+  const [timelineStage, setTimelineStage] = useState<number>(0);
+  const [overlays, setOverlays] = useState({
+    roi: true,
+    cost: false,
+    risk: false,
+    modernization: false,
+  });
+  const [showUnchanged, setShowUnchanged] = useState<boolean>(false);
+  const [visibleNodeIds, setVisibleNodeIds] = useState<Set<string>>(new Set());
+  const [visibleEdgeIds, setVisibleEdgeIds] = useState<Set<string>>(new Set());
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -209,6 +221,26 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       edges: ((data.edges ?? []) as LivingEdge[]).filter((e): e is LivingEdge => !!e && !!(e as any).source && !!(e as any).target),
     };
   }, [graphData, aiInsights.insights]);
+
+  const stageSnapshots = useMemo(() => {
+    const currentNodes = livingMapData.nodes.filter((n: any) => n.state !== "added");
+    const futureNodes = livingMapData.nodes.filter((n: any) => n.state !== "removed");
+    const deltaNodes = livingMapData.nodes.filter((n: any) =>
+      ["added", "removed", "modified"].includes((n as any).state ?? ""),
+    );
+    const stage1Nodes = deltaNodes.length ? deltaNodes : futureNodes;
+    const toSet = (nodesArr: LivingNode[]) => new Set(nodesArr.map((n) => n.id));
+    const currentKeep = toSet(currentNodes);
+    const futureKeep = toSet(futureNodes);
+    const stage1Keep = toSet(stage1Nodes);
+    const edgeFilter = (keep: Set<string>) =>
+      livingMapData.edges.filter((e) => keep.has(e.source) && keep.has(e.target));
+    return {
+      current: { nodes: currentNodes, edges: edgeFilter(currentKeep) },
+      stage1: { nodes: stage1Nodes, edges: edgeFilter(stage1Keep) },
+      future: { nodes: futureNodes, edges: edgeFilter(futureKeep) },
+    };
+  }, [livingMapData]);
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_TELEMETRY_DEBUG === "true") {
@@ -339,7 +371,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     setGraphError(null);
     try {
       const res = await fetch(
-        `/api/digital-enterprise/view?project=${encodeURIComponent(projectId)}&mode=${graphMode}`,
+        `/api/digital-enterprise/view?project=${encodeURIComponent(projectId)}&mode=all`,
         { cache: "no-store" },
       );
       if (!res.ok) {
@@ -357,11 +389,11 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     } finally {
       setGraphLoading(false);
     }
-  }, [projectId, graphMode]);
+  }, [projectId]);
 
   useEffect(() => {
     void loadGraph();
-  }, [loadGraph, graphMode]);
+  }, [loadGraph]);
 
   useEffect(() => {
     return () => {
@@ -416,9 +448,40 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     return counts;
   }, [livingMapData.nodes]);
 
+  const stageSnapshotForIndex = useMemo(() => {
+    const map: Record<number, { nodes: LivingNode[]; edges: LivingEdge[] }> = {
+      0: stageSnapshots.current,
+      [timelineStages.length - 1]: stageSnapshots.future,
+    };
+    if (timelineStages.length > 2) {
+      map[1] = stageSnapshots.stage1;
+    }
+    return map;
+  }, [stageSnapshots, timelineStages.length]);
+
+  const displayData = useMemo<LivingMapData>(() => {
+    const snap = stageSnapshotForIndex[timelineStage];
+    if (snap && snap.nodes.length > 0) {
+      return { nodes: snap.nodes, edges: snap.edges };
+    }
+    // Fallback to full graph to avoid blank states.
+    return livingMapData;
+  }, [livingMapData, stageSnapshotForIndex, timelineStage]);
+
+  useEffect(() => {
+    const snap = stageSnapshotForIndex[timelineStage];
+    if (snap && snap.nodes.length) {
+      setVisibleNodeIds(new Set(snap.nodes.map((n) => n.id)));
+      setVisibleEdgeIds(new Set(snap.edges.map((e) => e.id)));
+    } else {
+      setVisibleNodeIds(new Set(livingMapData.nodes.map((n) => n.id)));
+      setVisibleEdgeIds(new Set(livingMapData.edges.map((e) => e.id)));
+    }
+  }, [livingMapData, stageSnapshotForIndex, timelineStage]);
+
   const selectedNode = useMemo(
-    () => livingMapData.nodes.find((n) => n.id === selectedNodeId) ?? null,
-    [livingMapData.nodes, selectedNodeId]
+    () => displayData.nodes.find((n) => n.id === selectedNodeId) ?? null,
+    [displayData.nodes, selectedNodeId]
   );
 
   useEffect(() => {
@@ -614,27 +677,6 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                 Dense graph — domains collapsed
               </span>
             )}
-            <div className="ml-auto flex flex-wrap items-center gap-2 text-[0.7rem]">
-              <span className="text-slate-500">Mode:</span>
-              {(["all", "current", "future"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => {
-                    setGraphMode(m);
-                    void loadGraph();
-                  }}
-                  className={
-                    "rounded-full border px-3 py-1 font-semibold " +
-                    (graphMode === m
-                      ? "bg-slate-900 text-white border-slate-900"
-                      : "bg-white text-slate-700 border-slate-200")
-                  }
-                >
-                  {m === "all" ? "Delta" : m === "current" ? "Current" : "Future"}
-                </button>
-              ))}
-            </div>
           </div>
 
       {loading && (
@@ -694,6 +736,32 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />Workflow</span>
             <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />Manual/Other</span>
           </div>
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+            <span className="font-semibold text-slate-700">Overlays:</span>
+            {(["roi", "cost", "risk", "modernization"] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setOverlays((prev) => {
+                    const next = { ...prev, [key]: !prev[key] };
+                    telemetry.log(
+                      "overlay_active",
+                      { overlay: key, active: next[key] },
+                      simplificationScoreRef.current,
+                    );
+                    return next;
+                  });
+                }}
+                className={`rounded-full border px-3 py-1 font-semibold ${
+                  overlays[key] ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
+                }`}
+              >
+                {key === "roi" ? "ROI" : key === "cost" ? "Cost" : key === "risk" ? "Risk" : "Modernization"}
+              </button>
+            ))}
+            <span className="text-slate-400">(decorative until overlays wired)</span>
+          </div>
           {graphError && (
             <Card className="mb-3 border-rose-200 bg-rose-50">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -742,61 +810,100 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           )}
             {graphEnabled && graphData && (
             <>
-              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-                  Added
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
-                  Modified
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
-                  Removed
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
-                  Unchanged
-                </span>
-                <span className="ml-2 text-[0.75rem] text-slate-500">
-                  {livingMapData.nodes.length} nodes · {livingMapData.edges.length} edges
-                </span>
-                <button
-                  type="button"
-                  className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
-                  onClick={() => {
-                    // flip showOtherDomain via CSS custom event
-                    const evt = new CustomEvent("livingmap:toggle-other");
-                    window.dispatchEvent(evt);
-                  }}
-                >
-                  Toggle “Other”
-                </button>
-              </div>
-              <LivingMap
-                data={livingMapData}
-                height={720}
-                selectedNodeId={selectedNodeId ?? undefined}
-                onSelectNode={setSelectedNodeId}
-                searchTerm={search}
-              />
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+              Added
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
+              Modified
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
+              Removed
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+              Unchanged
+            </span>
+            <span className="ml-2 text-[0.75rem] text-slate-500">
+              {displayData.nodes.length} nodes · {displayData.edges.length} edges
+            </span>
+            <button
+              type="button"
+              className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={() => {
+                // flip showOtherDomain via CSS custom event
+                const evt = new CustomEvent("livingmap:toggle-other");
+                window.dispatchEvent(evt);
+              }}
+            >
+              Toggle “Other”
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={() => setShowUnchanged((v) => !v)}
+            >
+              {showUnchanged ? "Hide unchanged" : "Show unchanged"}
+            </button>
+          </div>
+          <CytoMap
+            data={livingMapData}
+            height={760}
+            selectedNodeId={selectedNodeId ?? undefined}
+            onSelectNode={(id) => setSelectedNodeId(id)}
+            searchTerm={search}
+            showUnchanged={showUnchanged}
+            visibleNodeIds={visibleNodeIds}
+            visibleEdgeIds={visibleEdgeIds}
+          />
             </>
           )}
           <div className="mt-4 flex flex-col gap-3">
-            <div className="flex items-center gap-3 text-xs text-slate-600">
-              <label className="flex items-center gap-2">
-                <span className="font-semibold text-slate-800">Timeline (months)</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={24}
-                    value={roiSim.month}
-                    onChange={(e) => roiSim.setMonth(Number(e.target.value))}
-                  />
-                  <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                    {roiSim.month}
-                  </span>
-                </label>
-              </div>
-              <NodeInsightPanel node={selectedNode} />
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+              <span className="font-semibold text-slate-800">Timeline</span>
+              <input
+                type="range"
+                min={0}
+                max={timelineStages.length - 1}
+                value={timelineStage}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  setTimelineStage(next);
+                  const snap =
+                    stageSnapshotForIndex[next] && stageSnapshotForIndex[next].nodes.length
+                      ? stageSnapshotForIndex[next]
+                      : livingMapData;
+                  telemetry.log(
+                    "timeline_stage_changed",
+                    { stage: timelineStages[next], nodes_visible: snap.nodes.length, edges_visible: snap.edges.length },
+                    simplificationScoreRef.current,
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("timeline_stage_changed", {
+                      detail: { stage: timelineStages[next], nodes: snap.nodes.length, edges: snap.edges.length },
+                    }),
+                  );
+                }}
+              />
+              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                {timelineStages[timelineStage]}
+              </span>
+              <span className="text-slate-400">({stageSnapshots.current.nodes.length} → {stageSnapshots.future.nodes.length} nodes)</span>
             </div>
+            <div className="flex items-center gap-3 text-xs text-slate-600">
+              <span className="font-semibold text-slate-800">ROI demo timeline</span>
+              <input
+                type="range"
+                min={0}
+                max={24}
+                value={roiSim.month}
+                onChange={(e) => roiSim.setMonth(Number(e.target.value))}
+              />
+              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                {roiSim.month}
+              </span>
+            </div>
+            <NodeInsightPanel node={selectedNode} />
+          </div>
           </section>
 
           {/* ROI + Events */}

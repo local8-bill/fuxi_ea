@@ -121,8 +121,8 @@ function normalizeRecord(row: Record<string, any>, source: Source) {
   const systemName = resolveField(row, ["system_name", "System", "Logical_Name", "Raw_Label", "Name"]);
   const name = systemName || label;
   const domain = resolveField(row, ["domain", "Domain"]) || null;
-  const upstreamRaw = resolveField(row, ["upstream", "Dependencies_Upstream"]);
-  const downstreamRaw = resolveField(row, ["downstream", "Dependencies_Downstream"]);
+  const upstreamRaw = resolveField(row, ["upstream", "Upstream", "Dependencies_Upstream"]);
+  const downstreamRaw = resolveField(row, ["downstream", "Downstream", "Dependencies_Downstream"]);
   const disposition = resolveField(row, ["state", "Disposition_Interpretation"]) || null;
   const upstream = upstreamRaw
     ? upstreamRaw.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
@@ -181,8 +181,8 @@ function buildRawRecords(
     label: ["label", "Raw_Label", "Logical_Name", "Name", "System"],
     system_name: ["system_name", "System", "Logical_Name", "Raw_Label", "Name"],
     domain: ["domain", "Domain"],
-    upstream: ["upstream", "Dependencies_Upstream"],
-    downstream: ["downstream", "Dependencies_Downstream"],
+    upstream: ["upstream", "Upstream", "Dependencies_Upstream"],
+    downstream: ["downstream", "Downstream", "Dependencies_Downstream"],
     state: ["state", "Disposition_Interpretation"],
     state_color: ["state_color", "Disposition_Color"],
   };
@@ -395,6 +395,10 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
       nodes: nodes.filter((n) => keep.has(n.id)),
       edges: edges.filter((e) => keep.has(e.source) && keep.has(e.target)),
     };
+  }
+  if (mode === "all") {
+    // Always return the full harmonized graph for timeline use; consumers can filter locally by state.
+    return { nodes, edges };
   }
   // delta = added/removed/modified; if no future present, return all nodes instead of empty.
   const deltaNodes = nodes.filter((n) => n.state === "added" || n.state === "removed" || n.state === "modified");
