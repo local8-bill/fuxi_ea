@@ -27,6 +27,8 @@ function stateColor(state: SequencedSystem["state"]) {
 export default function SequencerClient({ projectId, data }: Props) {
   const { log } = useTelemetry("transformation_dialogue", { projectId });
   const [mode, setMode] = useState<Mode>("sequence");
+  const [activeStage, setActiveStage] = useState<number | null>(null);
+  const [currentStageId, setCurrentStageId] = useState<string | number>("sequence");
 
   const filtered = useMemo(() => {
     if (!data) return { nodes: [], edges: [], stages: 0 };
@@ -59,6 +61,15 @@ export default function SequencerClient({ projectId, data }: Props) {
         nodes: nodes.sort((a, b) => a.domain.localeCompare(b.domain) || a.system.localeCompare(b.system)),
       }));
   }, [filtered.nodes]);
+
+  // Initialize active stage and telemetry
+  useMemo(() => {
+    if (stages.length && activeStage == null) {
+      setActiveStage(stages[0].stage);
+      log("stage_entered", { stageId: stages[0].stage, visibleNodes: stages[0].nodes.length });
+      setCurrentStageId(stages[0].stage);
+    }
+  }, [stages, activeStage, log]);
 
   const handleExport = (format: "csv" | "json") => {
     if (!data) return;
@@ -118,7 +129,11 @@ export default function SequencerClient({ projectId, data }: Props) {
             className={`rounded-full px-3 py-1 text-sm font-semibold ${
               mode === "current" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
             }`}
-            onClick={() => setMode("current")}
+            onClick={() => {
+              setMode("current");
+              log("stage_entered", { stageId: "current", visibleNodes: filtered.nodes.length });
+              setCurrentStageId("current");
+            }}
           >
             Show Current
           </button>
@@ -126,7 +141,11 @@ export default function SequencerClient({ projectId, data }: Props) {
             className={`rounded-full px-3 py-1 text-sm font-semibold ${
               mode === "future" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
             }`}
-            onClick={() => setMode("future")}
+            onClick={() => {
+              setMode("future");
+              log("stage_entered", { stageId: "future", visibleNodes: filtered.nodes.length });
+              setCurrentStageId("future");
+            }}
           >
             Show Future
           </button>
@@ -134,7 +153,11 @@ export default function SequencerClient({ projectId, data }: Props) {
             className={`rounded-full px-3 py-1 text-sm font-semibold ${
               mode === "sequence" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
             }`}
-            onClick={() => setMode("sequence")}
+            onClick={() => {
+              setMode("sequence");
+              log("stage_entered", { stageId: "sequence", visibleNodes: filtered.nodes.length });
+              setCurrentStageId("sequence");
+            }}
           >
             Show Sequence
           </button>
@@ -164,7 +187,18 @@ export default function SequencerClient({ projectId, data }: Props) {
         {stages.map((stage) => (
           <div key={stage.stage} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-900">Stage {stage.stage}</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveStage(stage.stage);
+                  log("stage_entered", { stageId: stage.stage, visibleNodes: stage.nodes.length });
+                  log("roi_stage_calculated", { stageId: stage.stage, cost: 0, benefit: 0 });
+                  setCurrentStageId(stage.stage);
+                }}
+                className="text-left"
+              >
+                <h3 className="text-lg font-semibold text-slate-900">Stage {stage.stage}</h3>
+              </button>
               <span className="text-xs text-slate-600">
                 {stage.nodes.length} system{stage.nodes.length === 1 ? "" : "s"}
               </span>
@@ -174,7 +208,15 @@ export default function SequencerClient({ projectId, data }: Props) {
                 <div
                   key={n.system}
                   className={`w-full rounded-xl border px-3 py-2 text-sm shadow-sm md:w-[240px] ${stateColor(n.state)}`}
-                  onClick={() => log("sequencer_focus_node", { system: n.system, stage: n.sequence_stage })}
+                  onClick={() => {
+                    log("sequencer_focus_node", { system: n.system, stage: n.sequence_stage });
+                    log("system_transition", { system: n.system, stageId: n.sequence_stage, state: n.state });
+                    log("timeline_stage_changed", {
+                      stage: currentStageId,
+                      nodes_visible: stage.nodes.length,
+                      edges_visible: filtered.edges?.length ?? 0,
+                    });
+                  }}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-slate-900">{n.system}</span>

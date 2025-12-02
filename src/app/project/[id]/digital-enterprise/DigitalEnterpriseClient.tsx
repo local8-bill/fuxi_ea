@@ -181,6 +181,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [showUnchanged, setShowUnchanged] = useState<boolean>(false);
   const [visibleNodeIds, setVisibleNodeIds] = useState<Set<string>>(new Set());
   const [visibleEdgeIds, setVisibleEdgeIds] = useState<Set<string>>(new Set());
+  const [highlightStage, setHighlightStage] = useState<boolean>(true);
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -468,6 +469,39 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     return livingMapData;
   }, [livingMapData, stageSnapshotForIndex, timelineStage]);
 
+  const setsEqual = (a: Set<string>, b: Set<string>) => {
+    if (a.size !== b.size) return false;
+    for (const v of a) {
+      if (!b.has(v)) return false;
+    }
+    return true;
+  };
+
+  useEffect(() => {
+    const snap = stageSnapshotForIndex[timelineStage];
+    const nextNodes = snap && snap.nodes.length ? new Set(snap.nodes.map((n) => n.id)) : new Set(livingMapData.nodes.map((n) => n.id));
+    const nextEdges = snap && snap.edges.length ? new Set(snap.edges.map((e) => e.id)) : new Set(livingMapData.edges.map((e) => e.id));
+    if (!setsEqual(visibleNodeIds, nextNodes)) {
+      setVisibleNodeIds(nextNodes);
+    }
+    if (!setsEqual(visibleEdgeIds, nextEdges)) {
+      setVisibleEdgeIds(nextEdges);
+    }
+  }, [livingMapData, stageSnapshotForIndex, timelineStage, visibleNodeIds, visibleEdgeIds]);
+
+  // Ensure timeline stage telemetry fires even if slider handlers miss.
+  useEffect(() => {
+    const snap = stageSnapshotForIndex[timelineStage];
+    const nodes = snap?.nodes?.length ?? livingMapData.nodes.length;
+    const edges = snap?.edges?.length ?? livingMapData.edges.length;
+    telemetry.log(
+      "timeline_stage_changed",
+      { stage: timelineStages[timelineStage], nodes_visible: nodes, edges_visible: edges },
+      simplificationScoreRef.current,
+    );
+  }, [timelineStage, stageSnapshotForIndex, livingMapData, telemetry, timelineStages, simplificationScoreRef]);
+
+  /*
   useEffect(() => {
     const snap = stageSnapshotForIndex[timelineStage];
     if (snap && snap.nodes.length) {
@@ -478,6 +512,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       setVisibleEdgeIds(new Set(livingMapData.edges.map((e) => e.id)));
     }
   }, [livingMapData, stageSnapshotForIndex, timelineStage]);
+  */
 
   const selectedNode = useMemo(
     () => displayData.nodes.find((n) => n.id === selectedNodeId) ?? null,
@@ -761,6 +796,15 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               </button>
             ))}
             <span className="text-slate-400">(decorative until overlays wired)</span>
+            <button
+              type="button"
+              className={`ml-2 rounded-full border px-3 py-1 font-semibold ${
+                highlightStage ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
+              }`}
+              onClick={() => setHighlightStage((v) => !v)}
+            >
+              {highlightStage ? "Highlight delta" : "No highlight"}
+            </button>
           </div>
           {graphError && (
             <Card className="mb-3 border-rose-200 bg-rose-50">

@@ -15,6 +15,7 @@ type CytoMapProps = {
   showUnchanged?: boolean;
   visibleNodeIds?: Set<string>;
   visibleEdgeIds?: Set<string>;
+  highlightStage?: boolean;
 };
 
 // Class helpers
@@ -35,6 +36,7 @@ export function CytoMap({
   showUnchanged = false,
   visibleNodeIds,
   visibleEdgeIds,
+  highlightStage = true,
 }: CytoMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any>(null);
@@ -86,11 +88,8 @@ export function CytoMap({
   }, [normalized.nodes]);
 
   // Build elements once per data change; we diff against the existing cy instance.
-  const hasDelta = useMemo(
-    () => (normalized.nodes ?? []).some((n) => (n as any).state && (n as any).state !== "unchanged"),
-    [normalized.nodes],
-  );
-  const effectiveShowUnchanged = showUnchanged || !hasDelta;
+  // Keep all nodes visible for now; stage visibility handled elsewhere.
+  const effectiveShowUnchanged = true;
 
   const elements = useMemo(() => {
     const nodes = (normalized.nodes ?? [])
@@ -323,38 +322,23 @@ export function CytoMap({
       });
 
     const hiddenNodes = new Set<string>();
-    // Apply classes based on state for highlight/visibility
+    // Apply classes based on state for highlight (keep all nodes visible)
     cy.nodes().forEach((n: any) => {
       n.removeClass([cls.added, cls.removed, cls.modified, cls.unchanged, cls.hidden]);
-        const state = n.data("state") || "unchanged";
-        const isUnchanged = state === "unchanged";
-    if (visibleNodeIds && visibleNodeIds.size > 0 && !visibleNodeIds.has(n.id())) {
-      n.addClass(cls.hidden);
-      hiddenNodes.add(n.id());
-      return;
-    }
-        if (!effectiveShowUnchanged && isUnchanged) {
-          n.addClass(cls.hidden);
-          hiddenNodes.add(n.id());
-          return;
-        }
+      const state = n.data("state") ?? "unknown";
       if (state === "added") n.addClass(cls.added);
       else if (state === "removed") n.addClass(cls.removed);
       else if (state === "modified") n.addClass(cls.modified);
       else n.addClass(cls.unchanged);
+      if (!highlightStage && (state === "unchanged" || state === "unknown")) {
+        n.addClass(cls.hidden);
+        n.removeClass(cls.hidden);
+      }
     });
 
     cy.edges().forEach((e: any) => {
       e.removeClass([cls.hidden, cls.added, cls.removed, cls.modified, cls.unchanged]);
       const state = e.data("edgeType");
-      if (visibleEdgeIds && visibleEdgeIds.size > 0 && !visibleEdgeIds.has(e.id())) {
-        e.addClass(cls.hidden);
-        return;
-      }
-      if (hiddenNodes.has(e.data("source")) || hiddenNodes.has(e.data("target"))) {
-        e.addClass(cls.hidden);
-        return;
-      }
       if (state === "unresolved") e.addClass(cls.removed);
       else if (state === "inferred") e.addClass(cls.modified);
       else e.addClass(cls.unchanged);
