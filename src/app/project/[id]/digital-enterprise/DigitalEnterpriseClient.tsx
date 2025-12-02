@@ -178,6 +178,9 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     risk: false,
     modernization: false,
   });
+  const [showUnchanged, setShowUnchanged] = useState<boolean>(false);
+  const [visibleNodeIds, setVisibleNodeIds] = useState<Set<string>>(new Set());
+  const [visibleEdgeIds, setVisibleEdgeIds] = useState<Set<string>>(new Set());
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -463,6 +466,17 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     }
     // Fallback to full graph to avoid blank states.
     return livingMapData;
+  }, [livingMapData, stageSnapshotForIndex, timelineStage]);
+
+  useEffect(() => {
+    const snap = stageSnapshotForIndex[timelineStage];
+    if (snap && snap.nodes.length) {
+      setVisibleNodeIds(new Set(snap.nodes.map((n) => n.id)));
+      setVisibleEdgeIds(new Set(snap.edges.map((e) => e.id)));
+    } else {
+      setVisibleNodeIds(new Set(livingMapData.nodes.map((n) => n.id)));
+      setVisibleEdgeIds(new Set(livingMapData.edges.map((e) => e.id)));
+    }
   }, [livingMapData, stageSnapshotForIndex, timelineStage]);
 
   const selectedNode = useMemo(
@@ -796,41 +810,51 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           )}
             {graphEnabled && graphData && (
             <>
-              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-                  Added
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
-                  Modified
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
-                  Removed
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
-                  Unchanged
-                </span>
-                <span className="ml-2 text-[0.75rem] text-slate-500">
-                  {displayData.nodes.length} nodes · {displayData.edges.length} edges
-                </span>
-                <button
-                  type="button"
-                  className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
-                  onClick={() => {
-                    // flip showOtherDomain via CSS custom event
-                    const evt = new CustomEvent("livingmap:toggle-other");
-                    window.dispatchEvent(evt);
-                  }}
-                >
-                  Toggle “Other”
-                </button>
-              </div>
-              <CytoMap
-                data={displayData}
-                height={760}
-                selectedNodeId={selectedNodeId ?? undefined}
-                onSelectNode={(id) => setSelectedNodeId(id)}
-                searchTerm={search}
-              />
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+              Added
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
+              Modified
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
+              Removed
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+              Unchanged
+            </span>
+            <span className="ml-2 text-[0.75rem] text-slate-500">
+              {displayData.nodes.length} nodes · {displayData.edges.length} edges
+            </span>
+            <button
+              type="button"
+              className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={() => {
+                // flip showOtherDomain via CSS custom event
+                const evt = new CustomEvent("livingmap:toggle-other");
+                window.dispatchEvent(evt);
+              }}
+            >
+              Toggle “Other”
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={() => setShowUnchanged((v) => !v)}
+            >
+              {showUnchanged ? "Hide unchanged" : "Show unchanged"}
+            </button>
+          </div>
+          <CytoMap
+            data={livingMapData}
+            height={760}
+            selectedNodeId={selectedNodeId ?? undefined}
+            onSelectNode={(id) => setSelectedNodeId(id)}
+            searchTerm={search}
+            showUnchanged={showUnchanged}
+            visibleNodeIds={visibleNodeIds}
+            visibleEdgeIds={visibleEdgeIds}
+          />
             </>
           )}
           <div className="mt-4 flex flex-col gap-3">
