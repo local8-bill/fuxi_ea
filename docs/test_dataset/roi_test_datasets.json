@@ -1,0 +1,64 @@
+{
+  "erp_modernization": {
+    "stages": [
+      { "month": 0, "cost": 500, "benefit": 0 },
+      { "month": 3, "cost": 1000, "benefit": 300 },
+      { "month": 6, "cost": 800, "benefit": 800 },
+      { "month": 9, "cost": 300, "benefit": 1500 },
+      { "month": 12, "cost": 100, "benefit": 2400 }
+    ],
+    "domains": {
+      "ERP": { "impact": 0.9, "complexity": 1.0 },
+      "Finance": { "impact": 0.7, "complexity": 0.8 },
+      "SupplyChain": { "impact": 0.8, "complexity": 0.7 }
+    },
+    "verification": [
+      "Run curl 'http://localhost:3000/api/roi/forecast?project=erp_modernization'",
+      "Confirm breakEvenMonth ≈ 9",
+      "Validate netROI ≈ 1.85",
+      "Telemetry logs show roi_stage_calculated and roi_forecast_generated"
+    ]
+  },
+
+  "omnichannel": {
+    "stages": [
+      { "month": 0, "cost": 250, "benefit": 0 },
+      { "month": 3, "cost": 600, "benefit": 120 },
+      { "month": 6, "cost": 900, "benefit": 480 },
+      { "month": 9, "cost": 900, "benefit": 1050 },
+      { "month": 12, "cost": 700, "benefit": 1750 }
+    ],
+    "domains": {
+      "Commerce": { "impact": 0.8, "complexity": 1.1 },
+      "Integration": { "impact": 0.9, "complexity": 1.3 },
+      "Experience": { "impact": 1.0, "complexity": 1.0 }
+    },
+    "verification": [
+      "Run curl 'http://localhost:3000/api/roi/forecast?project=omnichannel'",
+      "Confirm breakEvenMonth ≈ 12",
+      "Validate netROI ≈ 1.01",
+      "Telemetry events recorded for roi_stage_calculated"
+    ]
+  },
+
+  "data_consolidation": {
+    "stages": [
+      { "month": 0, "cost": 400, "benefit": 0 },
+      { "month": 3, "cost": 900, "benefit": 250 },
+      { "month": 6, "cost": 1200, "benefit": 700 },
+      { "month": 9, "cost": 1200, "benefit": 1400 },
+      { "month": 12, "cost": 1000, "benefit": 2100 }
+    ],
+    "domains": {
+      "Data": { "impact": 1.0, "complexity": 1.0 },
+      "Integration": { "impact": 0.6, "complexity": 0.7 },
+      "Analytics": { "impact": 0.9, "complexity": 0.8 }
+    },
+    "verification": [
+      "Run curl 'http://localhost:3000/api/roi/forecast?project=data_consolidation'",
+      "Confirm breakEvenMonth ≈ 13",
+      "Validate netROI ≈ 0.95",
+      "Telemetry logs include roi_forecast_generated"
+    ]
+  }
+}

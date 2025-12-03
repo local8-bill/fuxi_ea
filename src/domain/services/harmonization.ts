@@ -396,6 +396,10 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
       edges: edges.filter((e) => keep.has(e.source) && keep.has(e.target)),
     };
   }
+  if (mode === "all") {
+    // Always return the full harmonized graph for timeline use; consumers can filter locally by state.
+    return { nodes, edges };
+  }
   // delta = added/removed/modified; if no future present, return all nodes instead of empty.
   const deltaNodes = nodes.filter((n) => n.state === "added" || n.state === "removed" || n.state === "modified");
   const keep = new Set(deltaNodes.length > 0 ? deltaNodes.map((n) => n.id) : nodes.map((n) => n.id));

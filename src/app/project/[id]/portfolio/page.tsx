@@ -108,15 +108,19 @@ export default function PortfolioPage() {
   const scenarioLoggedRef = useRef(false);
 
   useEffect(() => {
+    // Avoid re-running if signals already set; telemetry instances can change between renders.
+    if (signals) return;
     const intake = loadProjectIntakeFromLocalStorage(projectId);
     const nextSignals = buildPortfolioSignalsFromIntake(intake);
+    const scoreForTelemetry = computeSimplificationScore(nextSignals);
     setSignals(nextSignals);
     setLoaded(true);
     if (!portfolioViewLoggedRef.current) {
       portfolioViewLoggedRef.current = true;
-      telemetry.log("portfolio_view", { hasIntake: !!intake }, simplificationScoreNormalized);
+      telemetry.log("portfolio_view", { hasIntake: !!intake }, scoreForTelemetry);
     }
-  }, [projectId, telemetry, simplificationScoreNormalized]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, telemetry, signals]);
 
   useEffect(() => {
     if (!signals) return;
@@ -145,7 +149,7 @@ export default function PortfolioPage() {
       DC: hasIntake ? 0.7 : 0.5,
       CL: hasIntake ? 0.55 : 0.7,
     });
-  }, [hasIntake, setMetrics]);
+  }, [hasIntake]);
 
   useEffect(() => {
     const nextProgress = !loaded ? 0.2 : hasIntake ? 0.8 : 0.45;
