@@ -179,3 +179,61 @@ Mapping is controlled via `domain/services/roiEstimator.ts`.
 - Extend to real financials for stage 2 validation.
 - ROI Dashboard: implement cost/benefit/ROI overlays with explainable tooltips.
 
+## Multi-Domain ROI Model and Narrative (D051 Reference)
+
+### 1. Overview
+This section formalizes the ROI model used across Fuxi EA’s transformation sequencer and dashboard.
+It defines how costs and benefits are computed by **stage**, then aggregated by **business/technical domain**.
+
+### 2. Mathematical Model
+Each transformation stage *i* is assigned to a domain *d*.
+
+- Stage cost function
+  \(C_i(t) = B_i(1 + \text{uplift}_i)e^{-βt} + 0.2B_i\)
+
+- Stage benefit function
+  \(V_i(t) = δ_i(1 - e^{-λ(t - T_{go})})\)
+
+Per-domain totals:
+
+\[
+C_{d,t} = \sum_{i \in S_d} C_i(t), \quad
+V_{d,t} = \sum_{i \in S_d} V_i(t)
+\]
+
+Domain ROI:
+
+\[
+ROI_{d,t} = \frac{V_{d,t} - C_{d,t}}{C_{d,t}}
+\]
+
+Total ROI is the weighted aggregate:
+
+\[
+ROI_t = \frac{\sum_d V_{d,t} - \sum_d C_{d,t}}{\sum_d C_{d,t}}
+\]
+
+### 3. Example Parameters
+| Size | Base Cost \(B_i\) | Benefit \(δ_i\) | Integration Uplift | Decay \(β\) | Adoption \(λ\) |
+|------|-------------------|-----------------|--------------------|--------------|----------------|
+| S | 100 | 80 | 30 % | 0.5 | 0.3 |
+| M | 300 | 250 | 45 % | 0.5 | 0.3 |
+| L | 700 | 700 | 60 % | 0.5 | 0.3 |
+
+### 4. Domain Example (15-Month Horizon)
+| Domain | Stage | Start | Duration | Break-Even (mo) | ROI@15 mo |
+|---------|--------|:--:|:--:|:--:|:--:|
+| ERP | ERP Modernization | 0 | 9 | 12 | +10 % |
+| Data | Data Warehouse Consolidation | 6 | 6 | 13 | +110 % |
+| Finance | Finance Automation | 10 | 3 | 13 | +35 % |
+
+### 5. Executive Narrative (for ROI Dashboard)
+- **ERP** = foundation, deferred benefit; enables all others.
+- **Data** = earliest positive cash-flow domain; funds later phases.
+- **Finance** = quick-win automation; credibility booster.
+- **Optimization insight:** advancing *Data* by one quarter improves enterprise payback by ~2 months.
+
+### 6. Implementation Notes
+- `/api/roi/forecast?domain=true` returns both timeline and per-domain ROI arrays.
+- Break-even occurs when \(V_{d,t}=C_{d,t}\).
+- ROI Dashboard (D051) visualizes domain curves and cumulative value mix.

@@ -1,5 +1,11 @@
 # Changelog
-# Changelog
+
+## v0.6.9 — ROI Dashboard Implementation
+
+- ROI forecast API (`/api/roi/forecast`) now returns per-domain cost/benefit/ROI timelines with break-even detection and telemetry (`roi_forecast_generated`, `roi_stage_calculated`).
+- ROI Dashboard page (`/project/[id]/roi-dashboard`) renders aggregate + per-domain ROI charts and logs `roi_dashboard_opened`.
+- React Flow set as sole graph engine for Digital Enterprise; Cytoscape/SBGN archived under `src/archive/graph_engines`.
+- Docs updated: D051A implementation brief added; math explainers aligned with ROI model.
 
 ## v0.6.5-dev — Graph stats + sequencer telemetry
 
