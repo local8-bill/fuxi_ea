@@ -1,6 +1,12 @@
 # Changelog
 # Changelog
 
+## v0.6.5-dev — Graph stats + sequencer telemetry
+
+- Graph stats now source counts from harmonized data (`enterprise_graph.json`) for accurate `graph_load` telemetry.
+- Sequencer telemetry enriched with cost/benefit context (when available) and clearer stage events (`stage_entered`, `system_transition`, `roi_stage_calculated`).
+- No UI changes; runtime remains `nodejs` to avoid Edge FS issues.
+
 ## v0.6.4 — UAT Baseline (Timeline + Cytoscape Integration)
 
 - Tag: `v0.6.4-uat-baseline`

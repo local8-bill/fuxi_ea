@@ -179,8 +179,6 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     modernization: false,
   });
   const [showUnchanged, setShowUnchanged] = useState<boolean>(false);
-  const [visibleNodeIds, setVisibleNodeIds] = useState<Set<string>>(new Set());
-  const [visibleEdgeIds, setVisibleEdgeIds] = useState<Set<string>>(new Set());
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -459,25 +457,8 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     return map;
   }, [stageSnapshots, timelineStages.length]);
 
-  const displayData = useMemo<LivingMapData>(() => {
-    const snap = stageSnapshotForIndex[timelineStage];
-    if (snap && snap.nodes.length > 0) {
-      return { nodes: snap.nodes, edges: snap.edges };
-    }
-    // Fallback to full graph to avoid blank states.
-    return livingMapData;
-  }, [livingMapData, stageSnapshotForIndex, timelineStage]);
-
-  useEffect(() => {
-    const snap = stageSnapshotForIndex[timelineStage];
-    if (snap && snap.nodes.length) {
-      setVisibleNodeIds(new Set(snap.nodes.map((n) => n.id)));
-      setVisibleEdgeIds(new Set(snap.edges.map((e) => e.id)));
-    } else {
-      setVisibleNodeIds(new Set(livingMapData.nodes.map((n) => n.id)));
-      setVisibleEdgeIds(new Set(livingMapData.edges.map((e) => e.id)));
-    }
-  }, [livingMapData, stageSnapshotForIndex, timelineStage]);
+  // Keep full graph visible; stage filtering is only for telemetry/metrics.
+  const displayData = livingMapData;
 
   const selectedNode = useMemo(
     () => displayData.nodes.find((n) => n.id === selectedNodeId) ?? null,
@@ -852,8 +833,6 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             onSelectNode={(id) => setSelectedNodeId(id)}
             searchTerm={search}
             showUnchanged={showUnchanged}
-            visibleNodeIds={visibleNodeIds}
-            visibleEdgeIds={visibleEdgeIds}
           />
             </>
           )}

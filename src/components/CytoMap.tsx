@@ -33,8 +33,6 @@ export function CytoMap({
   onSelectNode,
   searchTerm = "",
   showUnchanged = false,
-  visibleNodeIds,
-  visibleEdgeIds,
 }: CytoMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any>(null);
@@ -86,11 +84,7 @@ export function CytoMap({
   }, [normalized.nodes]);
 
   // Build elements once per data change; we diff against the existing cy instance.
-  const hasDelta = useMemo(
-    () => (normalized.nodes ?? []).some((n) => (n as any).state && (n as any).state !== "unchanged"),
-    [normalized.nodes],
-  );
-  const effectiveShowUnchanged = showUnchanged || !hasDelta;
+  const effectiveShowUnchanged = true;
 
   const elements = useMemo(() => {
     const nodes = (normalized.nodes ?? [])
@@ -388,7 +382,7 @@ export function CytoMap({
     }
     prevShowUnchanged.current = effectiveShowUnchanged;
     setLayingOut(false);
-  }, [elements, degreeMap, effectiveShowUnchanged, visibleNodeIds, visibleEdgeIds]);
+  }, [elements, degreeMap, effectiveShowUnchanged]);
 
   // Handle external selection
   useEffect(() => {
