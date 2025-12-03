@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { CytoGraph } from "@/components/CytoGraph";
+import { CytoGraph } from "@/archive/graph_engines/CytoGraph";
 import type { HarmonizedGraph } from "@/domain/services/harmonization";
 
 // Next 16: params is a Promise

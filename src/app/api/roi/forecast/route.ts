@@ -1,28 +1,43 @@
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
+import { forecastByDomain } from "@/domain/services/roi";
+import { recordTelemetry } from "@/lib/telemetry/server";
 
-const CANDIDATES = [
-  path.join(process.cwd(), ".fuxi", "data", "roi", "forecast.json"),
-  path.join(process.cwd(), "tests", "results", "roi_forecast.sample.json"),
-];
+export const runtime = "nodejs";
 
 export async function GET() {
-  for (const file of CANDIDATES) {
-    try {
-      const raw = await fs.readFile(file, "utf8");
-      const json = JSON.parse(raw);
-      return NextResponse.json(json);
-    } catch (err: any) {
-      if (err?.code !== "ENOENT") {
-        console.error("[ROI-FORECAST] failed to read", file, err);
-      }
-    }
-  }
+  try {
+    const forecast = await forecastByDomain(5);
 
-  return NextResponse.json({
-    timeline: [],
-    events: [],
-    predictions: { breakEvenMonth: null },
-  });
+    // Emit telemetry
+    await recordTelemetry({
+      event_type: "roi_forecast_generated",
+      workspace_id: "roi_dashboard",
+      data: {
+        domains: forecast.domains.length,
+        breakEvenMonth: forecast.predictions.breakEvenMonth,
+      },
+    });
+
+    for (const d of forecast.domains) {
+      await recordTelemetry({
+        event_type: "roi_stage_calculated",
+        workspace_id: "roi_dashboard",
+        data: {
+          domain: d.domain,
+          breakEvenMonth: d.breakEvenMonth,
+        },
+      });
+    }
+
+    return NextResponse.json(forecast);
+  } catch (err: any) {
+    console.error("[ROI-FORECAST] failed", err);
+    return NextResponse.json(
+      {
+        error: "failed_to_generate_forecast",
+        message: err?.message ?? "Unknown error",
+      },
+      { status: 500 },
+    );
+  }
 }

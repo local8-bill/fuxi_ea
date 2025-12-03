@@ -7,7 +7,6 @@ import {
   SystemImpactPanel,
   type SystemImpact,
 } from "@/components/digital-enterprise/SystemImpactPanel";
-import { CytoMap } from "@/components/CytoMap";
 import { LivingMap } from "@/components/LivingMap";
 import type { LivingMapData, LivingNode, LivingEdge } from "@/types/livingMap";
 import { useROISimulation } from "@/hooks/useROISimulation";
@@ -173,20 +172,17 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [graphError, setGraphError] = useState<string | null>(null);
   const timelineStages = useMemo(() => ["Current", "Stage 1", "Future"], []);
   const [timelineStage, setTimelineStage] = useState<number>(0);
-  const graphEngine = (process.env.NEXT_PUBLIC_GRAPH_ENGINE ?? "cyto").toLowerCase();
   const [overlays, setOverlays] = useState({
     roi: true,
     cost: false,
     risk: false,
     modernization: false,
   });
-  const [showUnchanged, setShowUnchanged] = useState<boolean>(false);
 
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const aiInsights = useAIInsights(graphData?.nodes ?? []);
-  const useReactFlow = graphEngine === "reactflow";
   const livingMapData = useMemo<LivingMapData>(() => {
     const data = graphData ?? { nodes: [], edges: [] };
     const safeNodes = ((data.nodes ?? []) as LivingNode[]).filter((n): n is LivingNode => !!n);
@@ -821,32 +817,14 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             >
               Toggle “Other”
             </button>
-            <button
-              type="button"
-              className="rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
-              onClick={() => setShowUnchanged((v) => !v)}
-            >
-              {showUnchanged ? "Hide unchanged" : "Show unchanged"}
-            </button>
           </div>
-          {useReactFlow ? (
-            <LivingMap
-              data={livingMapData}
-              height={760}
-              selectedNodeId={selectedNodeId ?? undefined}
-              onSelectNode={setSelectedNodeId}
-              searchTerm={search}
-            />
-          ) : (
-            <CytoMap
-              data={livingMapData}
-              height={760}
-              selectedNodeId={selectedNodeId ?? undefined}
-              onSelectNode={(id) => setSelectedNodeId(id)}
-              searchTerm={search}
-              showUnchanged={showUnchanged}
-            />
-          )}
+          <LivingMap
+            data={livingMapData}
+            height={760}
+            selectedNodeId={selectedNodeId ?? undefined}
+            onSelectNode={setSelectedNodeId}
+            searchTerm={search}
+          />
             </>
           )}
           <div className="mt-4 flex flex-col gap-3">
