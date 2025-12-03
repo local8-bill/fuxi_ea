@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { Card } from "@/components/ui/Card";
 import { ROIChart } from "@/components/ROIChart";
+import { ROISummaryCard } from "@/components/roi/ROISummaryCard";
 
 interface DomainROIData {
   domain: string;
@@ -18,7 +19,7 @@ interface DomainROIData {
 interface ROIForecast {
   timeline: { month: number; cost: number; benefit: number; roi: number }[];
   domains: DomainROIData[];
-  predictions: { breakEvenMonth: number | null };
+  predictions: { breakEvenMonth: number | null; netROI: number | null; totalCost: number; totalBenefit: number };
 }
 
 export default function ROIDashboardPage() {
@@ -87,6 +88,7 @@ export default function ROIDashboardPage() {
 
       {forecast && (
         <div className="space-y-6 mt-4">
+          <ROISummaryCard projectId={projectId} />
           <Card>
             <div className="grid gap-3 md:grid-cols-[2fr,1fr]">
               <ROIChart
@@ -100,6 +102,16 @@ export default function ROIDashboardPage() {
                   {forecast.predictions.breakEvenMonth != null
                     ? `Month ${forecast.predictions.breakEvenMonth}`
                     : "Not reached"}
+                </p>
+                <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Net ROI</p>
+                <p className="text-xl font-semibold text-slate-900">
+                  {forecast.predictions.netROI != null
+                    ? `${Math.round(forecast.predictions.netROI * 100)}%`
+                    : "n/a"}
+                </p>
+                <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Totals</p>
+                <p className="text-slate-800">
+                  Cost: ${forecast.predictions.totalCost.toLocaleString()} · Benefit: ${forecast.predictions.totalBenefit.toLocaleString()}
                 </p>
                 <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Domains</p>
                 <p className="text-slate-800">{forecast.domains.length} domains included</p>
