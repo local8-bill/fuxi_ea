@@ -36,3 +36,13 @@ Recent events:
 
 ## Tests / CI
 - CI metrics not wired yet; add coverage/log parsing to scripts/dashboard.js to populate.
+
+## Routes / Smoke Checklist
+- `/` — home
+- `/project/:id/intake`
+- `/project/:id/tech-stack`
+- `/project/:id/digital-enterprise`
+- `/project/:id/roi-dashboard`
+- `/project/:id/transformation-dialogue`
+- `/project/:id/portfolio`
+- APIs: `/api/roi/forecast?project=:id`, `/api/digital-enterprise/stats?project=:id`, `/api/digital-enterprise/view?project=:id`, `/api/telemetry`
