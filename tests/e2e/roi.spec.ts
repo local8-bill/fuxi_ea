@@ -6,7 +6,7 @@ test("ROI dashboard shows summary and TCC card", async ({ page }) => {
 
   await expect(page.getByText("ROI Summary")).toBeVisible();
   await expect(page.getByText("Total Cost of Change")).toBeVisible();
-  await expect(page.getByText("Break-even", { exact: false })).toBeVisible();
+  await expect(page.getByText(/Break-even/).first()).toBeVisible();
 
   // Ensure forecast JSON fields rendered
   const netRoi = page.getByText("%", { exact: false }).first();
