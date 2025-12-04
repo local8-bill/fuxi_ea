@@ -24,12 +24,14 @@ export function ModeSelector({ onChange }: ModeSelectorProps) {
       <div className="flex flex-col gap-2">
         {roles.map((r) => {
           const activeCls =
-            r === active ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-800 border border-slate-200";
+            r === active
+              ? "bg-slate-900 text-white border-slate-900"
+              : "bg-white text-slate-800 border-slate-200 hover:bg-slate-50";
           return (
             <button
               key={r}
               onClick={() => handleChange(r)}
-              className={`w-full rounded-xl px-3 py-2 text-sm font-semibold transition ${activeCls}`}
+              className={`w-full rounded-2xl border px-3 py-2 text-sm font-semibold text-left transition ${activeCls}`}
             >
               {r}
             </button>

@@ -49,7 +49,7 @@ export function NavSidebar({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {sections.map((s) => (
         <NavSection
           key={s.title}
