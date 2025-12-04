@@ -30,10 +30,10 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
 
   return (
     <div className="uxshell-root px-6 py-8">
-      <div className="uxshell-shell mx-auto max-w-7xl rounded-3xl border border-slate-200 bg-white/90 shadow-xl">
-        <div className="grid grid-cols-[260px_1fr] gap-6 p-6">
-          {/* Left rail */}
-          <div className="space-y-6">
+      <div className="mx-auto w-full max-w-[1800px]">
+        <div className="grid grid-cols-[280px_1fr] gap-10">
+          {/* Left rail (independent column) */}
+          <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow">
             <div className="space-y-2">
               <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Projects</p>
               <div className="rounded-2xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-100">
@@ -52,12 +52,17 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
                 <button className="w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">+ New project</button>
               </div>
             </div>
+
             <ModeSelector />
-            <NavSidebar projectId={targetProject} />
+
+            <div className="space-y-2">
+              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Views</p>
+              <NavSidebar projectId={targetProject} />
+            </div>
           </div>
 
-          {/* Command deck */}
-          <div className="flex flex-col gap-6">
+          {/* Command deck full width */}
+          <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow">
             <div className="space-y-2">
               <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Command Deck</p>
               <p className="text-3xl font-semibold text-slate-900">What can I help with?</p>
