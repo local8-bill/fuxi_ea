@@ -76,7 +76,15 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
                 <p className="text-sm text-slate-600">Ask in natural language or jump into a view.</p>
               </div>
 
-              <PromptBar />
+              <PromptBar
+                onAction={(action) => {
+                  if (action.target) {
+                    const href = `/project/${targetProject}/${action.target}`;
+                    void emitTelemetry("uxshell_action_invoked", { view: action.view, target: action.target });
+                    window.location.href = href;
+                  }
+                }}
+              />
 
               <div className="space-y-3">
                 <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Views</p>

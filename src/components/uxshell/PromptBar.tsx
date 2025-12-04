@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { emitTelemetry } from "./telemetry";
+import { emitTelemetry, mapPromptToAction } from "./telemetry";
 
 interface PromptBarProps {
   onSubmit?: (prompt: string) => void;
+  onAction?: (action: { view?: string; target?: string }) => void;
 }
 
-export function PromptBar({ onSubmit }: PromptBarProps) {
+export function PromptBar({ onSubmit, onAction }: PromptBarProps) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -17,6 +18,11 @@ export function PromptBar({ onSubmit }: PromptBarProps) {
     if (!prompt) return;
     setBusy(true);
     onSubmit?.(prompt);
+    const action = mapPromptToAction(prompt);
+    if (action.view || action.target) {
+      onAction?.(action);
+      await emitTelemetry("uxshell_action_invoked", { prompt, ...action });
+    }
     await emitTelemetry("prompt_executed", { prompt });
     setBusy(false);
     setValue("");
