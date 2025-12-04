@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ModeSelector } from "./ModeSelector";
 import { PromptBar } from "./PromptBar";
 import { emitTelemetry } from "./telemetry";
-import { NavSidebar } from "./NavSidebar";
+import { Sidebar } from "./Sidebar";
 
 type View = "graph" | "roi" | "sequencer" | "review";
 
@@ -33,41 +32,12 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
       <div className="mx-auto w-full max-w-[1800px]">
         <div className="grid grid-cols-[280px_1fr] gap-10">
           {/* Left rail (independent column) */}
-          <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow">
-            <div className="space-y-2">
-              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Projects</p>
-              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                {projects.map((p, idx) => (
-                  <Link
-                    key={p.id}
-                    href={`/project/${p.id}/uxshell`}
-                    className={`flex items-center justify-between px-3 py-2 text-sm font-semibold transition ${
-                      p.id === targetProject
-                        ? "bg-slate-900 text-white border-slate-900"
-                        : "text-slate-800 hover:bg-slate-50"
-                    }`}
-                    style={{ borderTop: idx === 0 ? "none" : "1px solid #e5e7eb" }}
-                  >
-                    <span>{p.name}</span>
-                    <span
-                      className={`text-[0.65rem] uppercase tracking-[0.15em] ${
-                        p.id === targetProject ? "text-white/80" : "text-slate-500"
-                      }`}
-                    >
-                      {p.status}
-                    </span>
-                  </Link>
-                ))}
-                <button className="w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">+ New project</button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Views</p>
-              <NavSidebar projectId={targetProject} />
-            </div>
-
-            <ModeSelector />
+          <div className="flex flex-col gap-6">
+            <Sidebar
+              projectId={targetProject}
+              currentProjectId={targetProject}
+              onModeChange={(mode) => emitTelemetry("uxshell_mode_changed", { projectId: targetProject, mode })}
+            />
           </div>
 
           {/* Command deck full width */}

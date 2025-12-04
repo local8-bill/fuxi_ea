@@ -3,11 +3,6 @@
 import { useEffect, useState } from "react";
 import { emitTelemetry } from "@/components/uxshell/telemetry";
 
-export type NavSectionState = {
-  section: string;
-  expanded: boolean;
-};
-
 const STORAGE_KEY = "fuxi_nav_state";
 
 export function useChevronNav(projectId: string) {
@@ -49,7 +44,7 @@ export function useChevronNav(projectId: string) {
     const next = expanded === section ? null : section;
     setExpanded(next);
     persist(next, activeItem);
-    void emitTelemetry("nav_section_opened", { projectId, sectionTitle: section });
+    void emitTelemetry("nav_section_toggled", { projectId, sectionTitle: section });
   };
 
   const selectItem = (section: string, item: string) => {
