@@ -11,7 +11,7 @@ import { emitTelemetry } from "./telemetry";
 type StageView = "graph" | "roi" | "sequencer" | "review";
 
 // Lazy-load heavy views to keep shell snappy
-const LivingMapEmbed = dynamic(() => import("./embeds/LivingMapEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
+const LivingMapEmbed = dynamic(() => import("./embeds/GraphEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
 const ROISummaryEmbed = dynamic(() => import("./embeds/ROISummaryEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
 const SequencerEmbed = dynamic(() => import("./embeds/SequencerEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
 const ReviewEmbed = dynamic(() => import("./embeds/ReviewEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
