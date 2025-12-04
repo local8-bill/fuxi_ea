@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ModeSelector } from "./ModeSelector";
 import { InsightPanel } from "./InsightPanel";
 import { PromptBar } from "./PromptBar";
@@ -11,6 +11,10 @@ type StageView = "graph" | "roi" | "sequencer" | "review";
 
 export function UnifiedLayout({ projectId }: { projectId?: string }) {
   const [view, setView] = useState<StageView>("graph");
+
+  useEffect(() => {
+    void emitTelemetry("context_switch", { view: "graph", projectId: projectId ?? "demo" });
+  }, [projectId]);
 
   const handleContextSwitch = (next: StageView) => {
     setView(next);
@@ -72,6 +76,18 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
   return (
     <div className="uxshell-root px-6 py-8">
       <div className="uxshell-shell mx-auto max-w-7xl rounded-3xl border border-slate-200 bg-white/70 shadow-xl">
+        <div className="flex items-center justify-between px-6 pt-4">
+          <div>
+            <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Unified Experience</p>
+            <p className="text-lg font-semibold text-slate-900">Project {projectId ?? "demo"}</p>
+          </div>
+          <div className="hidden sm:flex items-center gap-2 text-sm text-slate-600">
+            <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Live</span>
+            <Link href="/uxshell" className="text-indigo-600 font-semibold">
+              Demo Shell
+            </Link>
+          </div>
+        </div>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr_320px] p-6">
           <div className="space-y-6">
             <ModeSelector />
