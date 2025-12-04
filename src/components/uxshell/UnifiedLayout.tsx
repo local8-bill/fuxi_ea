@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { ModeSelector } from "./ModeSelector";
 import { InsightPanel } from "./InsightPanel";
@@ -8,6 +9,16 @@ import { PromptBar } from "./PromptBar";
 import { emitTelemetry } from "./telemetry";
 
 type StageView = "graph" | "roi" | "sequencer" | "review";
+
+// Lazy-load heavy views to keep shell snappy
+const LivingMapEmbed = dynamic(() => import("./embeds/LivingMapEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
+const ROISummaryEmbed = dynamic(() => import("./embeds/ROISummaryEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
+const SequencerEmbed = dynamic(() => import("./embeds/SequencerEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
+const ReviewEmbed = dynamic(() => import("./embeds/ReviewEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
+
+function EmbedSkeleton() {
+  return <div className="uxshell-card rounded-2xl bg-white p-4 h-full animate-pulse text-slate-400">Loading…</div>;
+}
 
 export function UnifiedLayout({ projectId }: { projectId?: string }) {
   const [view, setView] = useState<StageView>("graph");
@@ -26,50 +37,14 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
     const baseCls = "uxshell-card rounded-2xl bg-white p-4 h-full";
     switch (view) {
       case "roi":
-        return (
-          <div className={`${baseCls} flex flex-col gap-2`}>
-            <p className="text-sm font-semibold text-slate-900">ROI Dashboard</p>
-            <p className="text-sm text-slate-600">
-              View ROI summary and cost/benefit trends. This links to the live ROI dashboard for project {targetProject}.
-            </p>
-            <Link href={`/project/${targetProject}/roi-dashboard`} className="text-indigo-600 text-sm font-semibold">
-              Open ROI Dashboard →
-            </Link>
-          </div>
-        );
+        return <ROISummaryEmbed projectId={targetProject} />;
       case "sequencer":
-        return (
-          <div className={`${baseCls} flex flex-col gap-2`}>
-            <p className="text-sm font-semibold text-slate-900">Transformation Sequencer</p>
-            <p className="text-sm text-slate-600">
-              Build multi-stage roadmaps and validate stage costs. This links to the transformation dialogue workspace.
-            </p>
-            <Link href={`/project/${targetProject}/transformation-dialogue`} className="text-indigo-600 text-sm font-semibold">
-              Open Sequencer →
-            </Link>
-          </div>
-        );
+        return <SequencerEmbed projectId={targetProject} />;
       case "review":
-        return (
-          <div className={`${baseCls} flex flex-col gap-2`}>
-            <p className="text-sm font-semibold text-slate-900">Harmonization Review</p>
-            <p className="text-sm text-slate-600">Review harmonized graph deltas before publishing to Digital Enterprise.</p>
-            <Link href={`/project/${targetProject}/harmonization-review`} className="text-indigo-600 text-sm font-semibold">
-              Open Review →
-            </Link>
-          </div>
-        );
+        return <ReviewEmbed projectId={targetProject} />;
       case "graph":
       default:
-        return (
-          <div className={`${baseCls} flex flex-col gap-2`}>
-            <p className="text-sm font-semibold text-slate-900">Living Map (Graph)</p>
-            <p className="text-sm text-slate-600">Explore domains, edges, and timeline overlays.</p>
-            <Link href={`/project/${targetProject}/digital-enterprise`} className="text-indigo-600 text-sm font-semibold">
-              Open Graph →
-            </Link>
-          </div>
-        );
+        return <LivingMapEmbed projectId={targetProject} />;
     }
   };
 
