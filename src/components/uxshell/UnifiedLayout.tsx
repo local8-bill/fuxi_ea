@@ -6,6 +6,7 @@ import { ModeSelector } from "./ModeSelector";
 import { InsightPanel } from "./InsightPanel";
 import { PromptBar } from "./PromptBar";
 import { emitTelemetry } from "./telemetry";
+import { NavSidebar } from "./NavSidebar";
 
 type View = "graph" | "roi" | "sequencer" | "review";
 
@@ -46,26 +47,7 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr_320px] p-6">
           <div className="space-y-6">
             <ModeSelector />
-            <div className="space-y-2">
-              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Projects</p>
-              <div className="uxshell-card rounded-2xl bg-white p-3 space-y-2">
-                {projects.map((p) => (
-                  <Link
-                    key={p.id}
-                    href={`/project/${p.id}/uxshell`}
-                    className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm transition ${
-                      p.id === targetProject ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-800"
-                    }`}
-                  >
-                    <span>{p.name}</span>
-                    <span className="text-[0.65rem] uppercase tracking-[0.15em] text-slate-500">{p.status}</span>
-                  </Link>
-                ))}
-                <button className="w-full rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-700 hover:border-slate-400">
-                  + New project
-                </button>
-              </div>
-            </div>
+            <NavSidebar projectId={targetProject} />
           </div>
 
           <div className="uxshell-stage">
