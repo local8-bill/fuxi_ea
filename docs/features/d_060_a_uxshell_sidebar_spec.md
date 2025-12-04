@@ -69,3 +69,4 @@ Define a **consistent, hierarchical, collapsible sidebar** pattern for all entit
 3. All telemetry events are firing.
 4. No regressions in Command Deck or Insights panes.
 5. Tag build as `UXShell v0.3` upon merge.
+

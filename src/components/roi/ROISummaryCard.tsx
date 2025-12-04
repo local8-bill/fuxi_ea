@@ -9,6 +9,9 @@ interface ForecastPredictions {
   netROI: number | null;
   totalCost: number;
   totalBenefit: number;
+  tccTotal?: number;
+  tccRatio?: number;
+  tccClassification?: "Lean" | "Moderate" | "Complex";
 }
 
 interface ForecastResponse {
@@ -103,4 +106,3 @@ export function ROISummaryCard({ projectId }: { projectId: string }) {
     </Card>
   );
 }
-

@@ -10,10 +10,30 @@ export interface DomainROIData {
   breakEvenMonth: number | null;
 }
 
+export interface TCCBreakdown {
+  project: number;
+  transition: number;
+  operational: number;
+  human: number;
+  risk: number;
+  total: number;
+  ratio: number;
+  classification: "Lean" | "Moderate" | "Complex";
+}
+
 export interface ROIForecast {
   timeline: { month: number; cost: number; benefit: number; roi: number }[];
-  domains: DomainROIData[];
-  predictions: { breakEvenMonth: number | null; netROI: number | null; totalCost: number; totalBenefit: number };
+  domains: (DomainROIData & { tcc?: TCCBreakdown })[];
+  predictions: {
+    breakEvenMonth: number | null;
+    netROI: number | null;
+    totalCost: number;
+    totalBenefit: number;
+    tccTotal: number;
+    tccRatio: number;
+    tccClassification: "Lean" | "Moderate" | "Complex";
+    tccBreakdown: TCCBreakdown;
+  };
 }
 
 const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
@@ -59,6 +79,39 @@ function crossDomainCostFunction(systems: number, avgDependency: number, legacyP
   const basePerSystem = 120_000;
   const total = stageCostFunction(basePerSystem * Math.max(0.6, systems / 10), avgDependency, legacyPenalty) * systems;
   return total;
+}
+
+export function computeTccBreakdown(totalProjectCost: number, seedBasis: string): TCCBreakdown {
+  const seed = seedFromString(seedBasis || "tcc");
+  // Deterministic percentages within directive ranges
+  const pct = (min: number, max: number, offset: number) => min + ((seed + offset) % (max - min + 1)) / 100;
+  const transitionPct = pct(10, 30, 3) / 100;
+  const operationalPct = pct(5, 15, 7) / 100;
+  const humanPct = pct(10, 25, 11) / 100;
+  const riskPct = pct(10, 20, 17) / 100;
+
+  const transition = Math.round(totalProjectCost * transitionPct);
+  const operational = Math.round(totalProjectCost * operationalPct);
+  const human = Math.round(totalProjectCost * humanPct);
+  const risk = Math.round(totalProjectCost * riskPct);
+
+  const incremental = transition + operational + human + risk;
+  const total = totalProjectCost + incremental;
+  const ratio = totalProjectCost === 0 ? 0 : Number((incremental / totalProjectCost).toFixed(3));
+
+  const classification: TCCBreakdown["classification"] =
+    ratio < 0.4 ? "Lean" : ratio < 0.7 ? "Moderate" : "Complex";
+
+  return {
+    project: Math.round(totalProjectCost),
+    transition,
+    operational,
+    human,
+    risk,
+    total,
+    ratio,
+    classification,
+  };
 }
 
 function buildTimeline(domain: string, systems: number, months = 18): DomainROIData {
@@ -132,7 +185,12 @@ export async function forecastByDomain(limit = 5): Promise<ROIForecast> {
     // ignore
   }
 
-  const domainSeries = domainList.map((d) => buildTimeline(d, domainCounts.get(d) ?? 6));
+  const domainSeries = domainList.map((d) => {
+    const series = buildTimeline(d, domainCounts.get(d) ?? 6);
+    const projectCost = series.cost.reduce((s, v) => s + v, 0);
+    const tcc = computeTccBreakdown(projectCost, d);
+    return { ...series, tcc };
+  });
 
   // Aggregate timeline by summing cost/benefit across domains (assumes same month length)
   const months = domainSeries[0]?.months ?? [];
@@ -170,9 +228,41 @@ export async function forecastByDomain(limit = 5): Promise<ROIForecast> {
   const totalBenefit = aggregate.length ? aggregate.at(-1)!.benefit : 0;
   const netROI = totalCost > 0 ? Number(((totalBenefit - totalCost) / totalCost).toFixed(3)) : null;
 
+  const aggregateTcc = (() => {
+    const totalProject = domainSeries.reduce((sum, d) => sum + (d.tcc?.project ?? d.cost.reduce((s, v) => s + v, 0)), 0);
+    const sumTransition = domainSeries.reduce((sum, d) => sum + (d.tcc?.transition ?? 0), 0);
+    const sumOperational = domainSeries.reduce((sum, d) => sum + (d.tcc?.operational ?? 0), 0);
+    const sumHuman = domainSeries.reduce((sum, d) => sum + (d.tcc?.human ?? 0), 0);
+    const sumRisk = domainSeries.reduce((sum, d) => sum + (d.tcc?.risk ?? 0), 0);
+    const incremental = sumTransition + sumOperational + sumHuman + sumRisk;
+    const ratio = totalProject === 0 ? 0 : Number((incremental / totalProject).toFixed(3));
+    const classification: TCCBreakdown["classification"] =
+      ratio < 0.4 ? "Lean" : ratio < 0.7 ? "Moderate" : "Complex";
+
+    return {
+      project: Math.round(totalProject),
+      transition: Math.round(sumTransition),
+      operational: Math.round(sumOperational),
+      human: Math.round(sumHuman),
+      risk: Math.round(sumRisk),
+      total: Math.round(totalProject + incremental),
+      ratio,
+      classification,
+    } satisfies TCCBreakdown;
+  })();
+
   return {
     timeline: aggregate,
     domains: domainSeries,
-    predictions: { breakEvenMonth: aggregateBreakEven, netROI, totalCost, totalBenefit },
+    predictions: {
+      breakEvenMonth: aggregateBreakEven,
+      netROI,
+      totalCost,
+      totalBenefit,
+      tccTotal: aggregateTcc.total,
+      tccRatio: aggregateTcc.ratio,
+      tccClassification: aggregateTcc.classification,
+      tccBreakdown: aggregateTcc,
+    },
   };
 }

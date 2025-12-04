@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { forecastByDomain } from "@/domain/services/roi";
+import { computeTccBreakdown, forecastByDomain } from "@/domain/services/roi";
 import { recordTelemetry } from "@/lib/telemetry/server";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -33,6 +33,8 @@ function buildForecastFromTest(dataset: TestDataset) {
 
   let breakEvenMonth: number | null = null;
   let netROI: number | null = null;
+  let totalCost = 0;
+  let totalBenefit = 0;
   if (timeline.length) {
     const cum = timeline.reduce(
       (acc, cur, idx) => {
@@ -41,14 +43,18 @@ function buildForecastFromTest(dataset: TestDataset) {
         if (breakEvenMonth === null && acc.benefit >= acc.cost) {
           breakEvenMonth = cur.month;
         }
-        if (idx === timeline.length - 1 && acc.cost > 0) {
-          netROI = Number(((acc.benefit - acc.cost) / acc.cost).toFixed(3));
+        if (idx === timeline.length - 1) {
+          totalCost = acc.cost;
+          totalBenefit = acc.benefit;
+          if (acc.cost > 0) {
+            netROI = Number(((acc.benefit - acc.cost) / acc.cost).toFixed(3));
+          }
         }
         return acc;
       },
       { cost: 0, benefit: 0 },
     );
-    if (netROI === null && cum.cost > 0) {
+    if (netROI === null && totalCost > 0) {
       netROI = Number(((cum.benefit - cum.cost) / cum.cost).toFixed(3));
     }
   }
@@ -78,14 +84,27 @@ function buildForecastFromTest(dataset: TestDataset) {
         return c === 0 ? 0 : Number(((b - c) / c).toFixed(3));
       });
 
-      domains.push({ domain, months, cost, benefit, roi, breakEvenMonth: domBreak });
+      const projectCost = cost.reduce((s, v) => s + v, 0);
+      const tcc = computeTccBreakdown(projectCost, domain);
+      domains.push({ domain, months, cost, benefit, roi, breakEvenMonth: domBreak, tcc });
     });
   }
+
+  const tcc = computeTccBreakdown(totalCost, "test_dataset");
 
   return {
     timeline,
     domains,
-    predictions: { breakEvenMonth, netROI },
+    predictions: {
+      breakEvenMonth,
+      netROI,
+      totalCost,
+      totalBenefit,
+      tccTotal: tcc.total,
+      tccRatio: tcc.ratio,
+      tccClassification: tcc.classification,
+      tccBreakdown: tcc,
+    },
   };
 }
 
@@ -112,6 +131,16 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    await recordTelemetry({
+      event_type: "tcc_computed",
+      workspace_id: "roi_dashboard",
+      data: {
+        tccTotal: forecast.predictions.tccTotal,
+        tccRatio: forecast.predictions.tccRatio,
+        classification: forecast.predictions.tccClassification,
+      },
+    });
+
     for (const d of forecast.domains) {
       await recordTelemetry({
         event_type: "roi_stage_calculated",
@@ -121,6 +150,19 @@ export async function GET(req: NextRequest) {
           breakEvenMonth: d.breakEvenMonth,
         },
       });
+
+      if (d.tcc) {
+        await recordTelemetry({
+          event_type: "tcc_computed",
+          workspace_id: "roi_dashboard",
+          data: {
+            domain: d.domain,
+            tccTotal: d.tcc.total,
+            tccRatio: d.tcc.ratio,
+            classification: d.tcc.classification,
+          },
+        });
+      }
     }
 
     return NextResponse.json(forecast);
