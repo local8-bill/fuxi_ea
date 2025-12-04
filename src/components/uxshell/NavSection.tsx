@@ -27,7 +27,7 @@ export function NavSection({ title, icon, items = [], isExpanded = false, onTogg
         onClick={() => onToggle?.(title)}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        className={`flex w-full items-center gap-2 px-1.5 py-1 text-sm font-semibold transition ${
+        className={`flex w-full items-center gap-2 px-1.5 py-1 text-sm font-semibold transition duration-150 ease-in-out ${
           hover ? "bg-slate-50" : "bg-transparent"
         }`}
       >
@@ -52,7 +52,7 @@ function NavItem({ label, path, isActive, onClick }: NavItemProps) {
   return (
     <button
       onClick={() => onClick?.(path)}
-      className={`flex w-full items-center justify-between px-1.5 py-1 text-[12px] transition ${
+      className={`flex w-full items-center justify-between px-1.5 py-[6px] text-[12px] transition duration-150 ease-in-out ${
         isActive ? "font-semibold text-slate-900 border-l-2 border-slate-500 bg-slate-50" : "text-slate-700 hover:bg-slate-50"
       }`}
     >

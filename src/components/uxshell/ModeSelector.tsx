@@ -31,7 +31,7 @@ export function ModeSelector({ onChange }: ModeSelectorProps) {
             <button
               key={r}
               onClick={() => handleChange(r)}
-              className={`w-full rounded-2xl border px-3 py-2 text-sm font-semibold text-left transition ${activeCls}`}
+              className={`w-full rounded-2xl border px-3 py-2.5 text-sm font-semibold text-left transition ${activeCls}`}
             >
               {r}
             </button>
