@@ -1,51 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { ModeSelector } from "./ModeSelector";
 import { InsightPanel } from "./InsightPanel";
 import { PromptBar } from "./PromptBar";
 import { emitTelemetry } from "./telemetry";
 
-type StageView = "graph" | "roi" | "sequencer" | "review";
+type View = "graph" | "roi" | "sequencer" | "review";
 
-// Lazy-load heavy views to keep shell snappy
-const LivingMapEmbed = dynamic(() => import("./embeds/GraphEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
-const ROISummaryEmbed = dynamic(() => import("./embeds/ROISummaryEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
-const SequencerEmbed = dynamic(() => import("./embeds/SequencerEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
-const ReviewEmbed = dynamic(() => import("./embeds/ReviewEmbed"), { ssr: false, loading: () => <EmbedSkeleton /> });
-
-function EmbedSkeleton() {
-  return <div className="uxshell-card rounded-2xl bg-white p-4 h-full animate-pulse text-slate-400">Loading…</div>;
-}
+const projects = [
+  { id: "700am", name: "700am — Core", status: "live" },
+  { id: "951pm", name: "951pm — Pilot", status: "draft" },
+  { id: "demo", name: "Demo Workspace", status: "demo" },
+];
 
 export function UnifiedLayout({ projectId }: { projectId?: string }) {
-  const [view, setView] = useState<StageView>("graph");
+  const [activeView, setActiveView] = useState<View>("graph");
+  const targetProject = projectId ?? projects[0]?.id ?? "demo";
 
   useEffect(() => {
-    void emitTelemetry("context_switch", { view: "graph", projectId: projectId ?? "demo" });
-  }, [projectId]);
+    void emitTelemetry("uxshell_loaded", { projectId: targetProject });
+  }, [targetProject]);
 
-  const handleContextSwitch = (next: StageView) => {
-    setView(next);
-    void emitTelemetry("context_switch", { view: next, projectId });
-  };
-
-  const renderStage = () => {
-    const targetProject = projectId ?? "demo";
-    const baseCls = "uxshell-card rounded-2xl bg-white p-4 h-full";
-    switch (view) {
-      case "roi":
-        return <ROISummaryEmbed projectId={targetProject} />;
-      case "sequencer":
-        return <SequencerEmbed projectId={targetProject} />;
-      case "review":
-        return <ReviewEmbed projectId={targetProject} />;
-      case "graph":
-      default:
-        return <LivingMapEmbed projectId={targetProject} />;
-    }
+  const handleView = (next: View) => {
+    setActiveView(next);
+    void emitTelemetry("uxshell_view_selected", { view: next, projectId: targetProject });
   };
 
   return (
@@ -63,40 +43,89 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
             </Link>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr_320px] p-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr_320px] p-6">
           <div className="space-y-6">
             <ModeSelector />
             <div className="space-y-2">
-              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Views</p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { id: "graph", label: "Graph" },
-                  { id: "roi", label: "ROI" },
-                  { id: "sequencer", label: "Sequencer" },
-                  { id: "review", label: "Review" },
-                ].map((v) => (
-                  <button
-                    key={v.id}
-                    onClick={() => handleContextSwitch(v.id as StageView)}
-                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                      view === v.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
+              <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Projects</p>
+              <div className="uxshell-card rounded-2xl bg-white p-3 space-y-2">
+                {projects.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/project/${p.id}/uxshell`}
+                    className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm transition ${
+                      p.id === targetProject ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-800"
                     }`}
                   >
-                    {v.label}
-                  </button>
+                    <span>{p.name}</span>
+                    <span className="text-[0.65rem] uppercase tracking-[0.15em] text-slate-500">{p.status}</span>
+                  </Link>
                 ))}
+                <button className="w-full rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-700 hover:border-slate-400">
+                  + New project
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="uxshell-stage">{renderStage()}</div>
+          <div className="uxshell-stage">
+            <div className="uxshell-card rounded-2xl bg-white p-6 h-full flex flex-col gap-6">
+              <div className="space-y-1">
+                <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Command Deck</p>
+                <p className="text-2xl font-semibold text-slate-900">What can I help with?</p>
+                <p className="text-sm text-slate-600">Ask in natural language or jump into a view.</p>
+              </div>
+
+              <PromptBar />
+
+              <div className="space-y-3">
+                <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Views</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: "graph", label: "Graph", href: `/project/${targetProject}/digital-enterprise` },
+                    { id: "roi", label: "ROI", href: `/project/${targetProject}/roi-dashboard` },
+                    { id: "sequencer", label: "Sequencer", href: `/project/${targetProject}/transformation-dialogue` },
+                    { id: "review", label: "Review", href: `/project/${targetProject}/harmonization-review` },
+                  ].map((v) => (
+                    <Link
+                      key={v.id}
+                      href={v.href}
+                      onClick={() => handleView(v.id as View)}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold border ${
+                        activeView === v.id ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-800 border-slate-200"
+                      }`}
+                    >
+                      {v.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Status</p>
+                  <p className="text-sm text-slate-800 mt-1">Project {targetProject} · Mode: Architect</p>
+                  <p className="text-sm text-slate-600">Recent activity: ROI dashboard updated, graph synced.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Next actions</p>
+                  <ul className="text-sm text-slate-700 list-disc list-inside space-y-1">
+                    <li>Review graph for Finance domain</li>
+                    <li>Validate ROI assumptions for Commerce</li>
+                    <li>Advance Sequencer to Stage 2</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div className="space-y-6">
-            <InsightPanel />
+            <InsightPanel projectId={targetProject} />
           </div>
         </div>
 
         <div className="border-t border-slate-200 px-6 py-4 bg-white/80 rounded-b-3xl">
+          <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500 mb-2">Quick prompt</p>
           <PromptBar />
         </div>
       </div>
