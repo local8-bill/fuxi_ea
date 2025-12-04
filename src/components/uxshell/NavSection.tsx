@@ -8,6 +8,7 @@ interface NavItemProps {
   path: string;
   isActive?: boolean;
   onClick?: (path: string) => void;
+  rightLabel?: string;
 }
 
 interface NavSectionProps {
@@ -48,7 +49,7 @@ export function NavSection({ title, icon, items = [], isExpanded = false, onTogg
   );
 }
 
-function NavItem({ label, path, isActive, onClick }: NavItemProps) {
+function NavItem({ label, path, isActive, onClick, rightLabel }: NavItemProps) {
   return (
     <button
       onClick={() => onClick?.(path)}
@@ -57,6 +58,7 @@ function NavItem({ label, path, isActive, onClick }: NavItemProps) {
       }`}
     >
       <span>{label}</span>
+      {rightLabel ? <span className="text-[11px] uppercase tracking-[0.12em] text-slate-500">{rightLabel}</span> : null}
     </button>
   );
 }
