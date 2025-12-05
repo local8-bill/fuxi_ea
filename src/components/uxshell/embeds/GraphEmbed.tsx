@@ -13,7 +13,7 @@ export default function GraphEmbed({ projectId }: { projectId: string }) {
       </div>
       <div className="h-[420px] border-t border-slate-100">
         <iframe
-          src={`/project/${projectId}/digital-enterprise`}
+          src={`/project/${projectId}/digital-enterprise?embed=1`}
           className="w-full h-full"
           sandbox="allow-same-origin allow-scripts allow-forms"
           title="Graph"

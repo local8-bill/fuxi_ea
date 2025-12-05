@@ -51,34 +51,15 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
                 <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Command Deck</p>
                 <p className="text-3xl font-semibold text-slate-900">What can I help with?</p>
                 <p className="text-sm text-slate-600">Ask in natural language or jump into a view.</p>
-                <PromptBar
-                  onAction={(action) => {
-                    if (action.target) {
-                      const href = `/project/${targetProject}/${action.target}`;
-                      void emitTelemetry("uxshell_action_invoked", { view: action.view, target: action.target });
-                      window.location.href = href;
-                    }
-                  }}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { id: "graph", label: "Graph", href: `/project/${targetProject}/digital-enterprise` },
-                    { id: "roi", label: "ROI", href: `/project/${targetProject}/roi-dashboard` },
-                    { id: "sequencer", label: "Sequencer", href: `/project/${targetProject}/transformation-dialogue` },
-                    { id: "review", label: "Review", href: `/project/${targetProject}/harmonization-review` },
-                  ].map((v) => (
-                    <Link
-                      key={v.id}
-                      href={v.href}
-                      onClick={() => handleView(v.id as View)}
-                      className={`rounded-full px-4 py-2 text-sm font-semibold border ${
-                        activeView === v.id ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-800 border-slate-200"
-                      }`}
-                    >
-                      {v.label}
-                    </Link>
-                  ))}
-                </div>
+              <PromptBar
+                onAction={(action) => {
+                  if (action.target) {
+                    const href = `/project/${targetProject}/${action.target}`;
+                    void emitTelemetry("uxshell_action_invoked", { view: action.view, target: action.target });
+                    window.location.href = href;
+                  }
+                }}
+              />
               </div>
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">

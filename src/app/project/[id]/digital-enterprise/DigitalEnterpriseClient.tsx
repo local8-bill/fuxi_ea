@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import {
@@ -189,6 +190,8 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     { id: "m2", role: "twin", text: "Tip: toggle timeline to focus on changes." },
   ]);
   const aiInsights = useAIInsights(graphData?.nodes ?? []);
+  const searchParams = useSearchParams();
+  const isEmbed = searchParams.get("embed") === "1";
   const livingMapData = useMemo<LivingMapData>(() => {
     const data = graphData ?? { nodes: [], edges: [] };
     const safeNodes = ((data.nodes ?? []) as LivingNode[]).filter((n): n is LivingNode => !!n);
@@ -575,12 +578,14 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           />
         </div>
       )}
-      <WorkspaceHeader
-        statusLabel="DIGITAL ENTERPRISE"
-        title={`Ecosystem View for Project: ${projectId || "(unknown)"}`}
-        description="These metrics are derived directly from your Lucid architecture diagram. We count unique systems that participate in at least one connection and their integrations."
-      />
-      {showContextBar && (
+      {!isEmbed && (
+        <WorkspaceHeader
+          statusLabel="DIGITAL ENTERPRISE"
+          title={`Ecosystem View for Project: ${projectId || "(unknown)"}`}
+          description="These metrics are derived directly from your Lucid architecture diagram. We count unique systems that participate in at least one connection and their integrations."
+        />
+      )}
+      {showContextBar && !isEmbed && (
         <Card className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-[0.65rem] tracking-[0.22em] text-slate-500 uppercase mb-1">
