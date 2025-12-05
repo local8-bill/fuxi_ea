@@ -11,6 +11,7 @@ import ROISummaryEmbed from "./embeds/ROISummaryEmbed";
 import SequencerEmbed from "./embeds/SequencerEmbed";
 import ReviewEmbed from "./embeds/ReviewEmbed";
 import { useRef } from "react";
+import { ChatPane } from "./ChatPane";
 
 type View = "graph" | "roi" | "sequencer" | "review";
 
@@ -95,6 +96,8 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
                 />
               </div>
             </div>
+
+            <ChatPane projectId={targetProject} />
           </div>
 
           {/* Right rail */}
