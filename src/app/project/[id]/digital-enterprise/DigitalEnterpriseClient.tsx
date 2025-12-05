@@ -789,30 +789,41 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             </Card>
           )}
           {graphEnabled && graphData && (
-            <section className="mt-4 grid gap-4 lg:grid-cols-[320px,1fr]">
+            <section className="mt-4 grid gap-4 xl:grid-cols-[280px,1fr,220px] lg:grid-cols-[260px,1fr]">
               <Card className="p-4 h-full space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-500">
-                    Twin Insights
+                    Twin Voice
                   </p>
-                  <span className="text-[0.7rem] text-slate-500">{displayData.nodes.length} nodes</span>
+                  <span className="text-[0.7rem] text-slate-500">Live</span>
                 </div>
-                <div className="space-y-3">
-                  {Object.values(aiInsights.insights)
-                    .sort((a, b) => (b.opportunityScore ?? 0) - (a.opportunityScore ?? 0))
-                    .slice(0, 4)
-                    .map((insight) => (
-                      <div key={insight.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                        <p className="text-sm font-semibold text-slate-800">{insight.label}</p>
-                        <p className="text-xs text-slate-600">
-                          Domain: {insight.domain ?? "—"} · AI Readiness {Math.round(insight.aiReadiness ?? 0)} ·
-                          Opportunity {Math.round(insight.opportunityScore ?? 0)}
-                        </p>
-                      </div>
-                    ))}
-                  {!Object.keys(aiInsights.insights).length && (
-                    <p className="text-sm text-slate-600">Insights will appear as graph data loads.</p>
-                  )}
+                <div className="space-y-2 text-sm text-slate-700">
+                  <p className="font-semibold text-slate-900">What changed?</p>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li>Graph synced: {displayData.nodes.length} nodes, {displayData.edges.length} edges.</li>
+                    <li>Top domain focus: {aiInsights.insights?.[selectedNodeId ?? ""]?.domain ?? "auto"}</li>
+                    <li>Try: “Highlight integration risk in Finance.”</li>
+                  </ul>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                      onClick={() => {
+                        telemetry.log("twin_voice_prompt", { prompt: "show_risk" });
+                      }}
+                    >
+                      Show risk
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                      onClick={() => {
+                        telemetry.log("twin_voice_prompt", { prompt: "explain_roi" });
+                      }}
+                    >
+                      Explain ROI
+                    </button>
+                  </div>
                 </div>
               </Card>
 
@@ -898,6 +909,22 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                     </span>
                   </div>
                   <NodeInsightPanel node={selectedNode} />
+                </div>
+              </Card>
+
+              <Card className="p-4 space-y-3 hidden xl:block">
+                <div className="flex items-center justify-between">
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-500">
+                    Pulse
+                  </p>
+                  <span className="text-[0.7rem] text-slate-500">Telemetry</span>
+                </div>
+                <div className="space-y-2 text-sm text-slate-700">
+                  <p>Stage: {timelineStages[timelineStage]}</p>
+                  <p>Nodes/Edges: {displayData.nodes.length} / {displayData.edges.length}</p>
+                  <p>Simplification: {Math.round(simplificationScore * 100)}% ({simplificationLabel})</p>
+                  <p>Selected: {selectedNode ? selectedNode.label : "—"}</p>
+                  <p>ROI Month: {roiSim.month}</p>
                 </div>
               </Card>
             </section>
