@@ -788,92 +788,120 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               </div>
             </Card>
           )}
-            {graphEnabled && graphData && (
-            <>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-              Added
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
-              Modified
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
-              Removed
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
-              Unchanged
-            </span>
-            <span className="ml-2 text-[0.75rem] text-slate-500">
-              {displayData.nodes.length} nodes · {displayData.edges.length} edges
-            </span>
-            <button
-              type="button"
-              className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
-              onClick={() => {
-                // flip showOtherDomain via CSS custom event
-                const evt = new CustomEvent("livingmap:toggle-other");
-                window.dispatchEvent(evt);
-              }}
-            >
-              Toggle “Other”
-            </button>
-          </div>
-          <LivingMap
-            data={livingMapData}
-            height={760}
-            selectedNodeId={selectedNodeId ?? undefined}
-            onSelectNode={setSelectedNodeId}
-            searchTerm={search}
-          />
-            </>
+          {graphEnabled && graphData && (
+            <section className="mt-4 grid gap-4 lg:grid-cols-[320px,1fr]">
+              <Card className="p-4 h-full space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-500">
+                    Twin Insights
+                  </p>
+                  <span className="text-[0.7rem] text-slate-500">{displayData.nodes.length} nodes</span>
+                </div>
+                <div className="space-y-3">
+                  {Object.values(aiInsights.insights)
+                    .sort((a, b) => (b.opportunityScore ?? 0) - (a.opportunityScore ?? 0))
+                    .slice(0, 4)
+                    .map((insight) => (
+                      <div key={insight.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <p className="text-sm font-semibold text-slate-800">{insight.label}</p>
+                        <p className="text-xs text-slate-600">
+                          Domain: {insight.domain ?? "—"} · AI Readiness {Math.round(insight.aiReadiness ?? 0)} ·
+                          Opportunity {Math.round(insight.opportunityScore ?? 0)}
+                        </p>
+                      </div>
+                    ))}
+                  {!Object.keys(aiInsights.insights).length && (
+                    <p className="text-sm text-slate-600">Insights will appear as graph data loads.</p>
+                  )}
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+                    Added
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
+                    Modified
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
+                    Removed
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+                    Unchanged
+                  </span>
+                  <button
+                    type="button"
+                    className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      const evt = new CustomEvent("livingmap:toggle-other");
+                      window.dispatchEvent(evt);
+                    }}
+                  >
+                    Toggle “Other”
+                  </button>
+                </div>
+
+                <LivingMap
+                  data={livingMapData}
+                  height={720}
+                  selectedNodeId={selectedNodeId ?? undefined}
+                  onSelectNode={setSelectedNodeId}
+                  searchTerm={search}
+                />
+
+                <div className="mt-4 flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                    <span className="font-semibold text-slate-800">Timeline</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={timelineStages.length - 1}
+                      value={timelineStage}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setTimelineStage(next);
+                        const snap =
+                          stageSnapshotForIndex[next] && stageSnapshotForIndex[next].nodes.length
+                            ? stageSnapshotForIndex[next]
+                            : livingMapData;
+                        telemetry.log(
+                          "timeline_stage_changed",
+                          { stage: timelineStages[next], nodes_visible: snap.nodes.length, edges_visible: snap.edges.length },
+                          simplificationScoreRef.current,
+                        );
+                        window.dispatchEvent(
+                          new CustomEvent("timeline_stage_changed", {
+                            detail: { stage: timelineStages[next], nodes: snap.nodes.length, edges: snap.edges.length },
+                          }),
+                        );
+                      }}
+                    />
+                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                      {timelineStages[timelineStage]}
+                    </span>
+                    <span className="text-slate-400">
+                      ({stageSnapshots.current.nodes.length} → {stageSnapshots.future.nodes.length} nodes)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-600">
+                    <span className="font-semibold text-slate-800">ROI demo timeline</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={24}
+                      value={roiSim.month}
+                      onChange={(e) => roiSim.setMonth(Number(e.target.value))}
+                    />
+                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                      {roiSim.month}
+                    </span>
+                  </div>
+                  <NodeInsightPanel node={selectedNode} />
+                </div>
+              </Card>
+            </section>
           )}
-          <div className="mt-4 flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-              <span className="font-semibold text-slate-800">Timeline</span>
-              <input
-                type="range"
-                min={0}
-                max={timelineStages.length - 1}
-                value={timelineStage}
-                onChange={(e) => {
-                  const next = Number(e.target.value);
-                  setTimelineStage(next);
-                  const snap =
-                    stageSnapshotForIndex[next] && stageSnapshotForIndex[next].nodes.length
-                      ? stageSnapshotForIndex[next]
-                      : livingMapData;
-                  telemetry.log(
-                    "timeline_stage_changed",
-                    { stage: timelineStages[next], nodes_visible: snap.nodes.length, edges_visible: snap.edges.length },
-                    simplificationScoreRef.current,
-                  );
-                  window.dispatchEvent(
-                    new CustomEvent("timeline_stage_changed", {
-                      detail: { stage: timelineStages[next], nodes: snap.nodes.length, edges: snap.edges.length },
-                    }),
-                  );
-                }}
-              />
-              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                {timelineStages[timelineStage]}
-              </span>
-              <span className="text-slate-400">({stageSnapshots.current.nodes.length} → {stageSnapshots.future.nodes.length} nodes)</span>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-slate-600">
-              <span className="font-semibold text-slate-800">ROI demo timeline</span>
-              <input
-                type="range"
-                min={0}
-                max={24}
-                value={roiSim.month}
-                onChange={(e) => roiSim.setMonth(Number(e.target.value))}
-              />
-              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                {roiSim.month}
-              </span>
-            </div>
-            <NodeInsightPanel node={selectedNode} />
-          </div>
           </section>
 
           {/* ROI + Events */}
