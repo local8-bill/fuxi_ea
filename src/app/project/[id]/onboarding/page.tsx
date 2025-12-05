@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
+import { FileUploadPanel } from "@/components/panels/FileUploadPanel";
+import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
 import { useTelemetry } from "@/hooks/useTelemetry";
 
 type Role = "Architect" | "Analyst" | "CIO" | "FP&A";
@@ -10,12 +12,16 @@ type Role = "Architect" | "Analyst" | "CIO" | "FP&A";
 export default function GuidedOnboardingPage() {
   const params = useParams<{ id: string }>();
   const projectId = params?.id ?? "demo";
+  const router = useRouter();
   const telemetry = useTelemetry("guided_onboarding", { projectId });
 
   const [projectName, setProjectName] = useState(projectId);
   const [role, setRole] = useState<Role>("Architect");
   const [goal, setGoal] = useState("Modernize");
   const [pace, setPace] = useState("Moderate");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; size: number }[]>([]);
   const [startItems, setStartItems] = useState<Record<string, boolean>>({
     tech: false,
     roi: false,
@@ -30,14 +36,57 @@ export default function GuidedOnboardingPage() {
     future: true,
   });
 
-  const summary = useMemo(
-    () => ({
-      systems: 27,
-      integrations: 54,
-      domains: 6,
-    }),
-    [],
-  );
+  useEffect(() => {
+    telemetry.log("onboarding_loaded", { projectId });
+  }, [projectId, telemetry]);
+
+  const [summary, setSummary] = useState({
+    systems: 27,
+    integrations: 54,
+    domains: 6,
+  });
+
+  async function handleInventoryUpload(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    telemetry.log("onboarding_artifact_upload_started", { file: file.name, size: file.size });
+
+    try {
+      const name = file.name.toLowerCase();
+      const isCsv = name.endsWith(".csv");
+      if (!isCsv) {
+        throw new Error("Please upload a CSV export for fastest ingestion.");
+      }
+
+      const text = await file.text();
+      const parsed = parseInventoryCsv(text);
+
+      // Best-effort persist to ingestion API (non-blocking for UI)
+      const formData = new FormData();
+      formData.append("file", file);
+      void fetch("/api/ingestion/inventory", { method: "POST", body: formData }).catch((err) =>
+        console.warn("[ONBOARDING] Failed to persist inventory upload", err),
+      );
+
+      setArtifactsUploaded(true);
+      setUploadedFiles((prev) => [...prev, { name: file.name, size: file.size }]);
+      setSummary((prev) => ({
+        ...prev,
+        systems: parsed.uniqueSystems || prev.systems,
+      }));
+      telemetry.log("onboarding_artifacts_uploaded", {
+        files: [file.name],
+        rowCount: parsed.rows.length,
+        uniqueSystems: parsed.uniqueSystems,
+      });
+    } catch (err: any) {
+      const message = err?.message ?? "Upload failed. Try a CSV export.";
+      setUploadError(message);
+      telemetry.log("onboarding_artifact_upload_failed", { file: file.name, error: message });
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const toggleStartItem = (key: string) => {
     setStartItems((prev) => {
@@ -45,11 +94,6 @@ export default function GuidedOnboardingPage() {
       telemetry.log("onboarding_start_choice", { key, active: next[key] });
       return next;
     });
-  };
-
-  const markUpload = () => {
-    setArtifactsUploaded(true);
-    telemetry.log("onboarding_artifacts_uploaded", { files: ["current_state.csv", "future_state.csv"] });
   };
 
   const toggleArtifactType = (key: string) => {
@@ -81,14 +125,20 @@ export default function GuidedOnboardingPage() {
             <button
               type="button"
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-              onClick={() => telemetry.log("onboarding_action", { action: "create_project" })}
+              onClick={() => {
+                telemetry.log("onboarding_action", { action: "create_project" });
+                router.push("/project/new/intake");
+              }}
             >
               Create Project
             </button>
             <button
               type="button"
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-              onClick={() => telemetry.log("onboarding_action", { action: "continue_project" })}
+              onClick={() => {
+                telemetry.log("onboarding_action", { action: "continue_project" });
+                router.push(`/project/${projectId}/uxshell`);
+              }}
             >
               Continue Existing Project
             </button>
@@ -193,13 +243,6 @@ export default function GuidedOnboardingPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                onClick={markUpload}
-              >
-                Upload Files
-              </button>
-              <button
-                type="button"
                 className="rounded-xl border border-slate-100 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
                 onClick={() => telemetry.log("onboarding_action", { action: "skip_manual" })}
               >
@@ -208,10 +251,27 @@ export default function GuidedOnboardingPage() {
             </div>
           </div>
 
+          <FileUploadPanel
+            title="Upload artifacts"
+            helper="Drop a Lucid or inventory CSV to start ingestion. We’ll auto-detect inventory/current/future tags."
+            label={uploading ? "Uploading..." : "Upload CSV"}
+            onFileSelected={handleInventoryUpload}
+          />
+
+          {uploadError && <p className="text-sm text-rose-600">{uploadError}</p>}
+
           {artifactsUploaded && (
             <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-700">Artifacts detected</p>
-              <p className="text-sm text-emerald-800">current_state.csv, future_state.csv</p>
+              {uploadedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 text-sm text-emerald-800">
+                  {uploadedFiles.map((file) => (
+                    <span key={file.name} className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm">
+                      {file.name} ({Math.round(file.size / 1024)} KB)
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="flex flex-wrap gap-2 text-sm text-slate-800">
                 {["inventory", "current", "future"].map((key) => (
                   <button
@@ -272,14 +332,20 @@ export default function GuidedOnboardingPage() {
             <button
               type="button"
               className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-              onClick={() => telemetry.log("onboarding_action", { action: "open_roi_dashboard" })}
+              onClick={() => {
+                telemetry.log("onboarding_action", { action: "open_roi_dashboard" });
+                router.push(`/project/${projectId}/roi-dashboard`);
+              }}
             >
               View ROI Dashboard
             </button>
             <button
               type="button"
               className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-              onClick={() => telemetry.log("onboarding_action", { action: "open_harmonization_review" })}
+              onClick={() => {
+                telemetry.log("onboarding_action", { action: "open_harmonization_review" });
+                router.push(`/project/${projectId}/harmonization-review`);
+              }}
             >
               Go to Harmonization Review
             </button>
