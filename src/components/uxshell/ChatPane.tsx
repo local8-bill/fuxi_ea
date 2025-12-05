@@ -20,7 +20,19 @@ export function ChatPane({ projectId }: { projectId: string }) {
   );
 
   useEffect(() => {
-    // seed a welcome message
+    const key = `uxshell_chat_${projectId}`;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Message[];
+        if (Array.isArray(parsed)) {
+          setMessages(parsed);
+          return;
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
     setMessages([
       {
         role: "assistant",
@@ -29,6 +41,15 @@ export function ChatPane({ projectId }: { projectId: string }) {
       },
     ]);
   }, []);
+
+  useEffect(() => {
+    const key = `uxshell_chat_${projectId}`;
+    try {
+      localStorage.setItem(key, JSON.stringify(messages.slice(-50)));
+    } catch {
+      // ignore quota errors
+    }
+  }, [messages, projectId]);
 
   const sendMessage = () => {
     const trimmed = input.trim();
