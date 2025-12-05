@@ -6,6 +6,7 @@ import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { Card } from "@/components/ui/Card";
 import { ROIChart } from "@/components/ROIChart";
 import { ROISummaryCard } from "@/components/roi/ROISummaryCard";
+import { TCCSummaryCard } from "@/components/roi/TCCSummaryCard";
 
 interface DomainROIData {
   domain: string;
@@ -19,7 +20,25 @@ interface DomainROIData {
 interface ROIForecast {
   timeline: { month: number; cost: number; benefit: number; roi: number }[];
   domains: DomainROIData[];
-  predictions: { breakEvenMonth: number | null; netROI: number | null; totalCost: number; totalBenefit: number };
+  predictions: {
+    breakEvenMonth: number | null;
+    netROI: number | null;
+    totalCost: number;
+    totalBenefit: number;
+    tccTotal: number;
+    tccRatio: number;
+    tccClassification: "Lean" | "Moderate" | "Complex";
+    tccBreakdown: {
+      project: number;
+      transition: number;
+      operational: number;
+      human: number;
+      risk: number;
+      total: number;
+      ratio: number;
+      classification: string;
+    };
+  };
 }
 
 export default function ROIDashboardPage() {
@@ -89,6 +108,7 @@ export default function ROIDashboardPage() {
       {forecast && (
         <div className="space-y-6 mt-4">
           <ROISummaryCard projectId={projectId} />
+          <TCCSummaryCard projectId={projectId} />
           <Card>
             <div className="grid gap-3 md:grid-cols-[2fr,1fr]">
               <ROIChart

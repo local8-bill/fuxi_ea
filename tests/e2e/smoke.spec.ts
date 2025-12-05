@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test("home page renders", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText(/Fuxi/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Fuxi/i })).toBeVisible();
 });
 
 test("verification page responds", async ({ page }) => {

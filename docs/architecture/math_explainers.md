@@ -174,11 +174,6 @@ Mapping is controlled via `domain/services/roiEstimator.ts`.
 
 ---
 
-**Next Steps:**
-- Use these functions in hypothesis (T-shirt) mode for early-stage modeling.
-- Extend to real financials for stage 2 validation.
-- ROI Dashboard: implement cost/benefit/ROI overlays with explainable tooltips.
-
 ## Multi-Domain ROI Model and Narrative (D051 Reference)
 
 ### 1. Overview
@@ -237,3 +232,76 @@ ROI_t = \frac{\sum_d V_{d,t} - \sum_d C_{d,t}}{\sum_d C_{d,t}}
 - `/api/roi/forecast?domain=true` returns both timeline and per-domain ROI arrays.
 - Break-even occurs when \(V_{d,t}=C_{d,t}\).
 - ROI Dashboard (D051) visualizes domain curves and cumulative value mix.
+
+---
+
+## 9. Total Cost of Change (TCC)
+
+The **Total Cost of Change (TCC)** represents the *complete economic impact* of a transformation — combining direct project costs, operational disruption, integration complexity, and people/process adaptation into a single explainable metric.  
+It extends the ROI and Stage Cost functions to give a holistic view of investment magnitude.
+
+### Formula
+
+\[
+TCC = C_{project} + C_{transition} + C_{operational} + C_{human} + C_{risk}
+\]
+
+| Symbol | Description | Example Range |
+|---------|--------------|----------------|
+| **C_project** | Core implementation + license + partner cost | $100K–$5M |
+| **C_transition** | Cost to transition data, integrations, and configurations | 10–30% of C_project |
+| **C_operational** | Cost of downtime, performance degradation, or dual-running | 5–15% of C_project |
+| **C_human** | Training, enablement, change management overhead | 10–25% of C_project |
+| **C_risk** | Contingency for overruns or scope creep | 10–20% of total |
+
+---
+
+### Derived View: Composition Ratio
+
+\[
+TCC_{ratio} = \frac{C_{transition} + C_{operational} + C_{human} + C_{risk}}{C_{project}}
+\]
+
+This ratio shows how “heavy” the change effort is beyond the core project budget.
+
+| TCC Ratio | Classification | Description |
+|------------|----------------|-------------|
+| < 0.3 | **Lean** | Well-contained change; minimal disruption |
+| 0.3–0.6 | **Moderate** | Some overlap/dual-run complexity |
+| > 0.6 | **Complex** | Major multi-domain, high-change sensitivity |
+
+---
+
+### Visualization Guidance
+
+In the ROI dashboard and sequencer:
+
+- Represent TCC as a **stacked bar**:  
+  - Base = `C_project`  
+  - Segments = transition / operational / human / risk  
+- Show **TCC Ratio** next to ROI% for interpretability.  
+- Tooltip displays source formulas and cost breakdown per domain.  
+- Telemetry event: `tcc_computed` when total cost is finalized per stage or domain.
+
+---
+
+### Example (ERP Modernization)
+
+| Component | Value ($) |
+|------------|------------:|
+| C_project | 2,000,000 |
+| C_transition | 400,000 |
+| C_operational | 250,000 |
+| C_human | 300,000 |
+| C_risk | 200,000 |
+| **TCC** | **3,150,000** |
+| **TCC Ratio** | **0.575 (Moderate)** |
+
+---
+
+### Implementation Notes
+- Implemented in `/domain/services/roiCalculator.ts` as an extension of `stageCostFunction`.
+- Exposed via `/api/roi/forecast` under `tcc_total` and `tcc_ratio`.
+- Logged in telemetry with event `tcc_computed`.
+- Required for any transformation > $500K or multi-domain.
+

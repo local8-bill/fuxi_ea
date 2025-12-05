@@ -70,3 +70,6 @@ src_clean*/
 .zshrc
 .zshenv
 .config/*.env
+
+# IDE
+fuxi_ea.code-workspace

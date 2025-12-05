@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import {
@@ -182,7 +183,15 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const [impact, setImpact] = useState<SystemImpact | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [twinMessages, setTwinMessages] = useState<
+    { id: string; role: "twin" | "user"; text: string }[]
+  >([
+    { id: "m1", role: "twin", text: "Graph synced. Want a risk or ROI view?" },
+    { id: "m2", role: "twin", text: "Tip: toggle timeline to focus on changes." },
+  ]);
   const aiInsights = useAIInsights(graphData?.nodes ?? []);
+  const searchParams = useSearchParams();
+  const isEmbed = searchParams.get("embed") === "1";
   const livingMapData = useMemo<LivingMapData>(() => {
     const data = graphData ?? { nodes: [], edges: [] };
     const safeNodes = ((data.nodes ?? []) as LivingNode[]).filter((n): n is LivingNode => !!n);
@@ -569,12 +578,14 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           />
         </div>
       )}
-      <WorkspaceHeader
-        statusLabel="DIGITAL ENTERPRISE"
-        title={`Ecosystem View for Project: ${projectId || "(unknown)"}`}
-        description="These metrics are derived directly from your Lucid architecture diagram. We count unique systems that participate in at least one connection and their integrations."
-      />
-      {showContextBar && (
+      {!isEmbed && (
+        <WorkspaceHeader
+          statusLabel="DIGITAL ENTERPRISE"
+          title={`Ecosystem View for Project: ${projectId || "(unknown)"}`}
+          description="These metrics are derived directly from your Lucid architecture diagram. We count unique systems that participate in at least one connection and their integrations."
+        />
+      )}
+      {showContextBar && !isEmbed && (
         <Card className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-[0.65rem] tracking-[0.22em] text-slate-500 uppercase mb-1">
@@ -623,7 +634,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
         </Card>
       )}
 
-      {assistVisible && assistMessage && (
+      {assistVisible && assistMessage && !isEmbed && (
         <Card className="mb-4 border-amber-200 bg-amber-50">
           <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
             NEXT STEP
@@ -631,6 +642,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           <p className="text-xs text-amber-800">{assistMessage}</p>
         </Card>
       )}
+          {!isEmbed && (
           <div className="mb-6 flex flex-wrap items-center gap-2">
             <p className="text-[0.7rem] text-slate-500">Layer view:</p>
             {(["domains", "systems", "integrations"] as const).map((depth) => (
@@ -658,6 +670,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               </span>
             )}
           </div>
+          )}
 
       {loading && (
         <div className="mt-10 text-sm text-gray-500">
@@ -694,54 +707,58 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
           {/* Top systems table */}
         <section className="mt-12">
-          <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
-          <p className="text-xs text-gray-500 mb-4">
-            Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
-          </p>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-            <label className="flex items-center gap-2">
-              <span className="text-slate-700 font-semibold">Search</span>
-              <input
-                className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-slate-900 focus:outline-none"
-                placeholder="System or domain"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </label>
-          </div>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-700">Edge kinds:</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#2563eb" }} />API</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />Data</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />Workflow</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />Manual/Other</span>
-          </div>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-700">Overlays:</span>
-            {(["roi", "cost", "risk", "modernization"] as const).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => {
-                  setOverlays((prev) => {
-                    const next = { ...prev, [key]: !prev[key] };
-                    telemetry.log(
-                      "overlay_active",
-                      { overlay: key, active: next[key] },
-                      simplificationScoreRef.current,
-                    );
-                    return next;
-                  });
-                }}
-                className={`rounded-full border px-3 py-1 font-semibold ${
-                  overlays[key] ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
-                }`}
-              >
-                {key === "roi" ? "ROI" : key === "cost" ? "Cost" : key === "risk" ? "Risk" : "Modernization"}
-              </button>
-            ))}
-            <span className="text-slate-400">(decorative until overlays wired)</span>
-          </div>
+          {!isEmbed && (
+            <>
+              <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
+              <p className="text-xs text-gray-500 mb-4">
+                Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
+              </p>
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                <label className="flex items-center gap-2">
+                  <span className="text-slate-700 font-semibold">Search</span>
+                  <input
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-slate-900 focus:outline-none"
+                    placeholder="System or domain"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                <span className="font-semibold text-slate-700">Edge kinds:</span>
+                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#2563eb" }} />API</span>
+                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />Data</span>
+                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />Workflow</span>
+                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />Manual/Other</span>
+              </div>
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                <span className="font-semibold text-slate-700">Overlays:</span>
+                {(["roi", "cost", "risk", "modernization"] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setOverlays((prev) => {
+                        const next = { ...prev, [key]: !prev[key] };
+                        telemetry.log(
+                          "overlay_active",
+                          { overlay: key, active: next[key] },
+                          simplificationScoreRef.current,
+                        );
+                        return next;
+                      });
+                    }}
+                    className={`rounded-full border px-3 py-1 font-semibold ${
+                      overlays[key] ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
+                    }`}
+                  >
+                    {key === "roi" ? "ROI" : key === "cost" ? "Cost" : key === "risk" ? "Risk" : "Modernization"}
+                  </button>
+                ))}
+                <span className="text-slate-400">(decorative until overlays wired)</span>
+              </div>
+            </>
+          )}
           {graphError && (
             <Card className="mb-3 border-rose-200 bg-rose-50">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -767,7 +784,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               </div>
             </Card>
           )}
-          {!graphEnabled && !graphError && (
+          {!graphEnabled && !graphError && !isEmbed && (
             <Card className="mb-3 border-amber-200 bg-amber-50">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -788,184 +805,266 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               </div>
             </Card>
           )}
-            {graphEnabled && graphData && (
-            <>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-              Added
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
-              Modified
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
-              Removed
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
-              Unchanged
-            </span>
-            <span className="ml-2 text-[0.75rem] text-slate-500">
-              {displayData.nodes.length} nodes · {displayData.edges.length} edges
-            </span>
-            <button
-              type="button"
-              className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
-              onClick={() => {
-                // flip showOtherDomain via CSS custom event
-                const evt = new CustomEvent("livingmap:toggle-other");
-                window.dispatchEvent(evt);
-              }}
+          {graphEnabled && graphData && (
+            <section
+              className={
+                "mt-4 grid gap-4 " +
+                (isEmbed ? "grid-cols-1" : "xl:grid-cols-[320px,1fr,220px] lg:grid-cols-[280px,1fr]")
+              }
             >
-              Toggle “Other”
-            </button>
-          </div>
-          <LivingMap
-            data={livingMapData}
-            height={760}
-            selectedNodeId={selectedNodeId ?? undefined}
-            onSelectNode={setSelectedNodeId}
-            searchTerm={search}
-          />
+              {!isEmbed && (
+              <Card className="p-4 h-full space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-500">
+                    Twin Conversation
+                  </p>
+                  <span className="text-[0.7rem] text-slate-500">Live</span>
+                </div>
+                <div className="space-y-3 text-sm text-slate-700">
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {twinMessages.map((m) => (
+                      <div
+                        key={m.id}
+                        className={`rounded-xl px-3 py-2 ${m.role === "twin" ? "bg-slate-100 text-slate-800" : "bg-slate-900 text-white"}`}
+                      >
+                        {m.text}
+                      </div>
+                    ))}
+                  </div>
+                  <form
+                    className="flex items-center gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const formData = new FormData(e.currentTarget);
+                      const val = String(formData.get("prompt") ?? "").trim();
+                      if (!val) return;
+                      const next = { id: `u-${Date.now()}`, role: "user" as const, text: val };
+                      setTwinMessages((prev) => [...prev.slice(-4), next]);
+                      telemetry.log("twin_voice_prompt", { prompt: val });
+                      e.currentTarget.reset();
+                    }}
+                  >
+                    <input
+                      name="prompt"
+                      type="text"
+                      placeholder='Ask (e.g., "Highlight integration risk for Finance")'
+                      className="w-full rounded-full border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                    >
+                      Send
+                    </button>
+                  </form>
+                </div>
+              </Card>
+              )}
+
+              <Card className="p-4">
+                {!isEmbed && (
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+                    Added
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
+                    Modified
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
+                    Removed
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+                    Unchanged
+                  </span>
+                  <button
+                    type="button"
+                    className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      const evt = new CustomEvent("livingmap:toggle-other");
+                      window.dispatchEvent(evt);
+                    }}
+                >
+                  Toggle “Other”
+                </button>
+                </div>
+                )}
+
+                <LivingMap
+                  data={livingMapData}
+                  height={720}
+                  selectedNodeId={selectedNodeId ?? undefined}
+                  onSelectNode={setSelectedNodeId}
+                  searchTerm={search}
+                />
+
+                {!isEmbed && (
+                <div className="mt-4 flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                    <span className="font-semibold text-slate-800">Timeline</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={timelineStages.length - 1}
+                      value={timelineStage}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setTimelineStage(next);
+                        const snap =
+                          stageSnapshotForIndex[next] && stageSnapshotForIndex[next].nodes.length
+                            ? stageSnapshotForIndex[next]
+                            : livingMapData;
+                        telemetry.log(
+                          "timeline_stage_changed",
+                          { stage: timelineStages[next], nodes_visible: snap.nodes.length, edges_visible: snap.edges.length },
+                          simplificationScoreRef.current,
+                        );
+                        window.dispatchEvent(
+                          new CustomEvent("timeline_stage_changed", {
+                            detail: { stage: timelineStages[next], nodes: snap.nodes.length, edges: snap.edges.length },
+                          }),
+                        );
+                      }}
+                    />
+                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                      {timelineStages[timelineStage]}
+                    </span>
+                    <span className="text-slate-400">
+                      ({stageSnapshots.current.nodes.length} → {stageSnapshots.future.nodes.length} nodes)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-600">
+                    <span className="font-semibold text-slate-800">ROI demo timeline</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={24}
+                      value={roiSim.month}
+                      onChange={(e) => roiSim.setMonth(Number(e.target.value))}
+                    />
+                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                      {roiSim.month}
+                    </span>
+                  </div>
+                  <NodeInsightPanel node={selectedNode} />
+                </div>
+                )}
+              </Card>
+
+              {!isEmbed && (
+              <Card className="p-4 space-y-3 hidden xl:block">
+                <div className="flex items-center justify-between">
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-500">
+                    Pulse
+                  </p>
+                  <span className="text-[0.7rem] text-slate-500">Telemetry</span>
+                </div>
+                <div className="space-y-2 text-sm text-slate-700">
+                  <p>Stage: {timelineStages[timelineStage]}</p>
+                  <p>Nodes/Edges: {displayData.nodes.length} / {displayData.edges.length}</p>
+                  <p>Simplification: {Math.round(simplificationScore * 100)}% ({simplificationLabel})</p>
+                  <p>Selected: {selectedNode ? selectedNode.label : "—"}</p>
+                  <p>ROI Month: {roiSim.month}</p>
+                </div>
+              </Card>
+              )}
+            </section>
+          )}
+          </section>
+
+          {!isEmbed && (
+            <>
+              {/* ROI + Events */}
+              <section className="mt-12 grid gap-4 lg:grid-cols-[2fr,1fr]">
+                <ROIChart
+                  data={roiSim.timeline}
+                  breakEvenMonth={roiSim.breakEvenMonth}
+                  currentMonth={roiSim.month}
+                />
+                <EventLogPanel events={roiSim.filteredEvents} />
+              </section>
+
+              {/* Scenario Compare (beta) */}
+              <section className="mt-12">
+                <ScenarioComparePanel
+                  baseline={{
+                    systems: stats.systemsFuture ?? 0,
+                    integrations: stats.integrationsFuture ?? 0,
+                  }}
+                  roiSignal={roiSim.breakEvenMonth}
+                />
+              </section>
+
+              {/* Top systems table */}
+              <section className="mt-12">
+                <h2 className="text-sm font-semibold mb-1">
+                  HIGHEST-CONNECTIVITY SYSTEMS
+                </h2>
+                <p className="text-xs text-gray-500 mb-4">
+                  Top 10 systems by number of integrations in this ecosystem view.
+                </p>
+
+                <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+                          #
+                        </th>
+                        <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+                          SYSTEM
+                        </th>
+                        <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+                          INTEGRATIONS
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.topSystems.map((s, idx) => {
+                        const name = resolveSystemName(s);
+                        const count = resolveIntegrationCount(s);
+                        const key = s.systemId ?? s.id ?? `${name}-${idx}`;
+
+                        return (
+                          <tr
+                            key={key}
+                            className={
+                              idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"
+                            }
+                          >
+                            <td className="px-4 py-2 text-xs text-gray-500">
+                              {idx + 1}
+                            </td>
+                            <td className="px-4 py-2 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => handleSelectSystem(name, count)}
+                                className="text-left w-full underline-offset-2 hover:underline"
+                              >
+                                {name}
+                              </button>
+                            </td>
+                            <td className="px-4 py-2 text-xs">
+                              {formatNumber(count)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {stats.topSystems.length === 0 && (
+                        <tr>
+                          <td
+                            className="px-4 py-4 text-xs text-gray-500"
+                            colSpan={3}
+                          >
+                            No systems with integrations detected yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </>
           )}
-          <div className="mt-4 flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-              <span className="font-semibold text-slate-800">Timeline</span>
-              <input
-                type="range"
-                min={0}
-                max={timelineStages.length - 1}
-                value={timelineStage}
-                onChange={(e) => {
-                  const next = Number(e.target.value);
-                  setTimelineStage(next);
-                  const snap =
-                    stageSnapshotForIndex[next] && stageSnapshotForIndex[next].nodes.length
-                      ? stageSnapshotForIndex[next]
-                      : livingMapData;
-                  telemetry.log(
-                    "timeline_stage_changed",
-                    { stage: timelineStages[next], nodes_visible: snap.nodes.length, edges_visible: snap.edges.length },
-                    simplificationScoreRef.current,
-                  );
-                  window.dispatchEvent(
-                    new CustomEvent("timeline_stage_changed", {
-                      detail: { stage: timelineStages[next], nodes: snap.nodes.length, edges: snap.edges.length },
-                    }),
-                  );
-                }}
-              />
-              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                {timelineStages[timelineStage]}
-              </span>
-              <span className="text-slate-400">({stageSnapshots.current.nodes.length} → {stageSnapshots.future.nodes.length} nodes)</span>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-slate-600">
-              <span className="font-semibold text-slate-800">ROI demo timeline</span>
-              <input
-                type="range"
-                min={0}
-                max={24}
-                value={roiSim.month}
-                onChange={(e) => roiSim.setMonth(Number(e.target.value))}
-              />
-              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                {roiSim.month}
-              </span>
-            </div>
-            <NodeInsightPanel node={selectedNode} />
-          </div>
-          </section>
-
-          {/* ROI + Events */}
-          <section className="mt-12 grid gap-4 lg:grid-cols-[2fr,1fr]">
-            <ROIChart
-              data={roiSim.timeline}
-              breakEvenMonth={roiSim.breakEvenMonth}
-              currentMonth={roiSim.month}
-            />
-            <EventLogPanel events={roiSim.filteredEvents} />
-          </section>
-
-          {/* Scenario Compare (beta) */}
-          <section className="mt-12">
-            <ScenarioComparePanel
-              baseline={{
-                systems: stats.systemsFuture ?? 0,
-                integrations: stats.integrationsFuture ?? 0,
-              }}
-              roiSignal={roiSim.breakEvenMonth}
-            />
-          </section>
-
-          {/* Top systems table */}
-          <section className="mt-12">
-            <h2 className="text-sm font-semibold mb-1">
-              HIGHEST-CONNECTIVITY SYSTEMS
-            </h2>
-            <p className="text-xs text-gray-500 mb-4">
-              Top 10 systems by number of integrations in this ecosystem view.
-            </p>
-
-            <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                      #
-                    </th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                      SYSTEM
-                    </th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                      INTEGRATIONS
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.topSystems.map((s, idx) => {
-                    const name = resolveSystemName(s);
-                    const count = resolveIntegrationCount(s);
-                    const key = s.systemId ?? s.id ?? `${name}-${idx}`;
-
-                    return (
-                      <tr
-                        key={key}
-                        className={
-                          idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"
-                        }
-                      >
-                        <td className="px-4 py-2 text-xs text-gray-500">
-                          {idx + 1}
-                        </td>
-                        <td className="px-4 py-2 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => handleSelectSystem(name, count)}
-                            className="text-left w-full underline-offset-2 hover:underline"
-                          >
-                            {name}
-                          </button>
-                        </td>
-                        <td className="px-4 py-2 text-xs">
-                          {formatNumber(count)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {stats.topSystems.length === 0 && (
-                    <tr>
-                      <td
-                        className="px-4 py-4 text-xs text-gray-500"
-                        colSpan={3}
-                      >
-                        No systems with integrations detected yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
 
           {/* Impact panel */}
           <section className="mt-10">
