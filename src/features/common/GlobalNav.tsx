@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 type NavItem = {
   label: string;
@@ -11,6 +11,11 @@ type NavItem = {
 
 export function GlobalNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  if (searchParams?.get("embed") === "1") {
+    return null;
+  }
 
   // Try to extract /project/[id]/... from the current path
   let projectId: string | null = null;
