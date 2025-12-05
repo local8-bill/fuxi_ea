@@ -102,7 +102,7 @@ export function Sidebar({ projectId, currentProjectId, onModeChange }: SidebarPr
               onModeChange?.(m);
             },
           }))}
-          isExpanded={expanded ? expanded === "Modes" : true}
+          isExpanded={expanded ? expanded === "Modes" : false}
           onToggle={toggleSection}
         />
       </div>

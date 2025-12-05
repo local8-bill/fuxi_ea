@@ -6,7 +6,7 @@ import { emitTelemetry } from "@/components/uxshell/telemetry";
 const STORAGE_KEY = "fuxi_nav_state";
 
 export function useChevronNav(projectId: string) {
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>("Projects");
   const [activeItem, setActiveItem] = useState<string | null>(null);
 
   useEffect(() => {
