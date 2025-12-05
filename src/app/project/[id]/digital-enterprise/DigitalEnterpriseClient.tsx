@@ -634,7 +634,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
         </Card>
       )}
 
-      {assistVisible && assistMessage && (
+      {assistVisible && assistMessage && !isEmbed && (
         <Card className="mb-4 border-amber-200 bg-amber-50">
           <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
             NEXT STEP
@@ -642,6 +642,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           <p className="text-xs text-amber-800">{assistMessage}</p>
         </Card>
       )}
+          {!isEmbed && (
           <div className="mb-6 flex flex-wrap items-center gap-2">
             <p className="text-[0.7rem] text-slate-500">Layer view:</p>
             {(["domains", "systems", "integrations"] as const).map((depth) => (
@@ -669,6 +670,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               </span>
             )}
           </div>
+          )}
 
       {loading && (
         <div className="mt-10 text-sm text-gray-500">
@@ -705,54 +707,58 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
           {/* Top systems table */}
         <section className="mt-12">
-          <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
-          <p className="text-xs text-gray-500 mb-4">
-            Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
-          </p>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-            <label className="flex items-center gap-2">
-              <span className="text-slate-700 font-semibold">Search</span>
-              <input
-                className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-slate-900 focus:outline-none"
-                placeholder="System or domain"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </label>
-          </div>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-700">Edge kinds:</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#2563eb" }} />API</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />Data</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />Workflow</span>
-            <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />Manual/Other</span>
-          </div>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-700">Overlays:</span>
-            {(["roi", "cost", "risk", "modernization"] as const).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => {
-                  setOverlays((prev) => {
-                    const next = { ...prev, [key]: !prev[key] };
-                    telemetry.log(
-                      "overlay_active",
-                      { overlay: key, active: next[key] },
-                      simplificationScoreRef.current,
-                    );
-                    return next;
-                  });
-                }}
-                className={`rounded-full border px-3 py-1 font-semibold ${
-                  overlays[key] ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
-                }`}
-              >
-                {key === "roi" ? "ROI" : key === "cost" ? "Cost" : key === "risk" ? "Risk" : "Modernization"}
-              </button>
-            ))}
-            <span className="text-slate-400">(decorative until overlays wired)</span>
-          </div>
+          {!isEmbed && (
+            <>
+              <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
+              <p className="text-xs text-gray-500 mb-4">
+                Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
+              </p>
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                <label className="flex items-center gap-2">
+                  <span className="text-slate-700 font-semibold">Search</span>
+                  <input
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-slate-900 focus:outline-none"
+                    placeholder="System or domain"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                <span className="font-semibold text-slate-700">Edge kinds:</span>
+                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#2563eb" }} />API</span>
+                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />Data</span>
+                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />Workflow</span>
+                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />Manual/Other</span>
+              </div>
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                <span className="font-semibold text-slate-700">Overlays:</span>
+                {(["roi", "cost", "risk", "modernization"] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setOverlays((prev) => {
+                        const next = { ...prev, [key]: !prev[key] };
+                        telemetry.log(
+                          "overlay_active",
+                          { overlay: key, active: next[key] },
+                          simplificationScoreRef.current,
+                        );
+                        return next;
+                      });
+                    }}
+                    className={`rounded-full border px-3 py-1 font-semibold ${
+                      overlays[key] ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
+                    }`}
+                  >
+                    {key === "roi" ? "ROI" : key === "cost" ? "Cost" : key === "risk" ? "Risk" : "Modernization"}
+                  </button>
+                ))}
+                <span className="text-slate-400">(decorative until overlays wired)</span>
+              </div>
+            </>
+          )}
           {graphError && (
             <Card className="mb-3 border-rose-200 bg-rose-50">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -778,7 +784,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
               </div>
             </Card>
           )}
-          {!graphEnabled && !graphError && (
+          {!graphEnabled && !graphError && !isEmbed && (
             <Card className="mb-3 border-amber-200 bg-amber-50">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -800,7 +806,13 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             </Card>
           )}
           {graphEnabled && graphData && (
-            <section className="mt-4 grid gap-4 xl:grid-cols-[320px,1fr,220px] lg:grid-cols-[280px,1fr]">
+            <section
+              className={
+                "mt-4 grid gap-4 " +
+                (isEmbed ? "grid-cols-1" : "xl:grid-cols-[320px,1fr,220px] lg:grid-cols-[280px,1fr]")
+              }
+            >
+              {!isEmbed && (
               <Card className="p-4 h-full space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-500">
@@ -847,8 +859,10 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                   </form>
                 </div>
               </Card>
+              )}
 
               <Card className="p-4">
+                {!isEmbed && (
                 <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
                   <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
                     Added
@@ -869,10 +883,11 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                       const evt = new CustomEvent("livingmap:toggle-other");
                       window.dispatchEvent(evt);
                     }}
-                  >
-                    Toggle “Other”
-                  </button>
+                >
+                  Toggle “Other”
+                </button>
                 </div>
+                )}
 
                 <LivingMap
                   data={livingMapData}
@@ -882,6 +897,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                   searchTerm={search}
                 />
 
+                {!isEmbed && (
                 <div className="mt-4 flex flex-col gap-3">
                   <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
                     <span className="font-semibold text-slate-800">Timeline</span>
@@ -931,8 +947,10 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                   </div>
                   <NodeInsightPanel node={selectedNode} />
                 </div>
+                )}
               </Card>
 
+              {!isEmbed && (
               <Card className="p-4 space-y-3 hidden xl:block">
                 <div className="flex items-center justify-between">
                   <p className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-500">
@@ -948,100 +966,105 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
                   <p>ROI Month: {roiSim.month}</p>
                 </div>
               </Card>
+              )}
             </section>
           )}
           </section>
 
-          {/* ROI + Events */}
-          <section className="mt-12 grid gap-4 lg:grid-cols-[2fr,1fr]">
-            <ROIChart
-              data={roiSim.timeline}
-              breakEvenMonth={roiSim.breakEvenMonth}
-              currentMonth={roiSim.month}
-            />
-            <EventLogPanel events={roiSim.filteredEvents} />
-          </section>
+          {!isEmbed && (
+            <>
+              {/* ROI + Events */}
+              <section className="mt-12 grid gap-4 lg:grid-cols-[2fr,1fr]">
+                <ROIChart
+                  data={roiSim.timeline}
+                  breakEvenMonth={roiSim.breakEvenMonth}
+                  currentMonth={roiSim.month}
+                />
+                <EventLogPanel events={roiSim.filteredEvents} />
+              </section>
 
-          {/* Scenario Compare (beta) */}
-          <section className="mt-12">
-            <ScenarioComparePanel
-              baseline={{
-                systems: stats.systemsFuture ?? 0,
-                integrations: stats.integrationsFuture ?? 0,
-              }}
-              roiSignal={roiSim.breakEvenMonth}
-            />
-          </section>
+              {/* Scenario Compare (beta) */}
+              <section className="mt-12">
+                <ScenarioComparePanel
+                  baseline={{
+                    systems: stats.systemsFuture ?? 0,
+                    integrations: stats.integrationsFuture ?? 0,
+                  }}
+                  roiSignal={roiSim.breakEvenMonth}
+                />
+              </section>
 
-          {/* Top systems table */}
-          <section className="mt-12">
-            <h2 className="text-sm font-semibold mb-1">
-              HIGHEST-CONNECTIVITY SYSTEMS
-            </h2>
-            <p className="text-xs text-gray-500 mb-4">
-              Top 10 systems by number of integrations in this ecosystem view.
-            </p>
+              {/* Top systems table */}
+              <section className="mt-12">
+                <h2 className="text-sm font-semibold mb-1">
+                  HIGHEST-CONNECTIVITY SYSTEMS
+                </h2>
+                <p className="text-xs text-gray-500 mb-4">
+                  Top 10 systems by number of integrations in this ecosystem view.
+                </p>
 
-            <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                      #
-                    </th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                      SYSTEM
-                    </th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                      INTEGRATIONS
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.topSystems.map((s, idx) => {
-                    const name = resolveSystemName(s);
-                    const count = resolveIntegrationCount(s);
-                    const key = s.systemId ?? s.id ?? `${name}-${idx}`;
-
-                    return (
-                      <tr
-                        key={key}
-                        className={
-                          idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"
-                        }
-                      >
-                        <td className="px-4 py-2 text-xs text-gray-500">
-                          {idx + 1}
-                        </td>
-                        <td className="px-4 py-2 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => handleSelectSystem(name, count)}
-                            className="text-left w-full underline-offset-2 hover:underline"
-                          >
-                            {name}
-                          </button>
-                        </td>
-                        <td className="px-4 py-2 text-xs">
-                          {formatNumber(count)}
-                        </td>
+                <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+                          #
+                        </th>
+                        <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+                          SYSTEM
+                        </th>
+                        <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+                          INTEGRATIONS
+                        </th>
                       </tr>
-                    );
-                  })}
-                  {stats.topSystems.length === 0 && (
-                    <tr>
-                      <td
-                        className="px-4 py-4 text-xs text-gray-500"
-                        colSpan={3}
-                      >
-                        No systems with integrations detected yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                    </thead>
+                    <tbody>
+                      {stats.topSystems.map((s, idx) => {
+                        const name = resolveSystemName(s);
+                        const count = resolveIntegrationCount(s);
+                        const key = s.systemId ?? s.id ?? `${name}-${idx}`;
+
+                        return (
+                          <tr
+                            key={key}
+                            className={
+                              idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"
+                            }
+                          >
+                            <td className="px-4 py-2 text-xs text-gray-500">
+                              {idx + 1}
+                            </td>
+                            <td className="px-4 py-2 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => handleSelectSystem(name, count)}
+                                className="text-left w-full underline-offset-2 hover:underline"
+                              >
+                                {name}
+                              </button>
+                            </td>
+                            <td className="px-4 py-2 text-xs">
+                              {formatNumber(count)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {stats.topSystems.length === 0 && (
+                        <tr>
+                          <td
+                            className="px-4 py-4 text-xs text-gray-500"
+                            colSpan={3}
+                          >
+                            No systems with integrations detected yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          )}
 
           {/* Impact panel */}
           <section className="mt-10">

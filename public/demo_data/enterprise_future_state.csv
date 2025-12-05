@@ -1,57 +1,67 @@
 ﻿Raw_Label,Logical_Name,Disposition_Color,Disposition_Interpretation,Layer,Domain,System_Type,Dependencies_Upstream,Dependencies_Downstream,Notes
-SFCC,SFCC — Order Capture (Consumer),Black,Existing,Application,Commerce,SaaS,Consumer Web Channels,Order Mgmt (Consumer); Oracle EBS - Order Mgmt,Current consumer storefront + order capture.
-Order Mgmt (Consumer),Order Management — Consumer Cluster,Black,Existing,Application,Order Management,Composite,SFCC; CC UI; Store UI,Oracle EBS - Order Mgmt; HighJump WMS,"Composite OMS including DOMS AWS, Legacy DOMS, UI layers, sourcing."
-CC UI,Contact Center UI — Order Tools,Black,Existing,Channel,Customer Service,Application,Contact Center,Order Mgmt (Consumer),"Order lookup, modification, returns."
-Store UI,Store UI — Order Tools,Black,Existing,Channel,Retail Stores,Application,Store Ops Devices,Order Mgmt (Consumer); POS,Store-based order lookup & returns.
-DOMS AWS,DOMS on AWS — OMS Engine,Black,Existing,Application,Order Management,Custom Hosted,SFCC; CC UI; Store UI,Oracle EBS; HighJump; Sourcing,Current ecommerce order management.
-Legacy DOMS,Legacy DOMS — OMS Engine,Black,Existing,Application,Order Management,Legacy,Stores; Store UI,Oracle EBS; HighJump; Sourcing,Legacy store OMS.
-Price Lists,Price Lists — Current,Black,Existing,Application,Pricing,Data/Service,DOMS AWS; Legacy DOMS,SFCC; Oracle EBS - Pricing,Provides price books to commerce + ERP.
-Sourcing,Sourcing Engine — Current State,Black,Existing,Application,Fulfillment,Service,DOMS AWS; Legacy DOMS,HighJump; 3PL,Determines fulfillment locations.
-POS,POS — Predict Springs,Black,Existing,Application,Retail Stores,SaaS,Store UI,POSLog; ReSA; Oracle EBS,Store sales & returns.
-POSLog,POSLog — Transaction Log,Black,Existing,Integration,Retail Stores,Log Store,POS,ReSA; RMS,Downstream auditing + inventory.
-ReSA,ReSA — Sales Audit,Black,Existing,Application,Finance,Application,POSLog,Oracle EBS - Financials,Sales audit→GL.
-SIM,SIM — Store Inventory Mgmt,Black,Existing,Application,Inventory,Application,Stores; POS; RMS,Oracle EBS,Store-level adjustments & transfers.
-RMS,RMS — Retail Merchandising System,Black,Existing,Application,Merchandising,Application,Oracle EBS - Purchasing,SIM; Reporting,Merch hierarchy + inventory.
-Halo,Halo — RFID & Inventory Ops,Black,Existing,Application,Store Operations,Application,Store Ops Devices,SIM; RMS,"Cycle count, RFID, receiving."
-Oracle EBS,Oracle E-Business Suite — ERP,Black,Existing,ERP,Enterprise Back Office,ERP Suite,OMS; POS; RMS,Reporting; WMS; Nexus,"Finance, PO, Customer, Location, Order Mgmt, Pricing, Inventory."
-Financials,Oracle EBS — Financials,Black,Existing,Application,Finance,ERP Module,ReSA; POS,Reporting,GL/AR/AP/FA.
-Purchasing,Oracle EBS — Purchasing,Black,Existing,Application,Procurement,ERP Module,Vendors,RMS; Inventory Mgmt,POs + ASNs.
-Customer & Vendor,Oracle EBS — Customer & Vendor,Black,Existing,Application,Customer / Vendor,ERP Module,Order Mgmt; Financials,Reporting,Master data.
-Order Mgmt,Oracle EBS — Order Mgmt,Black,Existing,Application,Order Management,ERP Module,DOMS AWS; Legacy DOMS,Inventory Mgmt; Financials,Order processing + sourcing.
-Adv Pricing,Oracle EBS — Advanced Pricing,Black,Existing,Application,Pricing,ERP Module,Price Lists,Order Mgmt,B2B pricing + promos.
-Location,Oracle EBS — Location,Black,Existing,Application,Enterprise Data,ERP Module,RMS,WMS; 3PL; Nexus,Stores + warehouse master data.
-Inventory Mgmt,Oracle EBS — Inventory Mgmt,Black,Existing,Application,Inventory,ERP Module,Order Mgmt; Purchasing,HighJump; 3PL,WH inventory + transfers.
-Genysis,Genysis — EBS Satellite,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-DOE,Deckers Order Entry — DOE,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-SOMT,Sales Order Mod Tool — SOMT,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-WebADI,WebADI — Oracle XLS Loader,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-PMT,PMT — Product Move Tool,Black,Existing,Application,Order Management,Custom/Tool,Oracle EBS,,EBS satellite application.
-Flex PLM,Flex PLM — Product Design & Specs,Black,Existing,Application,Product,SaaS,,PIM (Salsify); Vendor EDI,"Design, specs, pricing."
-PIM (Salsify),PIM — Product Information Management,Black,Existing,Application,Product,SaaS,Flex PLM,SFCC; Oracle EBS; Vendors,Product data enrichment.
-HiJump,HighJump WMS — US Sites,Black,Existing,Warehouse,Warehouse Management,WMS,Oracle EBS; Sourcing; PMT,3PL; Carriers,Multiple WMS instances.
-3PL,Third-Party Logistics Providers,Black,Existing,Warehouse,Fulfillment,Partner,HighJump; EBS,Carriers,Multiple external logistics partners.
-IRIS,IRIS — WH Transfers,Black,Existing,Integration,Logistics,Integration Tool,EBS - Inventory Mgmt,HighJump,Warehouse-to-warehouse transfers.
-Nexus,Nexus — Trade Management,Black,Existing,Application,Trade / Tax / Logistics,Application,Oracle EBS,Brokers,Trade mgmt & brokers.
-Redshift/Tableau,Redshift + Tableau — Reporting Stack,Black,Existing,Analytics,Reporting,BI,EBS; RMS; POS,,Reporting warehouse.
-Deckers B2B,Deckers B2B Order Capture,Black,Existing,Application,B2B Commerce,Portal,B2B Customers,Oracle EBS - Order Mgmt,"B2B order creation, review, approval."
-Merkle,Merkle — Partner Integration,Black,Existing,Partner,Loyalty,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-COVEO,COVEO — Partner Integration,Black,Existing,Partner,Search,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Feedonomics,Feedonomics — Partner Integration,Black,Existing,Partner,Feeds,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Cloudinary,Cloudinary — Partner Integration,Black,Existing,Partner,Content Delivery,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Rudderstack,Rudderstack — Partner Integration,Black,Existing,Partner,Event Routing,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Cordial,Cordial — Partner Integration,Black,Existing,Partner,Email,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Chase,Chase — Partner Integration,Black,Existing,Partner,Payments,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Forter,Forter — Partner Integration,Black,Existing,Partner,Fraud,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Annex,Annex — Partner Integration,Black,Existing,Partner,Loyalty,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-GTM,GTM — Partner Integration,Black,Existing,Partner,Telemetry,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Tealium,Tealium — Partner Integration,Black,Existing,Partner,Tagging,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-CoreMedia,CoreMedia — Partner Integration,Black,Existing,Partner,Content,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Builder.io,Builder.io — Partner Integration,Black,Existing,Partner,Content,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-DynamicYield,DynamicYield — Partner Integration,Black,Existing,Partner,Personalization,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Adyen,Adyen — Partner Integration,Black,Existing,Partner,Payments,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-Avalara,Avalara — Partner Integration,Black,Existing,Partner,Tax,SaaS Partner,SFCC,OMS; EBS,External DTC partner.
-One Source,One Source — Partner Integration,Black,Existing,Partner,Tax,SaaS Partner,Oracle EBS,,External B2B partner.
-Vertex,Vertex — Partner Integration,Black,Existing,Partner,Tax,SaaS Partner,Oracle EBS,,External B2B partner.
-SPS Commerce,SPS Commerce — Partner Integration,Black,Existing,Partner,EDI,SaaS Partner,Oracle EBS,,External B2B partner.
-BlackLine,BlackLine — Partner Integration,Black,Existing,Partner,Finance,SaaS Partner,Oracle EBS,,External B2B partner.
-V Trader,V Trader — Partner Integration,Black,Existing,Partner,Finance,SaaS Partner,Oracle EBS,,External B2B partner.
+Commerce Experience,Commerce Experience — Web/Mobile UX,Green,New,Application,Commerce,Experience Layer,Consumer Web/Mobile Channels,Commerce Engine; OMS,Future-state UX layer providing search/browse/add-to-cart across regions (NA/EMEA/APac).
+Commerce Experience — Search,Commerce Experience — Search,Green,New,Application,Commerce,Capability,Consumer Web/Mobile Channels,Commerce Engine,Search capability for products across brands/sites.
+Commerce Experience — Browse,Commerce Experience — Browse,Green,New,Application,Commerce,Capability,Consumer Web/Mobile Channels,Commerce Engine,Browse and navigation capability.
+Commerce Experience — Add to Cart,Commerce Experience — Add to Cart,Green,New,Application,Commerce,Capability,Consumer Web/Mobile Channels,Commerce Engine,Cart creation and maintenance in experience layer.
+Commerce Engine,Commerce Engine — Consumer Order Capture,Green,New,Application,Commerce,SaaS,Commerce Experience,OMS; Price/Promo Config; Inventory,New headless commerce engine for order capture across brands/sites/currencies/languages.
+Commerce Engine — Multi Brand,Commerce Engine — Multi Brand,Green,New,Application,Commerce,Capability,Commerce Engine,OMS,Multi Brand capability within the commerce engine.
+Commerce Engine — Multi Site,Commerce Engine — Multi Site,Green,New,Application,Commerce,Capability,Commerce Engine,OMS,Multi Site capability within the commerce engine.
+Commerce Engine — Multi Currency,Commerce Engine — Multi Currency,Green,New,Application,Commerce,Capability,Commerce Engine,OMS,Multi Currency capability within the commerce engine.
+Commerce Engine — Multi Language,Commerce Engine — Multi Language,Green,New,Application,Commerce,Capability,Commerce Engine,OMS,Multi Language capability within the commerce engine.
+Marketplace Broker,Marketplace Broker — Aggregator,Green,New,Integration,Marketplaces,Service,Marketplaces (ASOS/Zalando/Rakuten),Commerce Engine; OMS,Future-state marketplace integration and normalization service.
+Price / Promo Configuration,Price & Promo Configuration — SaaS,Green,New,Application,Pricing,SaaS,Commerce Engine; OMS; Sales Ops; DTC Ops,Customer Orders; Vendor Direct POs,"Central SaaS service for price lists, promotion setup and pricing calls."
+Promo Engine,Promo Engine — Rules Engine,Green,New,Application,Pricing,Capability,Price & Promo Configuration,Commerce Engine; OMS,Promotion evaluation engine used during pricing calls.
+Enterprise Order Mgmt (OMS),Enterprise OMS — Core Order Management,Green,New,Application,Order Management,SaaS,Commerce Engine; CC UI; Store UI; B2B Orders,EBS (reduced role); WMS; MDM; PIM,Future-state enterprise OMS replacing DOMS; system of record for all orders.
+OMS — Order System Of Record,Enterprise OMS — Order System Of Record,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Order System Of Record capability in the future OMS.
+OMS — Sales & Return Orders,Enterprise OMS — Sales & Return Orders,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Sales & Return Orders capability in the future OMS.
+OMS — Order Processing,Enterprise OMS — Order Processing,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Order Processing capability in the future OMS.
+OMS — Order Consolidation,Enterprise OMS — Order Consolidation,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Order Consolidation capability in the future OMS.
+OMS — Order Status,Enterprise OMS — Order Status,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Order Status capability in the future OMS.
+OMS — Exception Mgmt,Enterprise OMS — Exception Mgmt,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Exception Mgmt capability in the future OMS.
+OMS — Network ATP,Enterprise OMS — Network ATP,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Network ATP capability in the future OMS.
+OMS — Network Thresholds,Enterprise OMS — Network Thresholds,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Network Thresholds capability in the future OMS.
+OMS — Location ATP,Enterprise OMS — Location ATP,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Location ATP capability in the future OMS.
+OMS — Inventory Demand,Enterprise OMS — Inventory Demand,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Inventory Demand capability in the future OMS.
+OMS — Hard/Soft Reservations,Enterprise OMS — Hard/Soft Reservations,Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Hard/Soft Reservations capability in the future OMS.
+OMS — Sales/Returns Posting (TLOG),Enterprise OMS — Sales/Returns Posting (TLOG),Green,New,Application,Order Management,Capability,Enterprise OMS — Core Order Management,EBS; WMS; MDM,Sales/Returns Posting (TLOG) capability in the future OMS.
+CC UI (Future),Contact Center UI — Future,Green,New,Channel,Customer Service,Application,Contact Center,Enterprise OMS,Future UI for creating/modifying orders in OMS.
+Store UI (Future),Store UI — Future,Green,New,Channel,Retail Stores,Application,Store Ops Devices,Enterprise OMS; POS,"Future store order and inventory UI (BOPIS, SFS)."
+DTC Pipeline,DTC Pipeline — Composite,Green,New,Application,Order Management,Composite,Enterprise OMS,WMS; Payment; Fraud,Future-state DTC orchestration pipeline inside OMS.
+DTC Pipeline — Fraud Check,DTC Pipeline — Fraud Check,Green,New,Application,Order Management,Capability,DTC Pipeline — Composite,Payment/Fraud/WMS,Fraud Check step within DTC pipeline.
+DTC Pipeline — Sourcing,DTC Pipeline — Sourcing,Green,New,Application,Order Management,Capability,DTC Pipeline — Composite,Payment/Fraud/WMS,Sourcing step within DTC pipeline.
+DTC Pipeline — Funds Capture,DTC Pipeline — Funds Capture,Green,New,Application,Order Management,Capability,DTC Pipeline — Composite,Payment/Fraud/WMS,Funds Capture step within DTC pipeline.
+B2B Pipeline,B2B Pipeline — Composite,Green,New,Application,Order Management,Composite,Enterprise OMS,EBS; WMS,Future-state B2B orchestration pipeline.
+B2B Pipeline — Recalc Price,B2B Pipeline — Recalc Price,Green,New,Application,Order Management,Capability,B2B Pipeline — Composite,EBS; Payment; WMS,Recalc Price capability in B2B pipeline.
+B2B Pipeline — Sourcing,B2B Pipeline — Sourcing,Green,New,Application,Order Management,Capability,B2B Pipeline — Composite,EBS; Payment; WMS,Sourcing capability in B2B pipeline.
+B2B Pipeline — Funds Capture,B2B Pipeline — Funds Capture,Green,New,Application,Order Management,Capability,B2B Pipeline — Composite,EBS; Payment; WMS,Funds Capture capability in B2B pipeline.
+B2B Pipeline — AR Funds Rqst,B2B Pipeline — AR Funds Rqst,Green,New,Application,Order Management,Capability,B2B Pipeline — Composite,EBS; Payment; WMS,AR Funds Rqst capability in B2B pipeline.
+B2B Pipeline — PO process monitor,B2B Pipeline — PO process monitor,Green,New,Application,Order Management,Capability,B2B Pipeline — Composite,EBS; Payment; WMS,PO process monitor capability in B2B pipeline.
+Party MDM,Party MDM — Customer/Vendor Master,Green,New,Application,Master Data,MDM,Upstream ingest from channels/OMS,EBS; OMS; Downstream systems,"Future master for customer, consumer, vendor, manufacturer."
+Location MDM,Location MDM — Store/Warehouse Master,Green,New,Application,Master Data,MDM,Org data; RMS; EBS,OMS; WMS; 3PL,"Future master for locations: stores, warehouses, corp, reserved locations."
+PIM (Salsify),PIM — Product Information Mgmt (Future),Yellow,Modified,Application,Product,SaaS,Flex PLM; O9,Commerce Engine; OMS; Vendors,Existing PIM repositioned in future architecture; focus on enrichment and syndication.
+Flex PLM,Flex PLM — Product Design & Specs (Future),Black,Existing,Application,Product,SaaS,,PIM; Vendors (Product Specs via Portal),Continues as design/specs and pricing source feeding PIM and vendors.
+SKU/UPC Generator,SKU/UPC Generator — ID Service,Green,New,Application,Product,Service,PIM; Flex PLM,OMS; EBS; WMS,Generates SKU/UPC identifiers in future-state flow.
+O9,O9 — Enterprise Planning & Forecasting,Green,New,Application,Planning,SaaS,Sales/Inventory history; Product,PIM; EBS; RMS/MFCS,"Future SaaS for enterprise planning, forecasting and PO suggestions."
+RMS / MFCS,RMS/MFCS — Merch & Inventory SaaS,Green,New,Application,Merchandising,SaaS,O9; PIM; Transaction HUB; POS,EBS; WMS; MDM,Future-state consolidated merch/inventory platform.
+S5,S5 — Financial & Assortment Planning,Green,New,Application,Planning,Application,Sales/Inventory data,RMS/MFCS,Fin plan and assortment planning feeding RMS/MFCS.
+Syrup,Syrup — Allocation & Replenishment,Green,New,Application,Inventory,Application,RMS/MFCS; Sales/Returns,RMS/MFCS; WMS,Allocations and replenishment orchestration feeding RMS/MFCS.
+POS (Predict Springs),POS — Predict Springs (Future),Yellow,Modified,Application,Retail Stores,SaaS,Store UI; Transaction HUB,RMS/MFCS; EBS; Nexus,Store POS continues but integrated to Transaction HUB and new inventory flows.
+Transaction HUB,Transaction HUB — All Sales/Returns,Green,New,Application,Retail / Analytics,Service,POS; OMS; Digital Channels,RMS/MFCS; EBS; Reporting,Consolidated transaction hub with order references for all sales/returns.
+ReSA/SACS,ReSA/SACS — Sales Audit (Future),Yellow,Modified,Application,Finance,Application,Transaction HUB; POSLog,EBS - Financials,Sales audit adjusted to new transaction flows.
+Oracle EBS (Future Core),Oracle EBS — Reduced Core,Yellow,Modified,ERP,Back Office,ERP Suite,OMS; RMS/MFCS; Transaction HUB,Finance; Tax; Trade,Future role reduced with OMS/RMS taking more responsibility.
+EBS — Financials,Oracle EBS — Financials (Future),Yellow,Modified,Application,Back Office,ERP Module,Oracle EBS — Reduced Core,,Retained for GL/AR/AP/FA but fed via new hubs.
+EBS — Customer & Vendor,Oracle EBS — Customer & Vendor (Future),Red,Retire,Application,Back Office,ERP Module,Oracle EBS — Reduced Core,,Master data moving to Party MDM.
+EBS — Purchasing,Oracle EBS — Purchasing (Future),Yellow,Modified,Application,Back Office,ERP Module,Oracle EBS — Reduced Core,,Aligned with O9 and RMS/MFCS planning.
+EBS — Location,Oracle EBS — Location (Future),Red,Retire,Application,Back Office,ERP Module,Oracle EBS — Reduced Core,,Location master moving to Location MDM.
+EBS — Order Mgmt,Oracle EBS — Order Mgmt (Future),Red,Retire,Application,Back Office,ERP Module,Oracle EBS — Reduced Core,,Order Mgmt function replaced by OMS.
+EBS — Adv Pricing,Oracle EBS — Adv Pricing (Future),Red,Retire,Application,Back Office,ERP Module,Oracle EBS — Reduced Core,,Pricing capabilities moved to Price/Promo SaaS.
+EBS — Inventory Mgmt,Oracle EBS — Inventory Mgmt (Future),Red,Retire,Application,Back Office,ERP Module,Oracle EBS — Reduced Core,,Warehouse inventory moves to WMS/RMS/MFCS.
+Genysis (Future),Genysis — Future Role,Yellow,Modified,Application,Order Management,Tool,Oracle EBS — Reduced Core,OMS; RMS/MFCS,Satellite tool adjusted to new ERP/OMS landscape.
+DOE (Future),DOE — Future Role,Yellow,Modified,Application,Order Management,Tool,Oracle EBS — Reduced Core,OMS; RMS/MFCS,Satellite tool adjusted to new ERP/OMS landscape.
+SOMT (Future),SOMT — Future Role,Yellow,Modified,Application,Order Management,Tool,Oracle EBS — Reduced Core,OMS; RMS/MFCS,Satellite tool adjusted to new ERP/OMS landscape.
+Web ADI (Future),Web ADI — Future Role,Yellow,Modified,Application,Order Management,Tool,Oracle EBS — Reduced Core,OMS; RMS/MFCS,Satellite tool adjusted to new ERP/OMS landscape.
+PMT (Future),PMT — Future Role,Yellow,Modified,Application,Order Management,Tool,Oracle EBS — Reduced Core,OMS; RMS/MFCS,Satellite tool adjusted to new ERP/OMS landscape.
+HiJump,HighJump WMS — Future,Yellow,Modified,Warehouse,Warehouse Management,WMS,OMS; RMS/MFCS; EBS,3PL; Carriers,WMS remains but with new integration patterns and responsibilities.
+3PL (Future),Third-Party Logistics Providers — Future,Black,Existing,Warehouse,Fulfillment,Partner,HiJump; OMS,Carriers,External 3PL partners continue to operate with updated messaging flows.
+Nexus (Future),Nexus — Trade Mgmt (Future),Yellow,Modified,Application,Trade / Tax,Application,EBS; OMS,Brokers; Authorities,Trade management adjusted to new order/inventory flow.
+B2B Orders,B2B Orders — Future Portal,Yellow,Modified,Application,B2B Commerce,Portal,B2B Customers; Sales Ops,Enterprise OMS; EBS,Future B2B order capture integrated more tightly with OMS.
