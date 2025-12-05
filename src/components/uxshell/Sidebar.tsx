@@ -43,27 +43,27 @@ export function Sidebar({ projectId, currentProjectId, onModeChange }: SidebarPr
   const router = useRouter();
   const { expanded, activeItem, toggleSection, selectItem } = useChevronNav(projectId);
 
-  const handleSelect = (section: string, path: string) => {
+  const handleSelect = (section: string, path: string, targetProjectId?: string) => {
     selectItem(section, path);
-    const href = `/project/${projectId}${path}`;
+    const nextProject = targetProjectId ?? projectId;
+    const href = `/project/${nextProject}${path}`;
     router.push(href);
   };
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="space-y-2">
-        <p className="text-[12px] uppercase tracking-[0.25em] text-slate-500">Projects</p>
+      <div className="space-y-3">
         <NavSection
           title="Projects"
           icon={<span />}
           items={projects.map((p) => ({
             label: p.name,
-            path: `/uxshell?project=${p.id}`,
+            path: `/uxshell`,
             isActive: currentProjectId === p.id,
             rightLabel: p.status,
-            onClick: () => handleSelect("Projects", `/uxshell`), // project switch handled via href
+            onClick: () => handleSelect("Projects", `/uxshell`, p.id),
           }))}
-          isExpanded
+          isExpanded={expanded ? expanded === "Projects" : true}
           onToggle={toggleSection}
         />
         <button className="w-full text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 rounded-lg px-2 py-1.5">
@@ -71,8 +71,7 @@ export function Sidebar({ projectId, currentProjectId, onModeChange }: SidebarPr
         </button>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-[12px] uppercase tracking-[0.25em] text-slate-500">Views</p>
+      <div className="space-y-3">
         {viewSections.map((s) => (
           <NavSection
             key={s.title}
@@ -83,14 +82,13 @@ export function Sidebar({ projectId, currentProjectId, onModeChange }: SidebarPr
               isActive: activeItem === i.path,
               onClick: () => handleSelect(s.title, i.path),
             }))}
-            isExpanded={expanded === s.title || s.title === "ROI"}
+            isExpanded={expanded ? expanded === s.title : s.title === "ROI"}
             onToggle={toggleSection}
           />
         ))}
       </div>
 
-      <div className="space-y-2">
-        <p className="text-[12px] uppercase tracking-[0.25em] text-slate-500">Modes</p>
+      <div className="space-y-3">
         <NavSection
           title="Modes"
           icon={<span />}
