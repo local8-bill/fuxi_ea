@@ -35,6 +35,14 @@ export default function GuidedOnboardingPage() {
     current: true,
     future: true,
   });
+  const [agentInput, setAgentInput] = useState("");
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentMessages, setAgentMessages] = useState<Array<{ role: "assistant" | "user"; content: string }>>([
+    {
+      role: "assistant",
+      content: "I can ingest your inventory, open ROI, or check harmonization. What do you want to do first?",
+    },
+  ]);
 
   useEffect(() => {
     telemetry.log("onboarding_loaded", { projectId });
@@ -102,6 +110,36 @@ export default function GuidedOnboardingPage() {
       telemetry.log("onboarding_artifact_type", { key, active: next[key] });
       return next;
     });
+  };
+
+  const sendAgentMessage = async () => {
+    const input = agentInput.trim();
+    if (!input) return;
+    setAgentLoading(true);
+    setAgentMessages((prev) => [...prev, { role: "user", content: input }]);
+    telemetry.log("onboarding_agent_message_sent", { projectId, input });
+
+    try {
+      const res = await fetch("/api/agent/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, userInput: input }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Agent unavailable");
+      }
+      const data = (await res.json()) as { nextPrompt: string };
+      setAgentMessages((prev) => [...prev, { role: "assistant", content: data.nextPrompt }]);
+      telemetry.log("onboarding_agent_message_received", { projectId, nextPrompt: data.nextPrompt });
+    } catch (err: any) {
+      const fallback = err?.message ?? "Something went wrong. Try again.";
+      setAgentMessages((prev) => [...prev, { role: "assistant", content: fallback }]);
+      telemetry.log("onboarding_agent_message_failed", { projectId, error: fallback });
+    } finally {
+      setAgentLoading(false);
+      setAgentInput("");
+    }
   };
 
   return (
@@ -325,6 +363,49 @@ export default function GuidedOnboardingPage() {
                   <span className="text-slate-800">{label}</span>
                 </label>
               ))}
+            </div>
+          </div>
+
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Conversational guide</p>
+                <p className="text-sm text-slate-700">Type what you need and I’ll route you (ingest, ROI, harmonization).</p>
+              </div>
+            </div>
+            <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-3">
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1 text-sm text-slate-800">
+                {agentMessages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`rounded-lg px-3 py-2 ${msg.role === "assistant" ? "bg-slate-50 text-slate-800" : "bg-slate-900 text-white"}`}
+                  >
+                    {msg.content}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+                  placeholder="e.g., “ingest my inventory csv” or “open ROI dashboard”"
+                  value={agentInput}
+                  onChange={(e) => setAgentInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      void sendAgentMessage();
+                    }
+                  }}
+                  disabled={agentLoading}
+                />
+                <button
+                  type="button"
+                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                  onClick={() => void sendAgentMessage()}
+                  disabled={agentLoading || !agentInput.trim()}
+                >
+                  {agentLoading ? "..." : "Send"}
+                </button>
+              </div>
             </div>
           </div>
 
