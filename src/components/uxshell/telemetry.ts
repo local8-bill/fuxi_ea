@@ -17,6 +17,9 @@ export async function emitTelemetry(eventType: string, payload: Record<string, a
 
 export function mapPromptToAction(prompt: string): { view?: string; target?: string } {
   const p = prompt.toLowerCase();
+  if (p.includes("onboard") || p.includes("onboarding") || p.includes("start project")) {
+    return { view: "onboarding", target: "onboarding" };
+  }
   if (p.includes("graph") || p.includes("map")) return { view: "graph", target: "digital-enterprise" };
   if (p.includes("roi") || p.includes("return") || p.includes("benefit")) return { view: "roi", target: "roi-dashboard" };
   if (p.includes("sequence") || p.includes("roadmap") || p.includes("stage")) return { view: "sequencer", target: "transformation-dialogue" };

@@ -20,6 +20,7 @@ const projects = [
 ];
 
 const viewSections = [
+  { title: "Onboarding", icon: <PlusIcon />, items: [{ label: "Guided Onboarding", path: "/onboarding" }] },
   {
     title: "ROI",
     icon: <SumIcon />,
