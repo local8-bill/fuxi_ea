@@ -12,7 +12,7 @@ export default defineConfig({
     headless: true,
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
-    video: "on",
+    video: "retain-on-failure",
   },
   projects: [
     {
