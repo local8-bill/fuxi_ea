@@ -53,6 +53,7 @@ export function Sidebar({ projectId, currentProjectId, onModeChange }: SidebarPr
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 px-1">Projects</p>
         <NavSection
           title="Projects"
           icon={<span />}
@@ -71,17 +72,18 @@ export function Sidebar({ projectId, currentProjectId, onModeChange }: SidebarPr
       </div>
 
       <div className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 px-1">Views</p>
         {viewSections.map((s) => (
           <NavSection
             key={s.title}
             title={s.title}
             icon={s.icon}
             items={s.items.map((i) => ({
-              ...i,
-              isActive: activeItem === i.path,
-              onClick: () => handleSelect(s.title, i.path),
-            }))}
-            isExpanded={expanded ? expanded === s.title : s.title === "ROI"}
+            ...i,
+            isActive: activeItem === i.path,
+            onClick: () => handleSelect(s.title, i.path),
+          }))}
+            isExpanded={expanded ? expanded === s.title : false}
             onToggle={toggleSection}
           />
         ))}
