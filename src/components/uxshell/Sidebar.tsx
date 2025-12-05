@@ -20,10 +20,10 @@ const projects = [
 ];
 
 const viewSections = [
-  { title: "Onboarding", icon: <PlusIcon />, items: [{ label: "Guided Onboarding", path: "/onboarding" }] },
+  { title: "Onboarding", icon: <span />, items: [{ label: "Guided Onboarding", path: "/onboarding" }] },
   {
     title: "ROI",
-    icon: <SumIcon />,
+    icon: <span />,
     items: [
       { label: "ROI 1 (Hypothesis)", path: "/roi-dashboard" },
       { label: "ROI 2 (Actuals)", path: "/roi-dashboard?mode=actuals" },
@@ -31,10 +31,10 @@ const viewSections = [
       { label: "+ New ROI", path: "/roi-dashboard?new=true" },
     ],
   },
-  { title: "+ Graph", icon: <PlusIcon />, items: [{ label: "Digital Enterprise", path: "/digital-enterprise" }] },
-  { title: "⇄ Sequencer", icon: <FlowIcon />, items: [{ label: "Transformation", path: "/transformation-dialogue" }] },
-  { title: "✓ Review", icon: <CheckIcon />, items: [{ label: "Harmonization Review", path: "/harmonization-review" }] },
-  { title: "∞ Digital Enterprise", icon: <InfinityIcon />, items: [{ label: "Systems View", path: "/digital-enterprise" }] },
+  { title: "+ Graph", icon: <span />, items: [{ label: "Digital Enterprise", path: "/digital-enterprise" }] },
+  { title: "⇄ Sequencer", icon: <span />, items: [{ label: "Transformation", path: "/transformation-dialogue" }] },
+  { title: "✓ Review", icon: <span />, items: [{ label: "Harmonization Review", path: "/harmonization-review" }] },
+  { title: "∞ Digital Enterprise", icon: <span />, items: [{ label: "Systems View", path: "/digital-enterprise" }] },
 ];
 
 const modes: Mode[] = ["Architect", "Analyst", "CFO", "FP&A", "CIO"];
@@ -58,10 +58,9 @@ export function Sidebar({ projectId, currentProjectId, onModeChange }: SidebarPr
           icon={<span />}
           items={projects.map((p) => ({
             label: p.name,
-            path: `/uxshell`,
+            path: `/uxshell?project=${p.id}`,
             isActive: currentProjectId === p.id,
-            rightLabel: p.status,
-            onClick: () => handleSelect("Projects", `/uxshell`, p.id),
+            onClick: () => handleSelect("Projects", `/uxshell?project=${p.id}`, p.id),
           }))}
           isExpanded={expanded ? expanded === "Projects" : true}
           onToggle={toggleSection}
@@ -101,7 +100,7 @@ export function Sidebar({ projectId, currentProjectId, onModeChange }: SidebarPr
               onModeChange?.(m);
             },
           }))}
-          isExpanded
+          isExpanded={expanded ? expanded === "Modes" : true}
           onToggle={toggleSection}
         />
       </div>

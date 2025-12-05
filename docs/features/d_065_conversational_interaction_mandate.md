@@ -57,6 +57,31 @@ Fuxi: Got it. I’ll merge the new data and update your dashboard. Should I log 
 
 ---
 
+### 🔧 Retrofit Guidelines for Existing Modules
+
+#### ROI Dashboard
+- Replace static filter panels with conversational filters (“Which domain’s ROI would you like to explore?”).
+- Auto-summarize changes in natural language (“Finance ROI increased 14% since your last run”).
+- Embed “Explain this” prompts beside any metric that links back to Math Explainers.
+
+#### Sequencer
+- Convert stage configuration into guided dialogue:  
+  - “Would you like to simulate a dual-run for ERP NextGen?”  
+  - “Shall I calculate transition cost overlap for Stage 2?”
+- Maintain timeline visuals, but drive their configuration through dialogue.
+
+#### Graph (React Flow)
+- When a user clicks a node:  
+  “This system has 5 dependencies and 2 unresolved edges. Would you like to see its impact?”
+- Support conversational filtering:  
+  “Show only cross-domain edges in the Finance cluster.”
+
+#### Onboarding
+- Use the AI questions we outlined earlier to establish **tone, intent, and tolerance for change**.
+- Persist responses as part of the enterprise model (metadata tied to persona).
+
+---
+
 **Author:** Fuxi Core Design Group  
 **Status:** Adopted  
 **Applies to:** All modules, directives, and future UX implementations within the Fuxi Ecosystem.
