@@ -11,8 +11,9 @@ export default defineConfig({
   use: {
     headless: true,
     baseURL: "http://localhost:3000",
-    trace: "on-first-retry",
-    video: "retain-on-failure",
+    // Always capture trace/video so click-throughs are recorded by default.
+    trace: "on",
+    video: "on",
   },
   projects: [
     {
