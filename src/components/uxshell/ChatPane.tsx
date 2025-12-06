@@ -48,6 +48,8 @@ export function ChatPane({ projectId }: { projectId: string }) {
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
 
+  const contextFilters = useMemo(() => ({ platform: "all", state: "current" }), []);
+
   const contextNote = useMemo(
     () => `Project ${projectId} · UXShell assistant stub`,
     [projectId],
@@ -112,7 +114,7 @@ export function ChatPane({ projectId }: { projectId: string }) {
         const res = await fetch("/api/harmonization", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId }),
+          body: JSON.stringify({ projectId, context: contextFilters }),
         });
         const data = await res.json();
         await waitForVisualCalm();
@@ -121,18 +123,30 @@ export function ChatPane({ projectId }: { projectId: string }) {
             data.summary?.integrations ?? "?"
           }, Domains: ${data.summary?.domains ?? "?"}. Opening Digital Enterprise view.`,
         );
-        if (data?.transitionUrl) {
-          pushReply("Open Digital Enterprise view", {
-            link: { label: "Digital Enterprise", href: data.transitionUrl },
-          });
+        const deeplink =
+          data?.transitionUrl ||
+          `/project/${projectId}/digital-enterprise?embed=0&platform=${contextFilters.platform}`;
+        pushReply("Open Digital Enterprise view", {
+          link: { label: "Digital Enterprise", href: deeplink },
+        });
+        // trigger visual transition immediately
+        try {
+          window.location.href = deeplink;
+        } catch {
+          // ignore if not available (SSR)
         }
-        void emitTelemetry("harmonization_completed", { projectId, summary: data.summary, tone });
+        void emitTelemetry("harmonization_completed", {
+          projectId,
+          summary: data.summary,
+          tone,
+          context: contextFilters,
+        });
       } else if (lower.includes("sequence") || lower.includes("roadmap") || lower.includes("plan")) {
         pushReply(phrases.sequence);
         const res = await fetch("/api/sequence/plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId, strategy: "value" }),
+          body: JSON.stringify({ projectId, strategy: "value", context: contextFilters }),
         });
         const data = await res.json();
         const waves: Array<any> = data.waves ?? [];
@@ -152,10 +166,18 @@ export function ChatPane({ projectId }: { projectId: string }) {
             waves,
           },
         ]);
-        void emitTelemetry("sequencing_generated", { projectId, strategy: "value", tone });
+        void emitTelemetry("sequencing_generated", {
+          projectId,
+          strategy: "value",
+          tone,
+          context: contextFilters,
+          waves,
+        });
       } else if (lower.includes("roi")) {
         pushReply(phrases.roi);
-        const res = await fetch(`/api/roi/forecast?project=${encodeURIComponent(projectId)}`);
+        const res = await fetch(
+          `/api/roi/forecast?project=${encodeURIComponent(projectId)}&platform=${contextFilters.platform}`,
+        );
         const data = await res.json();
         const netROI = data?.predictions?.netROI ?? data?.predictions?.roi ?? "—";
         await waitForVisualCalm();
@@ -170,11 +192,12 @@ export function ChatPane({ projectId }: { projectId: string }) {
           netROI,
           breakEvenMonth: data?.predictions?.breakEvenMonth,
           tone,
+          context: contextFilters,
         });
       } else if (lower.includes("export") || lower.includes("json")) {
         pushReply(phrases.export);
         await waitForVisualCalm();
-        void emitTelemetry("session_completed", { projectId, tone });
+        void emitTelemetry("session_completed", { projectId, tone, context: contextFilters });
       } else {
         pushReply(`${phrases.fallback} Request: "${original}". Context: ${contextNote}.`);
       }
