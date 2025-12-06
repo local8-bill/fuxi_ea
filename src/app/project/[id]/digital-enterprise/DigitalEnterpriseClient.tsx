@@ -569,7 +569,7 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   }
 
   return (
-    <div className="px-8 py-10 max-w-6xl mx-auto">
+    <div className={`max-w-6xl mx-auto ${isEmbed ? "px-4 py-6" : "px-8 py-8"}`}>
       {error && (
         <div className="mb-4">
           <ErrorBanner
@@ -687,26 +687,35 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       {!loading && !error && hasData && stats && (
         <>
           {/* Metric cards */}
-          <section className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
+          <section className={`grid grid-cols-1 sm:grid-cols-3 gap-3 ${isEmbed ? "mt-4" : "mt-8"}`}>
             <MetricCard
               label="SYSTEMS"
               value={formatNumber(stats.systemsFuture)}
-              description="Unique labeled systems that participate in at least one connection in this architecture view."
+              description={
+                isEmbed ? undefined : "Unique labeled systems that participate in at least one connection in this architecture view."
+              }
+              className={isEmbed ? "text-center py-2" : undefined}
             />
             <MetricCard
               label="INTEGRATIONS"
               value={formatNumber(stats.integrationsFuture)}
-              description="Unique system-to-system connections derived from connector lines."
+              description={
+                isEmbed ? undefined : "Unique system-to-system connections derived from connector lines."
+              }
+              className={isEmbed ? "text-center py-2" : undefined}
             />
             <MetricCard
               label="DOMAINS DETECTED"
               value={formatNumber(stats.domainsDetected ?? 0)}
-              description="Domain / ecosystem clustering will evolve in a later pass."
+              description={
+                isEmbed ? undefined : "Domain / ecosystem clustering will evolve in a later pass."
+              }
+              className={isEmbed ? "text-center py-2" : undefined}
             />
           </section>
 
           {/* Top systems table */}
-        <section className="mt-12">
+        <section className={isEmbed ? "mt-6" : "mt-10"}>
           {!isEmbed && (
             <>
               <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>

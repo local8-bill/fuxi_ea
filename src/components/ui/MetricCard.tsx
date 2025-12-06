@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 interface MetricCardProps {
   label: string;
   value: ReactNode;
-  description: string;
+  description?: string;
   className?: string;
 }
 
@@ -22,7 +22,7 @@ export function MetricCard({
         {label}
       </p>
       <p className="text-xl font-semibold mb-1">{value}</p>
-      <p className="text-xs text-gray-500">{description}</p>
+      {description ? <p className="text-xs text-gray-500">{description}</p> : null}
     </Card>
   );
 }

@@ -6,6 +6,15 @@ import { PromptBar } from "./PromptBar";
 import { emitTelemetry } from "./telemetry";
 import { Sidebar } from "./Sidebar";
 import { UXShellLayout } from "./UXShellLayout";
+import {
+  Bars3Icon,
+  GlobeAltIcon,
+  HomeIcon,
+  MagnifyingGlassIcon,
+  RectangleGroupIcon,
+  RectangleStackIcon,
+  Squares2X2Icon,
+} from "@heroicons/react/24/outline";
 import GraphEmbed from "./embeds/GraphEmbed";
 import ROISummaryEmbed from "./embeds/ROISummaryEmbed";
 import SequencerEmbed from "./embeds/SequencerEmbed";
@@ -57,6 +66,27 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
           </div>
         }
       >
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white/95 px-4 py-2 shadow-sm">
+          <div className="flex items-center gap-3 text-slate-800">
+            <Bars3Icon className="h-5 w-5" />
+            <span className="text-sm font-semibold tracking-tight">Fuxi · Enterprise Engine</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-600">
+            {[HomeIcon, GlobeAltIcon, MagnifyingGlassIcon, RectangleGroupIcon, Squares2X2Icon, RectangleStackIcon].map(
+              (Icon, idx) => (
+                <button
+                  key={Icon.displayName ?? `icon-${idx}`}
+                  type="button"
+                  className="rounded-lg px-2 py-1 hover:bg-slate-100"
+                  aria-label="nav-shortcut"
+                >
+                  <Icon className="h-5 w-5" />
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+
         <div className="grid w-full max-w-7xl grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_300px] items-start">
           {/* Main column */}
           <div className="flex flex-col gap-4">

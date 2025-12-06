@@ -7,7 +7,7 @@ export default function GraphEmbed({ projectId }: { projectId: string }) {
     <div className="uxshell-card rounded-2xl bg-white p-0 h-full flex flex-col overflow-hidden border border-slate-200">
       <iframe
         src={`/project/${projectId}/digital-enterprise?embed=1`}
-        className="w-full h-[520px]"
+        className="w-full h-[400px]"
         sandbox="allow-same-origin allow-scripts allow-forms"
         title="Graph"
       />
