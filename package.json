@@ -13,8 +13,9 @@
     "test:unit": "vitest --run",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
-    "collect:videos": "node scripts/collect_playwright_videos.js",
-    "beans": "node scripts/beans.js"
+    "collect:videos": "node scripts/cmd_beans/collect_playwright_videos.js",
+    "beans": "node scripts/cmd_beans/beans.js",
+    "routes": "bash scripts/cmd_beans/list_routes.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

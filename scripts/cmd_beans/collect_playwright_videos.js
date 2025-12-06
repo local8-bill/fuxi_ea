@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-/**
- * Collect Playwright videos into playwright-report/videos with human-friendly names.
- * It scans test-results/**/video.webm and copies them to playwright-report/videos/<folder>.webm
- */
+// Collect Playwright videos into playwright-report/videos with human-friendly names.
+// It scans any test-results/*/video.webm and copies them to playwright-report/videos/<folder>.webm.
 const fs = require("fs");
 const fsp = require("fs").promises;
 const path = require("path");
@@ -65,4 +63,3 @@ async function collect() {
 }
 
 collect();
-
