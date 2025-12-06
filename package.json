@@ -13,7 +13,8 @@
     "test:unit": "vitest --run",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
-    "collect:videos": "node scripts/collect_playwright_videos.js"
+    "collect:videos": "node scripts/collect_playwright_videos.js",
+    "beans": "node scripts/beans.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
