@@ -12,14 +12,36 @@ type Message = {
 };
 
 const toneProfile = {
-  harmonize: "Kicking off harmonization and keeping the view calm while we load results…",
-  sequence: "Generating a 3-wave modernization plan tailored to your data…",
-  roi: "Preparing your ROI snapshot with break-even and net ROI…",
-  export: "Exporting the roadmap JSON and wrapping up this session.",
-  fallback: "On it—I'll route that request through the assistant stack.",
+  formal: {
+    harmonize: "Initiating harmonization and preparing your enterprise graph.",
+    sequence: "Developing a three-wave modernization plan aligned to your data.",
+    roi: "Compiling your ROI snapshot with break-even and net ROI.",
+    export: "Exporting the roadmap JSON and closing the session.",
+    fallback: "Acknowledged. Routing this request through the assistant stack.",
+  },
+  neutral: {
+    harmonize: "Kicking off harmonization and keeping the view calm while results load…",
+    sequence: "Generating a 3-wave modernization plan tailored to your data…",
+    roi: "Preparing your ROI snapshot with break-even and net ROI…",
+    export: "Exporting the roadmap JSON and wrapping up this session.",
+    fallback: "On it—I'll route that request through the assistant stack.",
+  },
+  concise: {
+    harmonize: "Running harmonization now.",
+    sequence: "Building the 3-wave plan.",
+    roi: "Pulling ROI numbers.",
+    export: "Exporting and wrapping up.",
+    fallback: "Got it. Processing.",
+  },
 };
 
 const waitForVisualCalm = (ms = 600) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const pickTone = (lower: string, messages: Message[]): keyof typeof toneProfile => {
+  if (lower.includes("roi") || lower.includes("finance") || lower.includes("exec")) return "formal";
+  if (messages.length > 12) return "concise";
+  return "neutral";
+};
 
 export function ChatPane({ projectId }: { projectId: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -83,8 +105,10 @@ export function ChatPane({ projectId }: { projectId: string }) {
 
   const handleIntent = async (lower: string, original: string) => {
     try {
+      const tone = pickTone(lower, messages);
+      const phrases = toneProfile[tone];
       if (lower.includes("harmoniz") || lower.includes("graph")) {
-        pushReply(toneProfile.harmonize);
+        pushReply(phrases.harmonize);
         const res = await fetch("/api/harmonization", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -102,9 +126,9 @@ export function ChatPane({ projectId }: { projectId: string }) {
             link: { label: "Digital Enterprise", href: data.transitionUrl },
           });
         }
-        void emitTelemetry("harmonization_completed", { projectId, summary: data.summary });
+        void emitTelemetry("harmonization_completed", { projectId, summary: data.summary, tone });
       } else if (lower.includes("sequence") || lower.includes("roadmap") || lower.includes("plan")) {
-        pushReply(toneProfile.sequence);
+        pushReply(phrases.sequence);
         const res = await fetch("/api/sequence/plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -128,9 +152,9 @@ export function ChatPane({ projectId }: { projectId: string }) {
             waves,
           },
         ]);
-        void emitTelemetry("sequencing_generated", { projectId, strategy: "value" });
+        void emitTelemetry("sequencing_generated", { projectId, strategy: "value", tone });
       } else if (lower.includes("roi")) {
-        pushReply(toneProfile.roi);
+        pushReply(phrases.roi);
         const res = await fetch(`/api/roi/forecast?project=${encodeURIComponent(projectId)}`);
         const data = await res.json();
         const netROI = data?.predictions?.netROI ?? data?.predictions?.roi ?? "—";
@@ -145,13 +169,14 @@ export function ChatPane({ projectId }: { projectId: string }) {
           projectId,
           netROI,
           breakEvenMonth: data?.predictions?.breakEvenMonth,
+          tone,
         });
       } else if (lower.includes("export") || lower.includes("json")) {
-        pushReply(toneProfile.export);
+        pushReply(phrases.export);
         await waitForVisualCalm();
-        void emitTelemetry("session_completed", { projectId });
+        void emitTelemetry("session_completed", { projectId, tone });
       } else {
-        pushReply(`${toneProfile.fallback} Request: "${original}". Context: ${contextNote}.`);
+        pushReply(`${phrases.fallback} Request: "${original}". Context: ${contextNote}.`);
       }
     } catch (err: any) {
       pushReply(err?.message ?? "Something went wrong. Try again.");
