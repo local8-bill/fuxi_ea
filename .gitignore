@@ -73,3 +73,9 @@ src_clean*/
 
 # IDE
 fuxi_ea.code-workspace
+
+# playwright artifacts
+playwright-report/
+test-results/
+**/trace.zip
+**/video.webm
