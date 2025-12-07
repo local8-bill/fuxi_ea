@@ -1,111 +1,167 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { NavSection } from "./NavSection";
+import { NavSection, NavItem } from "./NavSection";
 import { useChevronNav } from "@/hooks/useChevronNav";
-import { PlusIcon, SumIcon, FlowIcon, CheckIcon, InfinityIcon } from "./NavIcons";
+import { emitTelemetry } from "./telemetry";
+import { pushWithContext } from "@/lib/navigation/pushWithContext";
 
-type Mode = "Architect" | "Analyst" | "CFO" | "FP&A" | "CIO";
+export type Mode = "Architect" | "Analyst" | "CFO" | "FP&A" | "CIO";
 
 interface SidebarProps {
   projectId: string;
   currentProjectId: string;
+  currentView?: string;
   onModeChange?: (mode: Mode) => void;
 }
 
 const projects = [
-  { id: "700am", name: "700am — Core", status: "LIVE" },
-  { id: "951pm", name: "951pm — Pilot", status: "DRAFT" },
-  { id: "demo", name: "Demo Workspace", status: "DEMO" },
+  { id: "700am", name: "700am — Core" },
+  { id: "951pm", name: "951pm — Pilot" },
+  { id: "demo", name: "Demo Workspace" },
 ];
 
-const viewSections = [
-  { title: "Onboarding", icon: <span />, items: [{ label: "Guided Onboarding", path: "/onboarding" }] },
-  {
-    title: "ROI",
-    icon: <span />,
-    items: [
-      { label: "ROI 1 (Hypothesis)", path: "/roi-dashboard" },
-      { label: "ROI 2 (Actuals)", path: "/roi-dashboard?mode=actuals" },
-      { label: "ROI 3 (Scenario B)", path: "/roi-dashboard?mode=scenario-b" },
-      { label: "+ New ROI", path: "/roi-dashboard?new=true" },
-    ],
-  },
-  { title: "+ Graph", icon: <span />, items: [{ label: "Digital Enterprise", path: "/digital-enterprise" }] },
-  { title: "⇄ Sequencer", icon: <span />, items: [{ label: "Transformation", path: "/transformation-dialogue" }] },
-  { title: "✓ Review", icon: <span />, items: [{ label: "Harmonization Review", path: "/harmonization-review" }] },
-  { title: "∞ Digital Enterprise", icon: <span />, items: [{ label: "Systems View", path: "/digital-enterprise" }] },
+const roiViews = [
+  { key: "roi-hypothesis", label: "ROI 1 (Hypothesis)", roiId: "hypothesis" },
+  { key: "roi-actuals", label: "ROI 2 (Actuals)", roiId: "actuals" },
+  { key: "roi-scenario", label: "ROI 3 (Scenario B)", roiId: "scenario-b" },
+  { key: "roi-new", label: "+ New ROI", roiId: "new" },
+];
+
+const viewShortcuts = [
+  { key: "view-graph", icon: "➕", label: "Graph", path: "/digital-enterprise", targetView: "graph" },
+  { key: "view-sequencer", icon: "⇄", label: "Sequencer", path: "/sequencer", targetView: "sequencer" },
+  { key: "view-review", icon: "✓", label: "Review", path: "/review", targetView: "review" },
+  { key: "view-digital", icon: "∞", label: "Digital Enterprise", path: "/digital-enterprise?view=systems", targetView: "graph" },
 ];
 
 const modes: Mode[] = ["Architect", "Analyst", "CFO", "FP&A", "CIO"];
 
-export function Sidebar({ projectId, currentProjectId, onModeChange }: SidebarProps) {
-  const router = useRouter();
-  const { expanded, activeItem, toggleSection, selectItem } = useChevronNav(projectId);
+const scrollToTop = () => {
+  try {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch {
+    // ignore SSR
+  }
+};
 
-  const handleSelect = (section: string, path: string, targetProjectId?: string) => {
-    selectItem(section, path);
-    const nextProject = targetProjectId ?? projectId;
-    const href = `/project/${nextProject}${path}`;
-    router.push(href);
+function buildHref(projectId: string, path: string) {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `/project/${projectId}${normalized}`;
+}
+
+export function Sidebar({ projectId, currentProjectId, currentView, onModeChange }: SidebarProps) {
+  const router = useRouter();
+  const targetProject = currentProjectId || projectId;
+  const { expandedMain, roiExpanded, activeItem, toggleMain, toggleRoi, selectItem } = useChevronNav(projectId);
+
+  const handleProjectSelect = (id: string) => {
+    const key = `project-${id}`;
+    if (activeItem === key) {
+      scrollToTop();
+      void emitTelemetry("uxshell_click", { projectId, section: "Projects", item: key, action: "scroll_top" });
+      return;
+    }
+    selectItem("Projects", key);
+    pushWithContext(router, buildHref(id, "/dashboard"), { from: currentView ?? "graph" });
+  };
+
+  const handleNewProject = () => {
+    selectItem("Projects", "new-project");
+    pushWithContext(router, "/project/new", { from: currentView ?? "graph" });
+  };
+
+  const handleViewRoute = (key: string, path: string, options?: { ensureRoi?: boolean; targetView?: string }) => {
+    if (activeItem === key) {
+      scrollToTop();
+      void emitTelemetry("uxshell_click", { projectId, section: "Views", item: key, action: "scroll_top" });
+      return;
+    }
+    selectItem("Views", key, { ensureRoi: options?.ensureRoi });
+    pushWithContext(router, buildHref(targetProject, path), {
+      from: currentView ?? "graph",
+      targetView: options?.targetView,
+    });
+  };
+
+  const handleModeSelect = (mode: Mode) => {
+    const key = `mode-${mode}`;
+    if (activeItem === key) {
+      scrollToTop();
+      return;
+    }
+    selectItem("Modes", key);
+    onModeChange?.(mode);
   };
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 px-1">Projects</p>
-        <NavSection
-          title="Projects"
-          icon={<span />}
-          items={projects.map((p) => ({
+      <NavSection
+        title="PROJECTS"
+        isExpanded={expandedMain === "Projects"}
+        onToggle={() => toggleMain("Projects")}
+        items={[
+          ...projects.map((p) => ({
             label: p.name,
-            path: `/uxshell?project=${p.id}`,
-            isActive: currentProjectId === p.id,
-            onClick: () => handleSelect("Projects", `/uxshell?project=${p.id}`, p.id),
-          }))}
-          isExpanded={expanded ? expanded === "Projects" : true}
-          onToggle={toggleSection}
-        />
-        <button className="w-full text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 rounded-lg px-2 py-1.5">
-          + New Project
-        </button>
-      </div>
+            isActive: activeItem === `project-${p.id}` || targetProject === p.id,
+            onClick: () => handleProjectSelect(p.id),
+          })),
+          {
+            label: "+ New Project",
+            isActive: activeItem === "new-project",
+            onClick: handleNewProject,
+          },
+        ]}
+      />
 
-      <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 px-1">Views</p>
-        {viewSections.map((s) => (
-          <NavSection
-            key={s.title}
-            title={s.title}
-            icon={s.icon}
-            items={s.items.map((i) => ({
-            ...i,
-            isActive: activeItem === i.path,
-            onClick: () => handleSelect(s.title, i.path),
-          }))}
-            isExpanded={expanded ? expanded === s.title : false}
-            onToggle={toggleSection}
-          />
-        ))}
-      </div>
+      <NavSection title="VIEWS" isExpanded={expandedMain === "Views"} onToggle={() => toggleMain("Views")}>
+        <div className="space-y-1 pl-2">
+          <button
+            type="button"
+            onClick={toggleRoi}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-[6px] text-[12px] font-semibold text-slate-800 transition hover:bg-neutral-100"
+          >
+            <span className="text-base text-slate-700" aria-hidden>
+              {roiExpanded ? "▾" : "▸"}
+            </span>
+            <span className="text-[11px]" aria-hidden>
+              ∑
+            </span>
+            <span>ROI</span>
+          </button>
+          {roiExpanded &&
+            roiViews.map((view) => (
+              <NavItem
+                key={view.key}
+                label={view.label}
+                icon="∑"
+                isActive={activeItem === view.key}
+                onClick={() => handleViewRoute(view.key, `/roi/${view.roiId}`, { ensureRoi: true, targetView: "roi" })}
+              />
+            ))}
 
-      <div className="space-y-3">
-        <NavSection
-          title="Modes"
-          icon={<span />}
-          items={modes.map((m) => ({
-            label: m,
-            path: `mode-${m}`,
-            isActive: activeItem === `mode-${m}`,
-            onClick: () => {
-              selectItem("Modes", `mode-${m}`);
-              onModeChange?.(m);
-            },
-          }))}
-          isExpanded={expanded ? expanded === "Modes" : false}
-          onToggle={toggleSection}
-        />
-      </div>
+          {viewShortcuts.map((view) => (
+            <NavItem
+              key={view.key}
+              label={view.label}
+              icon={view.icon}
+              isActive={activeItem === view.key}
+              onClick={() => handleViewRoute(view.key, view.path, { targetView: view.targetView })}
+            />
+          ))}
+        </div>
+      </NavSection>
+
+      <NavSection
+        title="MODES"
+        isExpanded={expandedMain === "Modes"}
+        onToggle={() => toggleMain("Modes")}
+        items={modes.map((m) => ({
+          label: m,
+          isActive: activeItem === `mode-${m}`,
+          onClick: () => handleModeSelect(m),
+        }))}
+      />
     </div>
   );
 }
