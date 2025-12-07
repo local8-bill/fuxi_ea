@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { normalizeTelemetryPayload, workspaceEnum } from "@/lib/telemetry/validation";
+import { updateDemoTelemetry } from "@/lib/telemetry/demoMetrics";
 
 export const runtime = "nodejs";
 
@@ -97,6 +98,7 @@ export async function POST(req: Request) {
     await fs.mkdir(DATA_DIR, { recursive: true });
     const line = JSON.stringify(parsed) + "\n";
     await fs.appendFile(EVENTS_FILE, line, "utf8");
+    await updateDemoTelemetry(parsed);
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

@@ -15,9 +15,13 @@ const beans = [
   {
     id: "generate_fuxi_brand_assets",
     cmd: "npm run generate:brand",
-    desc: "Generate Fuxi crown SVG/PNG variants and manifest for UI imports.",
+    desc: "Generate hand-drawn metallic Fuxi crowns (D077) and refresh manifest.",
     env: ["NODE_ENV=production"],
     outputs: ["/public/assets/brand/icons/manifest.json"],
+  },
+  {
+    cmd: "node scripts/telemetry-summary.js",
+    desc: "Print the latest telemetry events from .fuxi/data for quick troubleshooting.",
   },
 ];
 

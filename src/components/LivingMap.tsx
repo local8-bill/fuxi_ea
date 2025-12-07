@@ -19,6 +19,8 @@ type LivingMapProps = {
   selectedNodeId?: string;
   onSelectNode?: (id: string) => void;
   searchTerm?: string;
+  highlightNodeIds?: Set<string> | string[];
+  dimOpacity?: number;
 };
 
 const COLORS = {
@@ -54,8 +56,21 @@ function normalizeDomainValue(d?: string | null): string {
   return "Other";
 }
 
-export function LivingMap({ data, height = 760, selectedNodeId, onSelectNode }: LivingMapProps) {
+export function LivingMap({
+  data,
+  height = 760,
+  selectedNodeId,
+  onSelectNode,
+  highlightNodeIds,
+  dimOpacity = 0.3,
+}: LivingMapProps) {
   const { data: simData } = useSimulationEngine(data);
+  const highlightSet = useMemo(() => {
+    if (!highlightNodeIds) return null;
+    if (highlightNodeIds instanceof Set) return highlightNodeIds;
+    return new Set(highlightNodeIds);
+  }, [highlightNodeIds]);
+  const shouldDim = Boolean(highlightSet && highlightSet.size > 0);
 
   const domainColors = useMemo(() => {
     const palette = COLORS.domains;
@@ -126,6 +141,7 @@ export function LivingMap({ data, height = 760, selectedNodeId, onSelectNode }: 
         const localRow = Math.floor(i / maxPerRow);
         const label = (node as any).label ?? (node as any).name ?? node.id;
         const isSelected = selectedNodeId === node.id;
+        const isFocused = highlightSet?.has(String(node.id));
         childNodes.push({
           id: String(node.id),
           parentId: `group-${domain}`,
@@ -145,29 +161,36 @@ export function LivingMap({ data, height = 760, selectedNodeId, onSelectNode }: 
             cursor: "pointer",
             maxWidth: domainWidth - 80,
             wordBreak: "break-word",
+            opacity: shouldDim ? (isFocused ? 1 : dimOpacity) : 1,
           },
         } as Node);
       });
     });
 
     return [...groupNodes, ...childNodes];
-  }, [simData.nodes, domainColors, selectedNodeId]);
+  }, [simData.nodes, domainColors, selectedNodeId, highlightSet, shouldDim, dimOpacity]);
 
   const visibleNodeIds = useMemo(() => new Set(nodesToRender.filter((n) => n.type !== "group").map((n) => n.id)), [nodesToRender]);
 
   const edges = useMemo(() => {
-    return (simData.edges ?? []).filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)).map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      type: "bezier",
-      style: {
-        strokeWidth: 1.2,
-        stroke: "#94a3b8",
-        opacity: 0.55,
-      },
-    })) as Edge[];
-  }, [simData.edges, visibleNodeIds]);
+    return (simData.edges ?? [])
+      .filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
+      .map((e) => {
+        const focused =
+          highlightSet?.has(String(e.source)) && highlightSet?.has(String(e.target));
+        return {
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          type: "bezier",
+          style: {
+            strokeWidth: 1.2,
+            stroke: "#94a3b8",
+            opacity: shouldDim ? (focused ? 0.65 : dimOpacity) : 0.55,
+          },
+        };
+      }) as Edge[];
+  }, [simData.edges, visibleNodeIds, highlightSet, shouldDim, dimOpacity]);
 
   return (
     <div className="w-full">

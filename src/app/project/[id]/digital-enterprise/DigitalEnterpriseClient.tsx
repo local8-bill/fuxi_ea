@@ -2,80 +2,67 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { MetricCard } from "@/components/ui/MetricCard";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
-import {
-  SystemImpactPanel,
-  type SystemImpact,
-} from "@/components/digital-enterprise/SystemImpactPanel";
 import { LivingMap } from "@/components/LivingMap";
-import type { LivingMapData, LivingNode, LivingEdge } from "@/types/livingMap";
-import { useROISimulation } from "@/hooks/useROISimulation";
-import { ROIChart } from "@/components/ROIChart";
-import { EventLogPanel } from "@/components/EventLogPanel";
-import { useAIInsights } from "@/hooks/useAIInsights";
-import { NodeInsightPanel } from "@/components/NodeInsightPanel";
-import { ScenarioComparePanel } from "@/components/ScenarioComparePanel";
-import { useTelemetry } from "@/hooks/useTelemetry";
-import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { useAdaptiveUIState } from "@/hooks/useAdaptiveUIState";
+import type { LivingMapData, LivingNode } from "@/types/livingMap";
+import { MetricCard } from "@/components/ui/MetricCard";
 import { Card } from "@/components/ui/Card";
-import { useSimplificationMetrics } from "@/hooks/useSimplificationMetrics";
-
-interface TopSystemRaw {
-  systemId?: string;
-  id?: string;
-  systemName?: string;
-  name?: string;
-  label?: string;
-  integrationCount?: number;
-  integrations?: number;
-  degree?: number;
-}
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { useTelemetry } from "@/hooks/useTelemetry";
+import { useAIInsights } from "@/hooks/useAIInsights";
+import { useUserGenome } from "@/lib/context/userGenome";
+import { emitAdaptiveEvent } from "@/lib/adaptive/eventBus";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
   integrationsFuture: number;
   domainsDetected?: number;
-  topSystems: TopSystemRaw[];
 }
+
+type FlowStep = "domain" | "system" | "integration" | "insight";
 
 interface Props {
   projectId: string;
 }
 
-function resolveSystemName(s: TopSystemRaw): string {
-  return (
-    s.systemName ||
-    s.name ||
-    s.label ||
-    s.id ||
-    s.systemId ||
-    "Unknown"
-  );
-}
+const DIGITAL_TWIN_VERSION = "0.2";
 
-function resolveIntegrationCount(s: TopSystemRaw): number {
-  return (
-    s.integrationCount ??
-    s.integrations ??
-    s.degree ??
-    0
-  );
-}
+const ACTIONS = [
+  {
+    key: "redundancy",
+    title: "Analyze Redundancies",
+    summary: "Surface overlapping systems and pathways adding unnecessary run costs.",
+    cta: "Open Redundancy Map",
+    href: (projectId: string) => `/project/${projectId}/experience?scene=digital&lens=redundancy`,
+  },
+  {
+    key: "roi",
+    title: "Assess ROI",
+    summary: "Estimate ROI impact for this focus area and capture it as a scenario.",
+    cta: "Open ROI Dashboard",
+    href: (projectId: string) => `/project/${projectId}/experience?scene=roi`,
+  },
+  {
+    key: "modernization",
+    title: "Simulate Modernization",
+    summary: "Model the impact of retiring or upgrading systems via the sequencer.",
+    cta: "Open Sequencer",
+    href: (projectId: string) => `/project/${projectId}/experience?scene=sequencer`,
+  },
+];
 
-function formatNumber(n: number | undefined | null): string {
-  if (n == null || Number.isNaN(n)) return "0";
-  return n.toLocaleString();
+function formatNumber(value: number | undefined | null): string {
+  if (value == null || Number.isNaN(value)) return "0";
+  return value.toLocaleString();
 }
 
 function stableScore(id: string, base: number, spread: number) {
   let hash = 0;
   for (let i = 0; i < id.length; i += 1) {
     hash = (hash << 5) - hash + id.charCodeAt(i);
-    hash |= 0; // force 32-bit
+    hash |= 0;
   }
-  const normalized = Math.abs(hash % 1000) / 1000; // 0..0.999
+  const normalized = Math.abs(hash % 1000) / 1000;
   return base + normalized * spread;
 }
 
@@ -83,1009 +70,535 @@ function buildLivingMapData(view: { nodes?: any[]; edges?: any[] }): LivingMapDa
   const nodes = Array.isArray(view.nodes) ? view.nodes : [];
   const edges = Array.isArray(view.edges) ? view.edges : [];
   const degree = new Map<string, number>();
-  edges.forEach((e: any) => {
-    const src = e?.sourceId ?? e?.source;
-    const tgt = e?.targetId ?? e?.target;
+  edges.forEach((edge: any) => {
+    const src = edge?.sourceId ?? edge?.source;
+    const tgt = edge?.targetId ?? edge?.target;
     if (src) degree.set(src, (degree.get(src) ?? 0) + 1);
     if (tgt) degree.set(tgt, (degree.get(tgt) ?? 0) + 1);
   });
 
-  const livingNodes: LivingMapData["nodes"] = nodes.map((n: any) => {
-    const id = String(n?.id ?? "");
-    const label = String(n?.label ?? n?.name ?? "Unknown");
-    const domain = n?.domain ?? null;
-    const integrationCount = degree.get(id) ?? 0;
+  const livingNodes: LivingMapData["nodes"] = nodes.map((node: any) => {
+    const id = String(node?.id ?? "");
+    const label = String(node?.label ?? node?.name ?? "Unknown");
     return {
       id,
       label,
-      domain,
-      integrationCount,
-      state: (n as any).state,
-      health: stableScore(id, 55, 35),
-      aiReadiness: stableScore(id + "-ai", 45, 45),
-      roiScore: stableScore(id + "-roi", 35, 50),
+      domain: node?.domain ?? null,
+      integrationCount: degree.get(id) ?? 0,
+      state: node?.state,
+      health: stableScore(id, 55, 30),
+      aiReadiness: stableScore(`${id}-ai`, 45, 45),
+      roiScore: stableScore(`${id}-roi`, 35, 50),
     };
   });
 
-  const livingEdges: LivingMapData["edges"] = edges.map((e: any, idx: number) => ({
-    id: String(e?.id ?? `edge-${idx}`),
-    source: String(e?.sourceId ?? e?.source ?? ""),
-    target: String(e?.targetId ?? e?.target ?? ""),
+  const livingEdges: LivingMapData["edges"] = edges.map((edge: any, idx: number) => ({
+    id: String(edge?.id ?? `edge-${idx}`),
+    source: String(edge?.sourceId ?? edge?.source ?? ""),
+    target: String(edge?.targetId ?? edge?.target ?? ""),
     weight: 1,
     kind: "api",
-    confidence: typeof e?.confidence === "number" ? e.confidence : undefined,
-    inferred: Boolean(e?.data?.inferred || e?.inferred),
-    state: (e as any).state,
+    confidence: typeof edge?.confidence === "number" ? edge.confidence : undefined,
+    inferred: Boolean(edge?.data?.inferred || edge?.inferred),
   }));
 
   return { nodes: livingNodes, edges: livingEdges };
 }
 
+function buildInsight(role: string, motivation: string, systemName: string, peerName: string, tone: string) {
+  const base = role.toLowerCase().includes("cfo")
+    ? `From a finance lens, ${systemName} and ${peerName} create duplicate run costs.`
+    : `The ${systemName} → ${peerName} path is carrying redundant flows.`;
+  const toneSuffix = tone === "empathetic" ? " I can soften the rollout if you need." : tone === "analytical" ? " Let's quantify the delta next." : " Ready to act when you are.";
+  return `${base} Aligning this connection accelerates ${motivation.toLowerCase()}.${toneSuffix}`;
+}
+
 export function DigitalEnterpriseClient({ projectId }: Props) {
-  const telemetry = useTelemetry("digital_enterprise", { projectId });
-  const { snapshot, setMetrics } = useSimplificationMetrics("digital_enterprise");
-  const {
-    showContextBar,
-    contextMessage,
-    setContextMessage,
-    assistVisible,
-    assistMessage,
-    setAssistMessage,
-    setAssistVisible,
-    ctaEnabled,
-    setCtaEnabled,
-    ctaLabel,
-    setCtaLabel,
-    progress,
-    setProgress,
-  } = useAdaptiveUIState("digital_enterprise", {
-    initialContext: "Explore domains → systems → integrations as data arrives.",
-    initialCTA: "Run AI analysis",
-    initialProgress: 0.25,
-  });
+  const { log: logTelemetry } = useTelemetry("digital_twin", { projectId });
+  const searchParams = useSearchParams();
+  const isEmbed = searchParams.get("embed") === "1";
+  const { role, motivation, interactionStyle, preferredTone } = useUserGenome();
+
   const [stats, setStats] = useState<DigitalEnterpriseStats | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [graphDepth, setGraphDepth] = useState<"domains" | "systems" | "integrations">("domains");
-  const [autoCollapsed, setAutoCollapsed] = useState(false);
-  const retryAfterRef = useRef<number>(0);
-  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const devLoadOnceRef = useRef(false);
-  const simplificationScoreRef = useRef(0);
-  const prevUiRef = useRef<{
-    progress: number;
-    ctaEnabled: boolean;
-    context: string;
-    ctaLabel: string;
-  }>({
-    progress: 0.25,
-    ctaEnabled: false,
-    context: "",
-    ctaLabel: "Run AI analysis",
-  });
-  const [graphEnabled, setGraphEnabled] = useState(false);
-  const prevMetricsRef = useRef<{ DC: number; CL: number }>({
-    DC: snapshot?.metrics?.DC ?? 0.55,
-    CL: snapshot?.metrics?.CL ?? 0.7,
-  });
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsLoading, setStatsLoading] = useState<boolean>(true);
+
   const [graphData, setGraphData] = useState<LivingMapData | null>(null);
   const [graphLoading, setGraphLoading] = useState<boolean>(true);
   const [graphError, setGraphError] = useState<string | null>(null);
-  const timelineStages = useMemo(() => ["Current", "Stage 1", "Future"], []);
-  const [timelineStage, setTimelineStage] = useState<number>(0);
-  const [overlays, setOverlays] = useState({
-    roi: true,
-    cost: false,
-    risk: false,
-    modernization: false,
-  });
 
-  const [impact, setImpact] = useState<SystemImpact | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [twinMessages, setTwinMessages] = useState<
-    { id: string; role: "twin" | "user"; text: string }[]
-  >([
-    { id: "m1", role: "twin", text: "Graph synced. Want a risk or ROI view?" },
-    { id: "m2", role: "twin", text: "Tip: toggle timeline to focus on changes." },
-  ]);
+  const [graphRevealed, setGraphRevealed] = useState(false);
+  const [viewMode, setViewMode] = useState<"roi" | "risk" | "modernization">("roi");
+
+  const [flowStep, setFlowStep] = useState<FlowStep>("domain");
+  const flowStepRef = useRef<FlowStep>("domain");
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
+  const [selectedIntegration, setSelectedIntegration] = useState<{ edgeId: string; peerLabel: string } | null>(null);
+  const [insightMessage, setInsightMessage] = useState<string | null>(null);
+
   const aiInsights = useAIInsights(graphData?.nodes ?? []);
-  const searchParams = useSearchParams();
-  const isEmbed = searchParams.get("embed") === "1";
-  const livingMapData = useMemo<LivingMapData>(() => {
-    const data = graphData ?? { nodes: [], edges: [] };
-    const safeNodes = ((data.nodes ?? []) as LivingNode[]).filter((n): n is LivingNode => !!n);
-    const dispositions: Array<NonNullable<LivingMapData["nodes"][number]["disposition"]>> = [
-      "keep",
-      "modernize",
-      "replace",
-      "retire",
-    ];
-    const enrichedNodes = safeNodes
-      .map((n, idx) => {
-        const labelRaw = (n as any).system_name ?? (n as any).label ?? "";
-        const label = labelRaw || String(n.id ?? "Unknown");
-        if (!n.id || !label) return null;
-        const insight = aiInsights.insights[n.id];
-        return {
-          ...n,
-          id: String(n.id),
-          label,
-          domain: insight?.domain ?? n.domain,
-          aiReadiness: insight?.aiReadiness ?? n.aiReadiness,
-          opportunityScore: insight?.opportunityScore ?? n.opportunityScore,
-          riskScore: insight?.riskScore ?? n.riskScore,
-          roiScore: n.roiScore ?? n.opportunityScore,
-          aiSummary: insight?.summary ?? n.aiSummary,
-          disposition: (insight?.disposition as any) ?? n.disposition ?? dispositions[idx % dispositions.length],
-        };
-      })
-      .filter(Boolean) as LivingNode[];
 
-    return {
-      nodes: enrichedNodes,
-      edges: ((data.edges ?? []) as LivingEdge[]).filter((e): e is LivingEdge => !!e && !!(e as any).source && !!(e as any).target),
-    };
+  const livingMapData = useMemo<LivingMapData>(() => {
+    const fallback = graphData ?? { nodes: [], edges: [] };
+    const safeNodes = ((fallback.nodes ?? []) as LivingNode[]).filter(Boolean);
+    const enriched = safeNodes.map((node) => {
+      const insight = aiInsights.insights[node.id];
+      return {
+        ...node,
+        domain: insight?.domain ?? node.domain,
+        aiReadiness: insight?.aiReadiness ?? node.aiReadiness,
+        roiScore: insight?.opportunityScore ?? node.roiScore,
+        disposition: insight?.disposition ?? node.disposition,
+      };
+    });
+    return { nodes: enriched, edges: fallback.edges ?? [] };
   }, [graphData, aiInsights.insights]);
 
-  const stageSnapshots = useMemo(() => {
-    const currentNodes = livingMapData.nodes.filter((n: any) => n.state !== "added");
-    const futureNodes = livingMapData.nodes.filter((n: any) => n.state !== "removed");
-    const deltaNodes = livingMapData.nodes.filter((n: any) =>
-      ["added", "removed", "modified"].includes((n as any).state ?? ""),
+  const domainCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    livingMapData.nodes.forEach((node) => {
+      const key = ((node.domain as string) || "Other").trim() || "Other";
+      counts[key] = (counts[key] ?? 0) + 1;
+    });
+    return counts;
+  }, [livingMapData.nodes]);
+
+  const domainSuggestions = useMemo(() => {
+    const sorted = Object.entries(domainCounts)
+      .filter(([domain]) => domain.toLowerCase() !== "unknown")
+      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+      .map(([domain]) => domain);
+    return (sorted.length ? sorted.slice(0, 4) : ["Commerce", "Finance", "Supply Chain", "Order Management"]).map(
+      (domain) => domain.charAt(0).toUpperCase() + domain.slice(1),
     );
-    const stage1Nodes = deltaNodes.length ? deltaNodes : futureNodes;
-    const toSet = (nodesArr: LivingNode[]) => new Set(nodesArr.map((n) => n.id));
-    const currentKeep = toSet(currentNodes);
-    const futureKeep = toSet(futureNodes);
-    const stage1Keep = toSet(stage1Nodes);
-    const edgeFilter = (keep: Set<string>) =>
-      livingMapData.edges.filter((e) => keep.has(e.source) && keep.has(e.target));
-    return {
-      current: { nodes: currentNodes, edges: edgeFilter(currentKeep) },
-      stage1: { nodes: stage1Nodes, edges: edgeFilter(stage1Keep) },
-      future: { nodes: futureNodes, edges: edgeFilter(futureKeep) },
-    };
-  }, [livingMapData]);
+  }, [domainCounts]);
 
-  useEffect(() => {
-    if (process.env.NEXT_PUBLIC_TELEMETRY_DEBUG === "true") {
-      // eslint-disable-next-line no-console
-      console.log("[DE] harmonized graph", {
-        nodes: livingMapData.nodes.length,
-        edges: livingMapData.edges.length,
-        sample: livingMapData.nodes.slice(0, 3).map((n) => ({ id: n.id, label: n.label, domain: (n as any).domain })),
+  const selectedSystem = useMemo(() => livingMapData.nodes.find((node) => node.id === selectedSystemId) ?? null, [livingMapData.nodes, selectedSystemId]);
+
+  const systemCandidates = useMemo(() => {
+    if (!selectedDomain) return [];
+    return livingMapData.nodes
+      .filter((node) => (node.domain as string)?.toLowerCase() === selectedDomain.toLowerCase())
+      .sort((a, b) => (b.integrationCount ?? 0) - (a.integrationCount ?? 0))
+      .slice(0, 4);
+  }, [livingMapData.nodes, selectedDomain]);
+
+  const integrationCandidates = useMemo(() => {
+    if (!selectedSystem) return [];
+    return livingMapData.edges
+      .filter((edge) => edge.source === selectedSystem.id || edge.target === selectedSystem.id)
+      .slice(0, 4)
+      .map((edge) => {
+        const peerId = edge.source === selectedSystem.id ? edge.target : edge.source;
+        const peer = livingMapData.nodes.find((node) => node.id === peerId);
+        return {
+          id: edge.id,
+          label: peer?.label ?? "Unknown integration",
+        };
       });
+  }, [livingMapData.edges, livingMapData.nodes, selectedSystem]);
+
+  const highlightNodeIds = useMemo(() => {
+    if (selectedSystem) {
+      const ids = new Set<string>([selectedSystem.id]);
+      livingMapData.edges.forEach((edge) => {
+        if (edge.source === selectedSystem.id) ids.add(edge.target);
+        if (edge.target === selectedSystem.id) ids.add(edge.source);
+      });
+      return ids;
     }
-  }, [livingMapData]);
+    if (selectedDomain) {
+      const ids = livingMapData.nodes
+        .filter((node) => (node.domain as string)?.toLowerCase() === selectedDomain.toLowerCase())
+        .map((node) => node.id);
+      return ids.length ? new Set(ids) : null;
+    }
+    return null;
+  }, [livingMapData.nodes, livingMapData.edges, selectedSystem, selectedDomain]);
 
-  const roiSim = useROISimulation();
-  const simplificationScore = Math.min(
-    1,
-    Math.max(0, (snapshot?.metrics?.SSS ?? 2.4) / 5),
-  );
-  const simplificationLabel =
-    simplificationScore >= 0.8
-      ? "Clean graph"
-      : simplificationScore >= 0.5
-      ? "Mostly aligned"
-      : "Needs clarity";
-  const simplificationTone =
-    simplificationScore >= 0.8
-      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-      : simplificationScore >= 0.5
-      ? "bg-amber-50 text-amber-800 border-amber-200"
-      : "bg-rose-50 text-rose-700 border-rose-200";
+  const focusPulse = useMemo(() => {
+    if (!highlightNodeIds || !highlightNodeIds.size) return null;
+    const integrations = livingMapData.edges.filter((edge) => highlightNodeIds.has(edge.source) && highlightNodeIds.has(edge.target)).length;
+    return {
+      systems: highlightNodeIds.size,
+      integrations,
+      overlap: Math.max(4, Math.round(integrations * 1.1)),
+    };
+  }, [highlightNodeIds, livingMapData.edges]);
+
+  const hasStats = Boolean(stats);
+  const hasGraph = (livingMapData.nodes.length ?? 0) > 0;
+
   useEffect(() => {
-    simplificationScoreRef.current = simplificationScore;
-  }, [simplificationScore]);
+    logTelemetry("workspace_view", { projectId, version: DIGITAL_TWIN_VERSION });
+  }, [projectId, logTelemetry]);
 
-  const loadStats = useCallback(
-    async (opts?: { allowDuplicate?: boolean; source?: "auto" | "retry" | "manual" }) => {
-      if (process.env.NODE_ENV === "development" && !opts?.allowDuplicate) {
-        if (devLoadOnceRef.current) return;
-        devLoadOnceRef.current = true;
-      }
-
-      const now = Date.now();
-      if (now < retryAfterRef.current && !opts?.allowDuplicate) {
-        return;
-      }
-
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
-      }
-    const started = performance.now();
-    setLoading(true);
-    setError(null);
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    setStatsError(null);
     try {
-      const res = await fetch(
-        `/api/digital-enterprise/stats?project=${encodeURIComponent(projectId)}`,
-        { cache: "no-store" },
-      );
+      const res = await fetch(`/api/digital-enterprise/stats?project=${encodeURIComponent(projectId)}`, { cache: "no-store" });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        const logFn = res.status === 429 ? console.warn : console.error;
-        logFn("[DE-PAGE] Failed to load stats", res.status, text);
-        if (res.status === 429) {
-          let retryAfterMs = 60000;
-          try {
-            const parsed = JSON.parse(text);
-            if (parsed?.retryAfterMs) {
-              retryAfterMs = Number(parsed.retryAfterMs) || retryAfterMs;
-            }
-          } catch {
-            // ignore JSON parse errors
-          }
-          retryAfterRef.current = Date.now() + retryAfterMs;
-          setError(`Rate limited. Retrying in ${Math.round(retryAfterMs / 1000)}s.`);
-          retryTimeoutRef.current = setTimeout(() => {
-            loadStats({ allowDuplicate: true, source: "retry" });
-          }, retryAfterMs);
-        } else {
-          setError("Failed to load digital enterprise metrics.");
-        }
-        setStats(null);
-        telemetry.log(
-          "graph_load_error",
-          {
-            status: res.status,
-            body: text,
-          },
-          simplificationScoreRef.current,
-        );
-        return;
+        throw new Error(`Stats load failed ${res.status}: ${text}`);
       }
-
       const json = (await res.json()) as DigitalEnterpriseStats;
       setStats(json);
-      setError(null);
-      telemetry.log(
-        "graph_load",
-        {
-          systems: json.systemsFuture,
-          integrations: json.integrationsFuture,
-          domains: json.domainsDetected,
-          duration_ms: Math.round(performance.now() - started),
-        },
-        simplificationScoreRef.current,
-      );
     } catch (err: any) {
-      console.error("[DE-PAGE] Error loading stats", err);
-      setError("Failed to load digital enterprise metrics.");
+      setStatsError(err?.message ?? "Failed to load digital twin metrics.");
       setStats(null);
-      telemetry.log(
-        "graph_load_error",
-        { message: (err as Error)?.message },
-        simplificationScoreRef.current,
-      );
     } finally {
-      setLoading(false);
+      setStatsLoading(false);
     }
-    },
-    [projectId, telemetry],
-  );
-
-  useEffect(() => {
-    telemetry.log("workspace_view", { projectId }, simplificationScoreRef.current);
-    loadStats();
-  }, [projectId, telemetry, loadStats]);
+  }, [projectId]);
 
   const loadGraph = useCallback(async () => {
     setGraphLoading(true);
     setGraphError(null);
     try {
-      const res = await fetch(
-        `/api/digital-enterprise/view?project=${encodeURIComponent(projectId)}&mode=all`,
-        { cache: "no-store" },
-      );
+      const res = await fetch(`/api/digital-enterprise/view?project=${encodeURIComponent(projectId)}&mode=all`, { cache: "no-store" });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        throw new Error(`View load failed ${res.status}: ${text}`);
+        throw new Error(`Graph load failed ${res.status}: ${text}`);
       }
       const json = await res.json();
-      const next = buildLivingMapData(json);
-      setGraphData(next);
-      setGraphEnabled(true);
+      setGraphData(buildLivingMapData(json));
     } catch (err: any) {
       setGraphError(err?.message ?? "Failed to load graph data.");
       setGraphData(null);
-      setGraphEnabled(false);
     } finally {
       setGraphLoading(false);
     }
   }, [projectId]);
 
   useEffect(() => {
-    void loadGraph();
-  }, [loadGraph]);
+    loadStats();
+    loadGraph();
+  }, [loadStats, loadGraph]);
 
   useEffect(() => {
-    return () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
-      }
-    };
+    if (!hasGraph || graphLoading) return;
+    const timer = window.setTimeout(() => {
+      setGraphRevealed(true);
+      logTelemetry("digital_twin.graph_revealed", {
+        nodes: livingMapData.nodes.length,
+        edges: livingMapData.edges.length,
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [graphLoading, hasGraph, livingMapData.nodes.length, livingMapData.edges.length, logTelemetry]);
+
+  useEffect(() => {
+    emitAdaptiveEvent("ux_mode:set", { mode: "focus", step: flowStep });
   }, []);
 
-  useEffect(() => {
-    if (!stats) return;
-    const denseGraph =
-      (stats.systemsFuture ?? 0) > 50 || (stats.integrationsFuture ?? 0) > 80;
-    if (autoCollapsed !== denseGraph) {
-      setAutoCollapsed(denseGraph);
-    }
-    const nextDepth: "domains" | "systems" = denseGraph ? "domains" : "systems";
-    if (graphDepth !== nextDepth) {
-      setGraphDepth(nextDepth);
-    }
-    const loadFactor = Math.min(
-      1,
-      ((stats.systemsFuture ?? 0) + (stats.integrationsFuture ?? 0)) / 800,
-    );
-    const nextMetrics = {
-      DC: 0.55 + loadFactor * 0.35,
-      CL: 0.7 - loadFactor * 0.2,
-    };
-    const prev = prevMetricsRef.current;
-    const dcDelta = Math.abs((prev.DC ?? 0) - nextMetrics.DC);
-    const clDelta = Math.abs((prev.CL ?? 0) - nextMetrics.CL);
-    if (dcDelta > 0.001 || clDelta > 0.001) {
-      prevMetricsRef.current = nextMetrics;
-      setMetrics(nextMetrics);
-    }
-  }, [stats, autoCollapsed, graphDepth, setMetrics]);
-
-
-  const hasDataFromStats =
-    !!stats &&
-    ((stats.systemsFuture ?? 0) > 0 ||
-      (stats.integrationsFuture ?? 0) > 0);
-  const hasGraphData = (graphData?.nodes?.length ?? 0) > 0;
-  const hasData = hasDataFromStats || hasGraphData;
-  const domainCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    (livingMapData.nodes ?? []).forEach((n: any) => {
-      const d = (n.domain as string) || "Other";
-      counts[d] = (counts[d] ?? 0) + 1;
-    });
-    return counts;
-  }, [livingMapData.nodes]);
-
-  const stageSnapshotForIndex = useMemo(() => {
-    const map: Record<number, { nodes: LivingNode[]; edges: LivingEdge[] }> = {
-      0: stageSnapshots.current,
-      [timelineStages.length - 1]: stageSnapshots.future,
-    };
-    if (timelineStages.length > 2) {
-      map[1] = stageSnapshots.stage1;
-    }
-    return map;
-  }, [stageSnapshots, timelineStages.length]);
-
-  // Keep full graph visible; stage filtering is only for telemetry/metrics.
-  const displayData = livingMapData;
-
-  const selectedNode = useMemo(
-    () => displayData.nodes.find((n) => n.id === selectedNodeId) ?? null,
-    [displayData.nodes, selectedNodeId]
+  const advanceFlow = useCallback(
+    (next: FlowStep) => {
+      const prev = flowStepRef.current;
+      if (prev === next) return;
+      flowStepRef.current = next;
+      setFlowStep(next);
+      emitAdaptiveEvent("ux_mode:set", { mode: "focus", step: next });
+      logTelemetry("twin_transition_complete", { from: prev, to: next, role });
+    },
+    [logTelemetry, role],
   );
 
-  useEffect(() => {
-    const baseProgress = hasData ? 0.65 : 0.35;
-    const depthBonus = selectedNodeId ? 0.9 : baseProgress;
-    const nextContext = hasData
-      ? "Graph loaded — drill into systems or run AI analysis."
-      : "Load Lucid data on Tech Stack to populate this view.";
-    const nextLabel = hasData ? "Run AI analysis" : "Awaiting Lucid data";
+  const handleDomainSelect = (domain: string) => {
+    setSelectedDomain(domain);
+    setSelectedSystemId(null);
+    setSelectedIntegration(null);
+    setInsightMessage(null);
+    logTelemetry("twin_focus_entered", { domain, role });
+    advanceFlow("system");
+  };
 
-    const prev = prevUiRef.current;
-    const progressChanged = Math.abs(prev.progress - depthBonus) > 0.001;
-    const ctaChanged = prev.ctaEnabled !== hasData || prev.ctaLabel !== nextLabel;
-    const contextChanged = prev.context !== nextContext;
+  const handleSystemSelect = (systemId: string) => {
+    setSelectedSystemId(systemId);
+    setSelectedIntegration(null);
+    setInsightMessage(null);
+    advanceFlow("integration");
+  };
 
-    if (progressChanged) {
-      prevUiRef.current.progress = depthBonus;
-      setProgress(depthBonus);
-    }
-    if (ctaChanged) {
-      prevUiRef.current.ctaEnabled = hasData;
-      prevUiRef.current.ctaLabel = nextLabel;
-      setCtaEnabled(hasData);
-      setCtaLabel(nextLabel);
-    }
-    if (contextChanged) {
-      prevUiRef.current.context = nextContext;
-      setContextMessage(nextContext);
-    }
-  }, [
-    hasData,
-    selectedNodeId,
-    setContextMessage,
-    setCtaEnabled,
-    setCtaLabel,
-    setProgress,
-  ]);
-
-  useEffect(() => {
-    if (error) {
-      setAssistVisible(true);
-      setAssistMessage(error);
-      return;
-    }
-    if (autoCollapsed) {
-      setAssistVisible(true);
-      setAssistMessage(
-        "Dense graph detected — defaulting to domain view. Expand layers as needed.",
-      );
-      return;
-    }
-    setAssistVisible(false);
-    setAssistMessage(null);
-  }, [autoCollapsed, error, setAssistMessage, setAssistVisible]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setAssistVisible(true);
-      setAssistMessage("Explore nodes or run AI analysis to trace integrations.");
-      telemetry.log(
-        "digital_enterprise_idle",
-        { idle_ms: 45000, hasData },
-        simplificationScoreRef.current,
-      );
-    }, 45000);
-    return () => window.clearTimeout(timer);
-  }, [
-    hasData,
-    selectedNodeId,
-    search,
-    telemetry,
-    setAssistMessage,
-    setAssistVisible,
-  ]);
-
-  function handleSelectSystem(name: string, degree: number) {
-    // For now, we mock upstream/downstream split.
-    // Backend traversal will replace this logic later.
-    const upstreamCount = Math.max(0, Math.floor(degree / 2));
-    const downstreamCount = Math.max(0, degree - upstreamCount);
-    telemetry.log("node_click", { name, degree }, simplificationScoreRef.current);
-    telemetry.log(
-      "edge_trace",
-      { name, degree, upstreamCount, downstreamCount },
-      simplificationScoreRef.current,
-    );
-
-    setImpact({
-      systemName: name,
-      totalDegree: degree,
-      upstreamCount,
-      downstreamCount,
-      upstream: [],
-      downstream: [],
+  const handleIntegrationSelect = (integrationId: string, peerLabel: string) => {
+    if (!selectedSystem) return;
+    setSelectedIntegration({ edgeId: integrationId, peerLabel });
+    const message = buildInsight(role, motivation, selectedSystem.label, peerLabel, preferredTone);
+    setInsightMessage(message);
+    logTelemetry("twin_insight_generated", {
+      system: selectedSystem.label,
+      peer: peerLabel,
+      role,
     });
-  }
+    advanceFlow("insight");
+  };
+
+  const focusSummary = useMemo(() => {
+    if (!selectedDomain) return "Pick a domain so I can compress the map for you.";
+    if (!selectedSystem) return `Scanning ${selectedDomain}. Pick a system to zoom in.`;
+    if (!selectedIntegration) return `Tracing ${selectedSystem.label}. Choose an adjacent integration to inspect.`;
+    return `Highlighting ${selectedSystem.label} ↔ ${selectedIntegration.peerLabel}. Ready for the next move?`;
+  }, [selectedDomain, selectedSystem, selectedIntegration]);
+
+  const promptsByRole: Record<FlowStep, string> = {
+    domain:
+      interactionStyle === "narrative"
+        ? `Let's ease in, ${role}. Which ecosystem should we study first?`
+        : `Choose a domain to start compressing the map.`,
+    system:
+      interactionStyle === "narrative"
+        ? "I spotlighted the busiest systems in that domain. Want to zoom into one?"
+        : "Pick the system that feels most congested right now.",
+    integration:
+      interactionStyle === "narrative"
+        ? "These connections carry most of the load. Which one should we interrogate?"
+        : "Select the integration that needs clarity.",
+    insight:
+      interactionStyle === "narrative"
+        ? "Here’s the insight I generated. Want me to route it somewhere?"
+        : "Insight ready. Where should I send you next?",
+  };
+
+  const renderFlowButtons = () => {
+    switch (flowStep) {
+      case "domain":
+        return (
+          <div className="flex flex-wrap gap-2">
+            {domainSuggestions.map((domain) => (
+              <button
+                key={domain}
+                type="button"
+                onClick={() => handleDomainSelect(domain)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                  selectedDomain === domain ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-900"
+                }`}
+              >
+                {domain}
+              </button>
+            ))}
+          </div>
+        );
+      case "system":
+        return (
+          <div className="flex flex-wrap gap-2">
+            {systemCandidates.map((node) => (
+              <button
+                key={node.id}
+                type="button"
+                onClick={() => handleSystemSelect(node.id)}
+                className={`rounded-2xl border px-3 py-2 text-left text-xs ${
+                  selectedSystemId === node.id ? "border-slate-900 bg-white" : "border-slate-200 bg-slate-50 hover:border-slate-900"
+                }`}
+              >
+                <p className="text-sm font-semibold text-slate-900">{node.label}</p>
+                <p className="text-[0.7rem] text-slate-500">Connections: {node.integrationCount ?? 0}</p>
+              </button>
+            ))}
+          </div>
+        );
+      case "integration":
+        return (
+          <div className="flex flex-wrap gap-2">
+            {integrationCandidates.map((edge) => (
+              <button
+                key={edge.id}
+                type="button"
+                onClick={() => handleIntegrationSelect(edge.id, edge.label)}
+                className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-left text-xs hover:border-slate-900"
+              >
+                <p className="text-sm font-semibold text-slate-900">{edge.label}</p>
+                <p className="text-[0.7rem] text-slate-500">Integration focus</p>
+              </button>
+            ))}
+          </div>
+        );
+      case "insight":
+      default:
+        return insightMessage ? <p className="text-sm text-slate-800">{insightMessage}</p> : null;
+    }
+  };
 
   return (
-    <div className={`max-w-6xl mx-auto ${isEmbed ? "px-4 py-6" : "px-8 py-8"}`}>
-      {error && (
+    <div className={isEmbed ? "px-4 py-6" : "px-6 py-8"}>
+      {statsError && (
         <div className="mb-4">
-          <ErrorBanner
-            message={error}
-            onRetry={() => loadStats({ allowDuplicate: true, source: "manual" })}
-          />
+          <ErrorBanner message={statsError} onRetry={loadStats} />
         </div>
       )}
       {!isEmbed && (
         <WorkspaceHeader
-          statusLabel="DIGITAL ENTERPRISE"
-          title={`Ecosystem View for Project: ${projectId || "(unknown)"}`}
-          description="These metrics are derived directly from your Lucid architecture diagram. We count unique systems that participate in at least one connection and their integrations."
+          statusLabel="DIGITAL TWIN"
+          title={`Digital Twin Experience · v${DIGITAL_TWIN_VERSION}`}
+          description="Here’s the unified technology landscape — harmonized systems, integrations, and telemetry in one guided, conversational flow."
         />
       )}
-      {showContextBar && !isEmbed && (
-        <Card className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-[0.65rem] tracking-[0.22em] text-slate-500 uppercase mb-1">
-              CONTEXT
+
+      <section className="mt-6 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)_280px]">
+        <div className="space-y-4">
+          <Card className="space-y-3 border-slate-200 bg-white shadow-sm">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">Recognition</p>
+            <p className="text-sm text-slate-800">
+              “Here’s the full picture — every system and integration you’ve shared, harmonized across your enterprise.”
             </p>
-            <p className="text-xs text-slate-700">
-              {contextMessage || "Adaptive guidance will respond as telemetry arrives."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="h-2 w-36 rounded-full bg-slate-100">
-              <div
-                className="h-2 rounded-full bg-slate-900 transition-all"
-                style={{ width: `${Math.round(progress * 100)}%` }}
-              />
-            </div>
-            <span className="text-[0.75rem] font-semibold text-slate-800">
-              {Math.round(progress * 100)}%
-            </span>
-            <span
-              className={`inline-flex items-center rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${simplificationTone}`}
-            >
-              {Math.round(simplificationScore * 100)}% · {simplificationLabel}
-            </span>
-            <button
-              type="button"
-              disabled={!ctaEnabled}
-              onClick={() => {
-                telemetry.log(
-                  "ai_analysis_cta",
-                  { projectId, hasData },
-                  simplificationScoreRef.current,
-                );
-                setGraphDepth("systems");
-              }}
-              className={
-                "rounded-full px-4 py-1.5 text-[0.75rem] font-semibold " +
-                (ctaEnabled
-                  ? "bg-slate-900 text-white hover:bg-slate-800"
-                  : "bg-slate-200 text-slate-500 cursor-not-allowed")
-              }
-            >
-              {ctaLabel}
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {assistVisible && assistMessage && !isEmbed && (
-        <Card className="mb-4 border-amber-200 bg-amber-50">
-          <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
-            NEXT STEP
-          </p>
-          <p className="text-xs text-amber-800">{assistMessage}</p>
-        </Card>
-      )}
-          {!isEmbed && (
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            <p className="text-[0.7rem] text-slate-500">Layer view:</p>
-            {(["domains", "systems", "integrations"] as const).map((depth) => (
-              <button
-                key={depth}
-                type="button"
-                onClick={() => setGraphDepth(depth)}
-                className={
-                  "rounded-full border px-3 py-1 text-[0.7rem] font-semibold " +
-                  (graphDepth === depth
-                    ? "bg-slate-900 text-white border-slate-900"
-                    : "bg-slate-100 text-slate-700 border-slate-200")
-                }
-              >
-                {depth === "domains"
-                  ? "Domains"
-                  : depth === "systems"
-                  ? "Systems"
-                  : "Integrations"}
-              </button>
-            ))}
-            {autoCollapsed && (
-              <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-[0.7rem] font-medium text-amber-800">
-                Dense graph — domains collapsed
-              </span>
-            )}
-          </div>
-          )}
-
-      {loading && (
-        <div className="mt-10 text-sm text-gray-500">
-          Loading digital enterprise metrics…
-        </div>
-      )}
-
-      {!loading && error && (
-        <div className="mt-10 text-sm text-red-500">
-          {error}
-        </div>
-      )}
-
-      {!loading && !error && hasData && stats && (
-        <>
-          {/* Metric cards */}
-          <section className={`grid grid-cols-1 sm:grid-cols-3 gap-3 ${isEmbed ? "mt-4" : "mt-8"}`}>
-            <MetricCard
-              label="SYSTEMS"
-              value={formatNumber(stats.systemsFuture)}
-              description={
-                isEmbed ? undefined : "Unique labeled systems that participate in at least one connection in this architecture view."
-              }
-              className={isEmbed ? "text-center py-2" : undefined}
-            />
-            <MetricCard
-              label="INTEGRATIONS"
-              value={formatNumber(stats.integrationsFuture)}
-              description={
-                isEmbed ? undefined : "Unique system-to-system connections derived from connector lines."
-              }
-              className={isEmbed ? "text-center py-2" : undefined}
-            />
-            <MetricCard
-              label="DOMAINS DETECTED"
-              value={formatNumber(stats.domainsDetected ?? 0)}
-              description={
-                isEmbed ? undefined : "Domain / ecosystem clustering will evolve in a later pass."
-              }
-              className={isEmbed ? "text-center py-2" : undefined}
-            />
-          </section>
-
-          {/* Top systems table */}
-        <section className={isEmbed ? "mt-6" : "mt-10"}>
-          {!isEmbed && (
-            <>
-              <h2 className="text-sm font-semibold mb-1">LIVING MAP (BETA)</h2>
-              <p className="text-xs text-gray-500 mb-4">
-                Interactive upstream/downstream view; simulate and color by health/AI readiness/redundancy.
-              </p>
-              <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-                <label className="flex items-center gap-2">
-                  <span className="text-slate-700 font-semibold">Search</span>
-                  <input
-                    className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-slate-900 focus:outline-none"
-                    placeholder="System or domain"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                <span className="font-semibold text-slate-700">Edge kinds:</span>
-                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#2563eb" }} />API</span>
-                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#22c55e" }} />Data</span>
-                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#9333ea" }} />Workflow</span>
-                <span className="fx-pill"><span className="fx-legend-dot" style={{ backgroundColor: "#94a3b8" }} />Manual/Other</span>
-              </div>
-              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                <span className="font-semibold text-slate-700">Overlays:</span>
-                {(["roi", "cost", "risk", "modernization"] as const).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => {
-                      setOverlays((prev) => {
-                        const next = { ...prev, [key]: !prev[key] };
-                        telemetry.log(
-                          "overlay_active",
-                          { overlay: key, active: next[key] },
-                          simplificationScoreRef.current,
-                        );
-                        return next;
-                      });
-                    }}
-                    className={`rounded-full border px-3 py-1 font-semibold ${
-                      overlays[key] ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
-                    }`}
-                  >
-                    {key === "roi" ? "ROI" : key === "cost" ? "Cost" : key === "risk" ? "Risk" : "Modernization"}
-                  </button>
-                ))}
-                <span className="text-slate-400">(decorative until overlays wired)</span>
-              </div>
-            </>
-          )}
-          {graphError && (
-            <Card className="mb-3 border-rose-200 bg-rose-50">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            {hasStats && (
+              <div className="grid grid-cols-2 gap-2 text-[0.7rem] text-slate-600">
                 <div>
-                  <p className="text-[0.65rem] tracking-[0.22em] text-rose-700 uppercase mb-1">
-                    GRAPH LOAD ERROR
-                  </p>
-                  <p className="text-xs text-rose-800">
-                    {graphError || "Failed to load Digital Enterprise graph."}
-                  </p>
+                  <p className="text-slate-500">Systems</p>
+                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.systemsFuture)}</p>
                 </div>
+                <div>
+                  <p className="text-slate-500">Integrations</p>
+                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.integrationsFuture)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Domains</p>
+                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.domainsDetected)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">View mode</p>
+                  <p className="font-semibold text-slate-900 capitalize">{viewMode}</p>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card className="space-y-4 border-emerald-200 bg-emerald-50">
+            <div>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-600">Guided focus</p>
+              <p className="text-sm text-emerald-900">{promptsByRole[flowStep]}</p>
+            </div>
+            <p className="text-xs text-emerald-800">{focusSummary}</p>
+            {renderFlowButtons()}
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Digital Twin graph</p>
+              <p className="text-xs text-slate-500">Fade-in reveals and progressive focus transitions.</p>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <span>View Mode</span>
+              <select
+                className="rounded-xl border border-slate-300 bg-white px-2 py-1 text-sm"
+                value={viewMode}
+                onChange={(event) => {
+                  const next = event.target.value as typeof viewMode;
+                  setViewMode(next);
+                  logTelemetry("digital_twin.view_mode_changed", { mode: next });
+                }}
+              >
+                <option value="roi">ROI</option>
+                <option value="risk">Risk</option>
+                <option value="modernization">Modernization</option>
+              </select>
+            </label>
+          </div>
+
+          {graphError && (
+            <Card className="border-rose-200 bg-rose-50">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-rose-700">{graphError}</p>
                 <button
                   type="button"
-                  className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-                  onClick={() => {
-                    setGraphEnabled(false);
-                    setGraphData(null);
-                    void loadGraph();
-                  }}
+                  className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
+                  onClick={loadGraph}
                 >
                   Retry
                 </button>
               </div>
             </Card>
           )}
-          {!graphEnabled && !graphError && !isEmbed && (
-            <Card className="mb-3 border-amber-200 bg-amber-50">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-[0.65rem] tracking-[0.22em] text-amber-700 uppercase mb-1">
-                    GRAPH LOADING PAUSED
-                  </p>
-                  <p className="text-xs text-amber-800">
-                    Enable the graph to explore nodes. This reduces React dev-mode re-render churn.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-                  onClick={() => setGraphEnabled(true)}
-                >
-                  Load graph
-                </button>
+
+          <div className={`rounded-3xl border border-slate-200 bg-white p-3 shadow-lg transition-opacity duration-700 ${graphRevealed ? "opacity-100" : "opacity-0"}`}>
+            {graphLoading && <div className="py-36 text-center text-sm text-slate-500">Loading digital twin map…</div>}
+            {!graphLoading && hasGraph && (
+              <LivingMap data={livingMapData} height={isEmbed ? 520 : 680} highlightNodeIds={highlightNodeIds ?? undefined} dimOpacity={0.2} />
+            )}
+            {!graphLoading && !hasGraph && (
+              <div className="py-20 text-center text-sm text-slate-500">No harmonized systems yet. Import data or run onboarding to populate the graph.</div>
+            )}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <MetricCard label="Systems" value={formatNumber(stats?.systemsFuture)} />
+            <MetricCard label="Integrations" value={formatNumber(stats?.integrationsFuture)} />
+            <MetricCard label="Domains" value={formatNumber(stats?.domainsDetected)} />
+          </div>
+
+          {flowStep === "insight" && insightMessage && (
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-slate-900">Action invitation</p>
+              <div className="grid gap-3 md:grid-cols-3">
+                {ACTIONS.map((action) => (
+                  <Card key={action.key} className="flex flex-col justify-between border-slate-200">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{action.title}</p>
+                      <p className="mt-1 text-xs text-slate-600">{action.summary}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        logTelemetry("digital_twin.action_selected", { action: action.key, role });
+                        window.location.href = action.href(projectId);
+                      }}
+                      className="mt-4 inline-flex items-center justify-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                    >
+                      {action.cta}
+                    </button>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <Card className="space-y-3 border-slate-200">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">Telemetry Pulse</p>
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">Readiness</p>
+                <p className="text-2xl font-semibold text-slate-900">{hasStats ? Math.min(95, Math.round(58 + (stats?.systemsFuture ?? 40) / 4)) : 64}%</p>
+                <p className="text-[0.7rem] text-slate-500">Graph fidelity + session stability</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">Impact</p>
+                <p className="text-2xl font-semibold text-slate-900">{hasStats ? Math.min(98, Math.round(60 + (stats?.integrationsFuture ?? 0) / 2.5)) : 72}%</p>
+                <p className="text-[0.7rem] text-slate-500">Projected value of current focus</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">Confidence</p>
+                <p className="text-2xl font-semibold text-slate-900">
+                  {hasStats
+                    ? Math.min(94, Math.round(58 + ((stats?.integrationsFuture ?? 1) / Math.max(1, stats?.systemsFuture ?? 1)) * 14))
+                    : 62}%
+                </p>
+                <p className="text-[0.7rem] text-slate-500">Sensor coverage + telemetry freshness</p>
+              </div>
+            </div>
+          </Card>
+
+          {focusPulse && (
+            <Card className="space-y-3 border-emerald-200 bg-white shadow-sm">
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-600">Focus Pulse</p>
+              <div className="space-y-2 text-sm text-slate-700">
+                <p>
+                  Systems highlighted: <span className="font-semibold">{focusPulse.systems}</span>
+                </p>
+                <p>
+                  Integrations in lens: <span className="font-semibold">{focusPulse.integrations}</span>
+                </p>
+                <p>
+                  Overlap index: <span className="font-semibold">{focusPulse.overlap}</span>
+                </p>
               </div>
             </Card>
           )}
-          {graphEnabled && graphData && (
-            <section
-              className={
-                "mt-4 grid gap-4 " +
-                (isEmbed ? "grid-cols-1" : "xl:grid-cols-[320px,1fr,220px] lg:grid-cols-[280px,1fr]")
-              }
-            >
-              {!isEmbed && (
-              <Card className="p-4 h-full space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-500">
-                    Twin Conversation
-                  </p>
-                  <span className="text-[0.7rem] text-slate-500">Live</span>
-                </div>
-                <div className="space-y-3 text-sm text-slate-700">
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {twinMessages.map((m) => (
-                      <div
-                        key={m.id}
-                        className={`rounded-xl px-3 py-2 ${m.role === "twin" ? "bg-slate-100 text-slate-800" : "bg-slate-900 text-white"}`}
-                      >
-                        {m.text}
-                      </div>
-                    ))}
-                  </div>
-                  <form
-                    className="flex items-center gap-2"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const formData = new FormData(e.currentTarget);
-                      const val = String(formData.get("prompt") ?? "").trim();
-                      if (!val) return;
-                      const next = { id: `u-${Date.now()}`, role: "user" as const, text: val };
-                      setTwinMessages((prev) => [...prev.slice(-4), next]);
-                      telemetry.log("twin_voice_prompt", { prompt: val });
-                      e.currentTarget.reset();
-                    }}
-                  >
-                    <input
-                      name="prompt"
-                      type="text"
-                      placeholder='Ask (e.g., "Highlight integration risk for Finance")'
-                      className="w-full rounded-full border border-slate-200 px-3 py-2 text-sm"
-                    />
-                    <button
-                      type="submit"
-                      className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                    >
-                      Send
-                    </button>
-                  </form>
-                </div>
-              </Card>
-              )}
-
-              <Card className="p-4">
-                {!isEmbed && (
-                <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-                    Added
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
-                    Modified
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-700">
-                    Removed
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 font-semibold text-slate-700">
-                    Unchanged
-                  </span>
-                  <button
-                    type="button"
-                    className="ml-3 rounded-full border border-slate-200 px-3 py-1 text-[0.75rem] font-semibold text-slate-700 hover:bg-slate-50"
-                    onClick={() => {
-                      const evt = new CustomEvent("livingmap:toggle-other");
-                      window.dispatchEvent(evt);
-                    }}
-                >
-                  Toggle “Other”
-                </button>
-                </div>
-                )}
-
-                <LivingMap
-                  data={livingMapData}
-                  height={720}
-                  selectedNodeId={selectedNodeId ?? undefined}
-                  onSelectNode={setSelectedNodeId}
-                  searchTerm={search}
-                />
-
-                {!isEmbed && (
-                <div className="mt-4 flex flex-col gap-3">
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                    <span className="font-semibold text-slate-800">Timeline</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={timelineStages.length - 1}
-                      value={timelineStage}
-                      onChange={(e) => {
-                        const next = Number(e.target.value);
-                        setTimelineStage(next);
-                        const snap =
-                          stageSnapshotForIndex[next] && stageSnapshotForIndex[next].nodes.length
-                            ? stageSnapshotForIndex[next]
-                            : livingMapData;
-                        telemetry.log(
-                          "timeline_stage_changed",
-                          { stage: timelineStages[next], nodes_visible: snap.nodes.length, edges_visible: snap.edges.length },
-                          simplificationScoreRef.current,
-                        );
-                        window.dispatchEvent(
-                          new CustomEvent("timeline_stage_changed", {
-                            detail: { stage: timelineStages[next], nodes: snap.nodes.length, edges: snap.edges.length },
-                          }),
-                        );
-                      }}
-                    />
-                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                      {timelineStages[timelineStage]}
-                    </span>
-                    <span className="text-slate-400">
-                      ({stageSnapshots.current.nodes.length} → {stageSnapshots.future.nodes.length} nodes)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-600">
-                    <span className="font-semibold text-slate-800">ROI demo timeline</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={24}
-                      value={roiSim.month}
-                      onChange={(e) => roiSim.setMonth(Number(e.target.value))}
-                    />
-                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
-                      {roiSim.month}
-                    </span>
-                  </div>
-                  <NodeInsightPanel node={selectedNode} />
-                </div>
-                )}
-              </Card>
-
-              {!isEmbed && (
-              <Card className="p-4 space-y-3 hidden xl:block">
-                <div className="flex items-center justify-between">
-                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-500">
-                    Pulse
-                  </p>
-                  <span className="text-[0.7rem] text-slate-500">Telemetry</span>
-                </div>
-                <div className="space-y-2 text-sm text-slate-700">
-                  <p>Stage: {timelineStages[timelineStage]}</p>
-                  <p>Nodes/Edges: {displayData.nodes.length} / {displayData.edges.length}</p>
-                  <p>Simplification: {Math.round(simplificationScore * 100)}% ({simplificationLabel})</p>
-                  <p>Selected: {selectedNode ? selectedNode.label : "—"}</p>
-                  <p>ROI Month: {roiSim.month}</p>
-                </div>
-              </Card>
-              )}
-            </section>
-          )}
-          </section>
-
-          {!isEmbed && (
-            <>
-              {/* ROI + Events */}
-              <section className="mt-12 grid gap-4 lg:grid-cols-[2fr,1fr]">
-                <ROIChart
-                  data={roiSim.timeline}
-                  breakEvenMonth={roiSim.breakEvenMonth}
-                  currentMonth={roiSim.month}
-                />
-                <EventLogPanel events={roiSim.filteredEvents} />
-              </section>
-
-              {/* Scenario Compare (beta) */}
-              <section className="mt-12">
-                <ScenarioComparePanel
-                  baseline={{
-                    systems: stats.systemsFuture ?? 0,
-                    integrations: stats.integrationsFuture ?? 0,
-                  }}
-                  roiSignal={roiSim.breakEvenMonth}
-                />
-              </section>
-
-              {/* Top systems table */}
-              <section className="mt-12">
-                <h2 className="text-sm font-semibold mb-1">
-                  HIGHEST-CONNECTIVITY SYSTEMS
-                </h2>
-                <p className="text-xs text-gray-500 mb-4">
-                  Top 10 systems by number of integrations in this ecosystem view.
-                </p>
-
-                <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                          #
-                        </th>
-                        <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                          SYSTEM
-                        </th>
-                        <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                          INTEGRATIONS
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stats.topSystems.map((s, idx) => {
-                        const name = resolveSystemName(s);
-                        const count = resolveIntegrationCount(s);
-                        const key = s.systemId ?? s.id ?? `${name}-${idx}`;
-
-                        return (
-                          <tr
-                            key={key}
-                            className={
-                              idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"
-                            }
-                          >
-                            <td className="px-4 py-2 text-xs text-gray-500">
-                              {idx + 1}
-                            </td>
-                            <td className="px-4 py-2 text-xs">
-                              <button
-                                type="button"
-                                onClick={() => handleSelectSystem(name, count)}
-                                className="text-left w-full underline-offset-2 hover:underline"
-                              >
-                                {name}
-                              </button>
-                            </td>
-                            <td className="px-4 py-2 text-xs">
-                              {formatNumber(count)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {stats.topSystems.length === 0 && (
-                        <tr>
-                          <td
-                            className="px-4 py-4 text-xs text-gray-500"
-                            colSpan={3}
-                          >
-                            No systems with integrations detected yet.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            </>
-          )}
-
-          {/* Impact panel */}
-          <section className="mt-10">
-            <SystemImpactPanel
-              impact={impact}
-              loading={false}
-              error={null}
-              className="w-full"
-            />
-          </section>
-        </>
-      )}
+        </div>
+      </section>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import React, { useRef, useState } from "react";
 interface FileUploadProps {
   label: string;
   onFileSelected: (file: File) => Promise<void> | void;
+  accept?: string;
 }
 
 /**
@@ -13,7 +14,7 @@ interface FileUploadProps {
  * - Shows selected filename
  * - Hides the native file input
  */
-export function FileUpload({ label, onFileSelected }: FileUploadProps) {
+export function FileUpload({ label, onFileSelected, accept }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState<string>("No file selected");
 
@@ -48,6 +49,7 @@ export function FileUpload({ label, onFileSelected }: FileUploadProps) {
         ref={inputRef}
         type="file"
         className="hidden"
+        accept={accept}
         onChange={handleChange}
       />
     </div>

@@ -30,7 +30,9 @@ export function NavSection({ title, isExpanded = false, onToggle, items, childre
         aria-expanded={isExpanded}
         className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-[12px] font-semibold uppercase tracking-[0.2em] text-slate-500 transition hover:bg-neutral-100"
       >
-        <span className="text-base text-slate-600">{chevron}</span>
+        <span className="text-base text-slate-600" aria-hidden="true">
+          {chevron}
+        </span>
         <span>{title}</span>
       </button>
       {isExpanded ? (

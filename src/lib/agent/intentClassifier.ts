@@ -1,4 +1,5 @@
 import type { AgentIntent, AgentIntentActionType, AgentSession } from "@/types/agent";
+import { detectDemoTopic } from "./demoScripts";
 
 type IntentCandidate = {
   id: AgentIntent["id"];
@@ -50,6 +51,14 @@ const INTENT_CANDIDATES: IntentCandidate[] = [
     responseHint: "Resuming where we left off with project context applied.",
     baseConfidence: 0.6,
   },
+  {
+    id: "demo_walkthrough",
+    label: "Demo Walkthrough",
+    keywords: ["walk", "demo", "explain", "show me", "how do"],
+    action: { type: "demo.explain" },
+    responseHint: "Let me walk you through that step by step.",
+    baseConfidence: 0.65,
+  },
 ];
 
 const PLATFORM_KEYWORDS = ["erp", "crm", "commerce", "finance", "data", "integration", "analytics", "hr", "supply", "planning"];
@@ -96,6 +105,12 @@ export function classifyIntent(input: string, session: AgentSession): AgentInten
     responseHint: winner.responseHint,
     action: winner.action,
   };
+
+  if (intent.id === "demo_walkthrough") {
+    const topic = detectDemoTopic(input) ?? "harmonization";
+    intent.action = { type: "demo.explain", params: { topic } };
+    intent.responseHint = `I'll narrate the ${topic} flow so you can follow along.`;
+  }
 
   const lastIntent = session.memory.lastIntent;
   if (lastIntent === winner.id) {

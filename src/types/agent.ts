@@ -24,6 +24,12 @@ export type AgentCard =
   | {
       type: "review";
       highlights: string[];
+    }
+  | {
+      type: "walkthrough";
+      title: string;
+      steps: Array<{ id: string; title: string; detail: string }>;
+      completion: string;
     };
 
 export interface AgentLink {
@@ -42,12 +48,20 @@ export interface AgentMessage {
   link?: AgentLink;
 }
 
+export type AgentTone = "formal" | "neutral" | "concise";
+
+export type ToneProfile = {
+  formality: AgentTone;
+  verbosity: "low" | "medium" | "high";
+  keywords: string[];
+};
+
 export interface AgentMemory {
   focusAreas: string[];
   lastIntent?: string;
   lastView?: string;
   lastMode?: string;
-  tone?: "formal" | "neutral" | "concise";
+  toneProfile?: ToneProfile;
 }
 
 export interface AgentSession {
@@ -57,7 +71,13 @@ export interface AgentSession {
   updatedAt: string;
 }
 
-export type AgentIntentActionType = "roi.summary" | "graph.harmonize" | "sequence.plan" | "review.resume" | "context.reminder";
+export type AgentIntentActionType =
+  | "roi.summary"
+  | "graph.harmonize"
+  | "sequence.plan"
+  | "review.resume"
+  | "context.reminder"
+  | "demo.explain";
 
 export interface AgentIntentAction {
   type: AgentIntentActionType;

@@ -8,6 +8,7 @@ interface Props {
   helper: string;
   label: string;
   onFileSelected: (file: File) => Promise<void> | void;
+  accept?: string;
   className?: string;
 }
 
@@ -16,6 +17,7 @@ export function FileUploadPanel({
   helper,
   label,
   onFileSelected,
+  accept,
   className = "",
 }: Props) {
   return (
@@ -29,7 +31,7 @@ export function FileUploadPanel({
       <p className="text-xs text-gray-600 mb-4">{helper}</p>
 
       {/* ✔️ ONLY custom uploader — NO browser-native file input */}
-      <FileUpload label={label} onFileSelected={onFileSelected} />
+      <FileUpload label={label} accept={accept} onFileSelected={onFileSelected} />
     </div>
   );
 }

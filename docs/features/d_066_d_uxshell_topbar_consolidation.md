@@ -1,6 +1,6 @@
 ### Directive D066D – UXShell Topbar Consolidation (Fixed Global Position)
 
-**Objective**\
+**Objective**  
 Establish the new global navigation bar (dark GPT-like header) as the sole, fixed navigation element anchored to the top of the viewport. Eliminate redundant or nested navigation components that previously appeared in child layouts.
 
 ---
@@ -13,10 +13,10 @@ Create a unified, professional, always-visible global navigation bar that provid
 
 #### 2. Expected Behavior
 
-- The topbar remains **fixed at ****top: 0** of the window.
-- It is **always visible**, even when scrolling content.
-- Content below (`.uxshell-content`) adjusts automatically with a top padding equal to the header height.
-- **No other layout** (UnifiedLayout, child routes) renders an additional nav.
+- The topbar remains **fixed at top: 0** of the window.  
+- It is **always visible**, even when scrolling content.  
+- Content below (`.uxshell-content`) adjusts automatically with a top padding equal to the header height.  
+- **No other layout** (UnifiedLayout, child routes) renders an additional nav.  
 - **Agent Integration:** anticipatory guidance can highlight, pulse, or animate icons contextually.
 
 ---
@@ -39,9 +39,9 @@ Create a unified, professional, always-visible global navigation bar that provid
 
 **Files to Modify:**
 
-- `src/components/UXShellLayout.tsx`  → mounts `<UXShellTopbar />`.
-- `src/components/UnifiedLayout.tsx`  → remove any `<NavIcons>` or duplicate toolbars.
-- `src/styles/uxshell.css`  → add grid and topbar styles.
+- `src/components/UXShellLayout.tsx` → mounts `<UXShellTopbar />`.  
+- `src/components/UnifiedLayout.tsx` → remove any `<NavIcons>` or duplicate toolbars.  
+- `src/styles/uxshell.css` → add grid and topbar styles.
 
 **CSS Spec:**
 
@@ -76,27 +76,35 @@ Create a unified, professional, always-visible global navigation bar that provid
 
 #### 4. Design Principles
 
-| Principle             | Description                                                         |
-| --------------------- | ------------------------------------------------------------------- |
-| **One Global Nav**    | The dark GPT-style topbar is the single navigation source.          |
-| **Fixed Position**    | It never scrolls or disappears.                                     |
-| **Stable Hierarchy**  | Sidebar and content align visually beneath it.                      |
+| Principle | Description |
+|------------|-------------|
+| **One Global Nav** | The dark GPT-style topbar is the single navigation source. |
+| **Fixed Position** | It never scrolls or disappears. |
+| **Stable Hierarchy** | Sidebar and content align visually beneath it. |
 | **Agent Orientation** | The anticipatory agent references this nav for contextual guidance. |
 
 ---
 
 #### 5. Integration with D075 (Anticipatory Interaction)
 
-- The topbar acts as a **visual compass** for the agent.
-- When the agent suggests a new view (e.g., *"Let's open Sequencing"*), the corresponding icon pulses briefly before routing.
+- The topbar acts as a **visual compass** for the agent.  
+- When the agent suggests a new view (e.g., *"Let's open Sequencing"*), the corresponding icon pulses briefly before routing.  
 - Topbar is the anchor point for preview modals and contextual insights.
 
 ---
 
-**Success Criteria:**
+#### 6. Deprecation Clause
 
-- ✅ Only one global nav renders.
-- ✅ Nav remains visible at all times.
-- ✅ No layout stacking or scroll offset issues.
-- ✅ Agent and UI transitions reference consistent spatial anchors.
+> All layout-level toolbars, `<NavIcons>` components, and in-page navigation rows are **deprecated**.  
+> They must **not** be reintroduced in any new feature or legacy refactor.  
+> Any new contextual or interaction elements must attach to the global topbar or insights rail.
+
+---
+
+**Success Criteria:**
+- ✅ Only one global nav renders.  
+- ✅ Nav remains visible at all times.  
+- ✅ No layout stacking or scroll offset issues.  
+- ✅ Agent and UI transitions reference consistent spatial anchors.  
+- ✅ Legacy toolbar and navigation components are fully removed from the repo.
 

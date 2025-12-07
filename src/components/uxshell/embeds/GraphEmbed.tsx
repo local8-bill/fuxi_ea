@@ -13,7 +13,7 @@ export default function GraphEmbed({ projectId }: { projectId: string }) {
       />
       <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
         <span className="text-xs text-slate-500">Living Map preview</span>
-        <Link href={`/project/${projectId}/digital-enterprise`} className="text-indigo-600 text-sm font-semibold">
+        <Link href={`/project/${projectId}/experience?scene=digital`} className="text-indigo-600 text-sm font-semibold">
           Open full view →
         </Link>
       </div>

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { normalizeTelemetryPayload, type TelemetryEvent } from "./schema";
+import { updateDemoTelemetry } from "./demoMetrics";
 
 const DATA_DIR = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
 const EVENTS_FILE = path.join(DATA_DIR, "telemetry_events.ndjson");
@@ -35,6 +36,7 @@ export async function recordTelemetry(event: Partial<TelemetryEvent>): Promise<T
   try {
     await fs.mkdir(path.dirname(EVENTS_FILE), { recursive: true });
     await fs.appendFile(EVENTS_FILE, JSON.stringify(normalized) + "\n", "utf8");
+    await updateDemoTelemetry(normalized);
     return normalized;
   } catch (err) {
     console.warn("[telemetry] failed to append event", err);

@@ -29,28 +29,28 @@ const navIcons: NavIconConfig[] = [
     label: "Digital Enterprise",
     Icon: GlobeAltIcon,
     targetView: "graph",
-    buildHref: (projectId) => `/project/${projectId}/digital-enterprise`,
+    buildHref: (projectId) => `/project/${projectId}/experience?scene=digital`,
   },
   {
     key: "roi",
     label: "ROI Dashboard",
     Icon: RectangleGroupIcon,
     targetView: "roi",
-    buildHref: (projectId) => `/project/${projectId}/roi/hypothesis`,
+    buildHref: (projectId) => `/project/${projectId}/experience?scene=roi`,
   },
   {
     key: "sequencer",
     label: "Sequencer",
     Icon: Squares2X2Icon,
     targetView: "sequencer",
-    buildHref: (projectId) => `/project/${projectId}/sequencer`,
+    buildHref: (projectId) => `/project/${projectId}/experience?scene=sequencer`,
   },
   {
     key: "review",
     label: "Review",
     Icon: RectangleStackIcon,
     targetView: "review",
-    buildHref: (projectId) => `/project/${projectId}/review`,
+    buildHref: (projectId) => `/project/${projectId}/experience?scene=review`,
   },
   {
     key: "search",
@@ -62,7 +62,7 @@ const navIcons: NavIconConfig[] = [
     key: "home",
     label: "Home",
     Icon: HomeIcon,
-    buildHref: () => "/uxshell",
+    buildHref: (projectId) => `/project/${projectId}/experience?scene=command`,
   },
 ];
 

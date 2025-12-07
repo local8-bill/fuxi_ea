@@ -26,7 +26,7 @@ export async function loadAgentSession(projectId: string): Promise<{ session: Ag
         lastIntent: parsed.memory?.lastIntent,
         lastView: parsed.memory?.lastView,
         lastMode: parsed.memory?.lastMode,
-        tone: parsed.memory?.tone,
+        toneProfile: parsed.memory?.toneProfile,
       },
     };
     return { session, existing: true };
@@ -38,7 +38,8 @@ export async function loadAgentSession(projectId: string): Promise<{ session: Ag
         {
           id: randomUUID(),
           role: "assistant",
-          content: "Hi, I'm your contextual shell companion. Ask for ROI, harmonization, or the next sequence step anytime.",
+          content:
+            "Let's focus the enterprise map. Which platforms are you assessing today? (ERP, CRM, Commerce, Data, Finance...)",
           ts: Date.now(),
         },
       ],

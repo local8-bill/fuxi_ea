@@ -37,7 +37,7 @@ export default function ROISummaryEmbed({ projectId }: { projectId: string }) {
     <div className="uxshell-card rounded-2xl bg-white p-4 h-full flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-slate-900">ROI Summary</p>
-        <Link href={`/project/${projectId}/roi-dashboard`} className="text-indigo-600 text-sm font-semibold">
+        <Link href={`/project/${projectId}/experience?scene=roi`} className="text-indigo-600 text-sm font-semibold">
           Open full view →
         </Link>
       </div>

@@ -5,6 +5,7 @@ import { NavSection, NavItem } from "./NavSection";
 import { useChevronNav } from "@/hooks/useChevronNav";
 import { emitTelemetry } from "./telemetry";
 import { pushWithContext } from "@/lib/navigation/pushWithContext";
+import { setExperienceScene, type ExperienceScene } from "@/hooks/useExperienceFlow";
 
 export type Mode = "Architect" | "Analyst" | "CFO" | "FP&A" | "CIO";
 
@@ -28,11 +29,12 @@ const roiViews = [
   { key: "roi-new", label: "+ New ROI", roiId: "new" },
 ];
 
-const viewShortcuts = [
-  { key: "view-graph", icon: "➕", label: "Graph", path: "/digital-enterprise", targetView: "graph" },
-  { key: "view-sequencer", icon: "⇄", label: "Sequencer", path: "/sequencer", targetView: "sequencer" },
-  { key: "view-review", icon: "✓", label: "Review", path: "/review", targetView: "review" },
-  { key: "view-digital", icon: "∞", label: "Digital Enterprise", path: "/digital-enterprise?view=systems", targetView: "graph" },
+type ViewShortcut = { key: string; icon: string; label: string; scene: ExperienceScene };
+
+const viewShortcuts: ViewShortcut[] = [
+  { key: "view-digital", icon: "∞", label: "Digital Twin", scene: "digital" },
+  { key: "view-sequencer", icon: "⇄", label: "Sequencer", scene: "sequencer" },
+  { key: "view-review", icon: "✓", label: "Review", scene: "review" },
 ];
 
 const modes: Mode[] = ["Architect", "Analyst", "CFO", "FP&A", "CIO"];
@@ -45,9 +47,8 @@ const scrollToTop = () => {
   }
 };
 
-function buildHref(projectId: string, path: string) {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `/project/${projectId}${normalized}`;
+function buildExperienceHref(projectId: string, scene: string) {
+  return `/project/${projectId}/experience?scene=${scene}`;
 }
 
 export function Sidebar({ projectId, currentProjectId, currentView, onModeChange }: SidebarProps) {
@@ -63,25 +64,23 @@ export function Sidebar({ projectId, currentProjectId, currentView, onModeChange
       return;
     }
     selectItem("Projects", key);
-    pushWithContext(router, buildHref(id, "/dashboard"), { from: currentView ?? "graph" });
+    pushWithContext(router, buildExperienceHref(id, currentView ?? "command"), { from: currentView ?? "command" });
   };
 
   const handleNewProject = () => {
     selectItem("Projects", "new-project");
-    pushWithContext(router, "/project/new", { from: currentView ?? "graph" });
+    pushWithContext(router, "/project/new", { from: currentView ?? "command" });
   };
 
-  const handleViewRoute = (key: string, path: string, options?: { ensureRoi?: boolean; targetView?: string }) => {
+  const handleViewRoute = (key: string, scene: string) => {
     if (activeItem === key) {
       scrollToTop();
       void emitTelemetry("uxshell_click", { projectId, section: "Views", item: key, action: "scroll_top" });
       return;
     }
-    selectItem("Views", key, { ensureRoi: options?.ensureRoi });
-    pushWithContext(router, buildHref(targetProject, path), {
-      from: currentView ?? "graph",
-      targetView: options?.targetView,
-    });
+    selectItem("Views", key);
+    setExperienceScene(targetProject, scene as any);
+    pushWithContext(router, buildExperienceHref(targetProject, scene), { from: currentView ?? "command", targetView: scene });
   };
 
   const handleModeSelect = (mode: Mode) => {
@@ -118,25 +117,26 @@ export function Sidebar({ projectId, currentProjectId, currentView, onModeChange
         <div className="space-y-1 pl-2">
           <button
             type="button"
+            aria-label="Σ ROI"
             onClick={toggleRoi}
             className="flex w-full items-center gap-2 rounded-lg px-2 py-[6px] text-[12px] font-semibold text-slate-800 transition hover:bg-neutral-100"
           >
-            <span className="text-base text-slate-700" aria-hidden>
+            <span className="text-base text-slate-700" aria-hidden="true">
               {roiExpanded ? "▾" : "▸"}
             </span>
-            <span className="text-[11px]" aria-hidden>
-              ∑
+            <span className="flex items-center gap-1 text-[11px]">
+              <span className="text-base">Σ</span>
+              <span>ROI</span>
             </span>
-            <span>ROI</span>
           </button>
           {roiExpanded &&
             roiViews.map((view) => (
               <NavItem
                 key={view.key}
                 label={view.label}
-                icon="∑"
+                icon="Σ"
                 isActive={activeItem === view.key}
-                onClick={() => handleViewRoute(view.key, `/roi/${view.roiId}`, { ensureRoi: true, targetView: "roi" })}
+                onClick={() => handleViewRoute(view.key, "roi")}
               />
             ))}
 
@@ -146,7 +146,7 @@ export function Sidebar({ projectId, currentProjectId, currentView, onModeChange
               label={view.label}
               icon={view.icon}
               isActive={activeItem === view.key}
-              onClick={() => handleViewRoute(view.key, view.path, { targetView: view.targetView })}
+              onClick={() => handleViewRoute(view.key, view.scene)}
             />
           ))}
         </div>
