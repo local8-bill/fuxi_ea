@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  {{DEFS}}
+  <circle
+    cx="512"
+    cy="512"
+    r="460"
+    fill="{{CIRCLE_FILL}}"
+    stroke="{{CIRCLE_STROKE}}"
+    stroke-width="{{CIRCLE_STROKE_WIDTH}}"
+  />
+  <path
+    d="M260 660 L330 360 L430 600 L512 320 L594 600 L694 360 L764 660 Z"
+    fill="{{CROWN_FILL}}"
+    stroke="{{CROWN_STROKE}}"
+    stroke-width="{{CROWN_STROKE_WIDTH}}"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

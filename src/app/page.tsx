@@ -1,171 +1,190 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { UXShellLayout } from "@/components/uxshell/UXShellLayout";
+import { PromptBar } from "@/components/uxshell/PromptBar";
+import { emitTelemetry } from "@/components/uxshell/telemetry";
+import type { AgentMessage } from "@/types/agent";
 
-type Tile = {
-  title: string;
-  bullets: string[];
-  cta: string;
-  href: string;
-};
+const DEFAULT_PROJECT_ID = "700am";
 
-
-
-const TILE_DATA: Tile[] = [
-  {
-    title: "Capability Modeling",
-    bullets: [
-      "Define & import business capabilities",
-      "Use AI to normalize & align",
-      "Score & structure your capability map",
-    ],
-    cta: "Start Capability Modeling",
-    href: "#", // no direct navigation for now
-  },
-  {
-    title: "Technology Stack Modeling",
-    bullets: [
-      "Upload inventories & system diagrams",
-      "Normalize applications using AI",
-      "Build your technology estate",
-    ],
-    cta: "Start Tech Modeling",
-    href: "#", // no direct navigation for now
-  },
-  {
-    title: "Digital Enterprise View",
-    bullets: [
-      "Combined capability × tech intelligence",
-      "Dependencies, risks, and redundancies",
-      "Modernization insights & narratives",
-    ],
-    cta: "Enter Digital Enterprise",
-    href: "#", // no direct navigation for now
-  },
-];
-
-export default function StartPage() {
+export default function LandingPage() {
   const router = useRouter();
-  const [project, setProject] = React.useState("");
-  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [projectInput, setProjectInput] = useState(DEFAULT_PROJECT_ID);
+  const [projectId, setProjectId] = useState(DEFAULT_PROJECT_ID);
+  const [messages, setMessages] = useState<AgentMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLaunch = async () => {
-    const trimmed = project.trim();
-    if (!trimmed) {
-      setErrorMsg("Please enter a project name.");
-      return;
-    }
-    setErrorMsg(null);
+  useEffect(() => {
+    void emitTelemetry("landing_conversation_started", { route: "/" });
+  }, []);
+
+  const fetchConversation = useCallback(async (targetProjectId: string) => {
+    setLoading(true);
+    setError(null);
     try {
-      await fetch("/api/projects/init", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: trimmed }),
+      const params = new URLSearchParams({
+        projectId: targetProjectId,
+        mode: "Architect",
+        view: "graph",
+        resume: "1",
       });
-    } catch {
-      // non-blocking; still navigate
+      const res = await fetch(`/api/agent/context?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      const data = await res.json();
+      setMessages(data.session?.messages ?? []);
+    } catch (err: any) {
+      setError(err?.message ?? "Unable to load conversation.");
+      setMessages([]);
+    } finally {
+      setLoading(false);
     }
-    router.push(`/project/${trimmed}/intake`);
-  };
+  }, []);
+
+  useEffect(() => {
+    void fetchConversation(projectId);
+  }, [projectId, fetchConversation]);
+
+  const handlePromptSubmit = useCallback(
+    async (rawPrompt: string) => {
+      const prompt = rawPrompt.trim();
+      if (!prompt) return;
+      const optimistic: AgentMessage = {
+        id: `landing-user-${Date.now()}`,
+        role: "user",
+        content: prompt,
+        ts: Date.now(),
+      };
+      setMessages((prev) => [...prev, optimistic]);
+      setBusy(true);
+      setError(null);
+      void emitTelemetry("landing_input_submitted", { projectId, prompt });
+      try {
+        const res = await fetch("/api/agent/intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId,
+            message: prompt,
+            context: { mode: "Architect", view: "graph" },
+          }),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || "Agent unavailable");
+        }
+        const data = await res.json();
+        setMessages(data.session?.messages ?? []);
+      } catch (err: any) {
+        setError(err?.message ?? "Something went wrong. Try again.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [projectId],
+  );
+
+  const handleContextApply = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      const trimmed = projectInput.trim();
+      setProjectId(trimmed || DEFAULT_PROJECT_ID);
+    },
+    [projectInput],
+  );
+
+  const handleContinue = useCallback(() => {
+    void emitTelemetry("onboarding_continued", { projectId, from: "landing" });
+    router.push(`/project/${projectId}/onboarding`);
+  }, [projectId, router]);
+
+  const renderedMessages = useMemo(() => {
+    if (loading) {
+      return (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-sm text-slate-500">
+          Loading conversation…
+        </div>
+      );
+    }
+    if (!messages.length) {
+      return (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          I can prepare onboarding, connect telemetry, or open ROI when you're ready.
+        </div>
+      );
+    }
+    return messages.map((message) => (
+      <div
+        key={message.id}
+        className={`w-full rounded-2xl px-3 py-2 text-sm ${
+          message.role === "assistant"
+            ? "bg-slate-50 text-slate-800 border border-slate-200"
+            : message.role === "system"
+              ? "bg-white/70 text-slate-500 border border-dashed border-slate-200"
+              : "bg-slate-900 text-white ml-auto"
+        }`}
+      >
+        <div className="whitespace-pre-wrap text-left">{message.content}</div>
+      </div>
+    ));
+  }, [loading, messages]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-12">
-        <header className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.5em] text-slate-500">
-            Welcome to
-          </p>
-          <h1 className="text-4xl font-semibold text-slate-900">
-            Fuxi — Enterprise Engine
-          </h1>
-          <p className="text-sm text-slate-500">
-            Build your digital enterprise — one move at a time.
-          </p>
-        </header>
+    <UXShellLayout sidebarHidden sidebar={null}>
+      <div className="flex min-h-[calc(100vh-56px)] flex-col items-center justify-center gap-6 px-4 text-center">
+        <div className="space-y-2">
+          <p className="text-[0.55rem] uppercase tracking-[0.5em] text-slate-400">Unified Experience Shell</p>
+          <h1 className="text-4xl font-semibold text-slate-900">Hello</h1>
+          <p className="text-sm text-slate-500">Ask Fuxi where to start — onboarding, ROI, or harmonization.</p>
+        </div>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-500">Open or Create a Project</p>
-              <p className="text-xs text-slate-400">Enter a name and go.</p>
-            </div>
-            <div className="flex items-center gap-2">
+        <div className="w-full max-w-2xl space-y-4">
+          <div className="rounded-3xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+            <div className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1">{renderedMessages}</div>
+            {error ? <p className="mt-3 text-xs text-rose-500">{error}</p> : null}
+          </div>
+
+          <PromptBar
+            onSubmit={handlePromptSubmit}
+            placeholder="Ask Fuxi where to start…"
+            disabled={busy || loading}
+          />
+
+          <form
+            onSubmit={handleContextApply}
+            className="rounded-2xl border border-slate-200 bg-white/80 p-4 text-left shadow-sm"
+          >
+            <label className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Project context</label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
               <input
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-slate-700 focus:border-slate-900 focus:outline-none"
-                placeholder="Project name"
-                value={project}
-                onChange={(e) => setProject(e.target.value)}
+                value={projectInput}
+                onChange={(e) => setProjectInput(e.target.value)}
+                className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+                placeholder="Project ID (e.g., 700am)"
               />
-              <button className="btn btn-primary text-xs" onClick={handleLaunch}>
-                Open Project
+              <button
+                type="submit"
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
+              >
+                Set context
+              </button>
+              <button
+                type="button"
+                onClick={handleContinue}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Continue onboarding
               </button>
             </div>
-            {errorMsg && (
-              <p className="mt-2 text-xs text-red-600">
-                {errorMsg}
-              </p>
-            )}
-          </div>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-3">
-          {TILE_DATA.map((tile) => (
-            <article
-              key={tile.title}
-              className="flex flex-col rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
-            >
-              <h2 className="text-lg font-semibold text-slate-900">{tile.title}</h2>
-              <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                {tile.bullets.map((bullet) => (
-                  <li key={bullet} className="flex gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-slate-900 mt-1" />
-                    <span>{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-auto pt-6">
-                <Link
-                  href={tile.href}
-                  className="inline-flex items-center justify-center rounded-full border border-gray-200 px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
-                >
-                  {tile.cta}
-                </Link>
-              </div>
-            </article>
-          ))}
-        </section>
-
-        {/* Junk drawer for unassociated routes (labs) */}
-        <section className="rounded-3xl border border-rose-200 bg-rose-50/70 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-rose-500">Labs / Junk Drawer</p>
-              <p className="text-xs text-rose-600">Quick links to standalone or experimental routes.</p>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2 text-sm">
-            {[
-              { label: "Dashboard", href: "/dashboard" },
-              { label: "Insights", href: "/insights" },
-              { label: "Research", href: "/research" },
-              { label: "Schema", href: "/schema" },
-              { label: "Verification (demo)", href: "/project/demo/verification" },
-              { label: "Scenario Studio (demo)", href: "/project/demo/scenario-studio" },
-              { label: "Scoring (demo)", href: "/project/demo/scoring" },
-            ].map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded-full border border-rose-200 bg-white px-3 py-1 text-rose-700 hover:border-rose-400 hover:text-rose-900"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        </section>
+            <p className="mt-2 text-xs text-slate-500">Current session: {projectId}</p>
+          </form>
+        </div>
       </div>
-    </div>
+    </UXShellLayout>
   );
 }

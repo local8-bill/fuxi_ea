@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { ROIChart } from "@/components/ROIChart";
 import { ROISummaryCard } from "@/components/roi/ROISummaryCard";
 import { TCCSummaryCard } from "@/components/roi/TCCSummaryCard";
+import { AnticipationTelemetryCard } from "@/components/roi/AnticipationTelemetryCard";
 
 interface DomainROIData {
   domain: string;
@@ -109,6 +110,7 @@ export default function ROIDashboardPage() {
         <div className="space-y-6 mt-4">
           <ROISummaryCard projectId={projectId} />
           <TCCSummaryCard projectId={projectId} />
+          <AnticipationTelemetryCard projectId={projectId} />
           <Card>
             <div className="grid gap-3 md:grid-cols-[2fr,1fr]">
               <ROIChart

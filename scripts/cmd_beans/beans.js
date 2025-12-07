@@ -10,11 +10,26 @@ const beans = [
   { cmd: "npx playwright test --trace=on", desc: "Run Playwright E2E with trace/video" },
   { cmd: "npx playwright show-report", desc: "Open Playwright report" },
   { cmd: "npm run collect:videos", desc: "Copy Playwright videos into playwright-report/videos" },
-  { cmd: "./scripts/list_routes.sh", desc: "Print common app routes" }
+  { cmd: "npm run dev:nuke", desc: "Kill cached builds (.next/.turbo) then start dev server fresh" },
+  { cmd: "./scripts/list_routes.sh", desc: "Print common app routes" },
+  {
+    id: "generate_fuxi_brand_assets",
+    cmd: "npm run generate:brand",
+    desc: "Generate Fuxi crown SVG/PNG variants and manifest for UI imports.",
+    env: ["NODE_ENV=production"],
+    outputs: ["/public/assets/brand/icons/manifest.json"],
+  },
 ];
 
 console.log("🍛 Command beans (common dev commands):\n");
 for (const bean of beans) {
   console.log(`- ${bean.cmd}`);
-  console.log(`  ${bean.desc}\n`);
+  console.log(`  ${bean.desc}`);
+  if (bean.env?.length) {
+    console.log(`  env: ${bean.env.join(", ")}`);
+  }
+  if (bean.outputs?.length) {
+    console.log(`  outputs: ${bean.outputs.join(", ")}`);
+  }
+  console.log();
 }

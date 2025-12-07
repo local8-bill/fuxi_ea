@@ -6,9 +6,11 @@ import { emitTelemetry, mapPromptToAction } from "./telemetry";
 interface PromptBarProps {
   onSubmit?: (prompt: string) => void;
   onAction?: (action: { view?: string; target?: string }) => void;
+  placeholder?: string;
+  disabled?: boolean;
 }
 
-export function PromptBar({ onSubmit, onAction }: PromptBarProps) {
+export function PromptBar({ onSubmit, onAction, placeholder, disabled = false }: PromptBarProps) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -37,11 +39,12 @@ export function PromptBar({ onSubmit, onAction }: PromptBarProps) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         className="flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
-        placeholder='Ask your enterprise (e.g., "Show ROI for Commerce")'
+        placeholder={placeholder ?? 'Ask your enterprise (e.g., "Show ROI for Commerce")'}
+        disabled={disabled || busy}
       />
       <button
         type="submit"
-        disabled={busy}
+        disabled={busy || disabled}
         className="rounded-xl bg-slate-900 px-3 py-1 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
       >
         Ask

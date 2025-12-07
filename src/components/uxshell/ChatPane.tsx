@@ -47,8 +47,15 @@ export function ChatPane({ projectId }: { projectId: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
+  const [focusPlatforms, setFocusPlatforms] = useState<string[]>([]);
 
-  const contextFilters = useMemo(() => ({ platform: "all", state: "current" }), []);
+  const contextFilters = useMemo(
+    () => ({
+      platform: focusPlatforms.length ? focusPlatforms : ["all"],
+      state: "current",
+    }),
+    [focusPlatforms],
+  );
 
   const contextNote = useMemo(
     () => `Project ${projectId} · UXShell assistant stub`,
@@ -105,8 +112,32 @@ export function ChatPane({ projectId }: { projectId: string }) {
     setMessages((prev) => [...prev, reply]);
   };
 
+  const extractPlatforms = (lower: string): string[] => {
+    const common = ["erp", "crm", "commerce", "data", "finance", "integration", "analytics"];
+    const tokens = lower
+      .split(/[,;]+|\band\b|\bor\b/gi)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const hits = new Set<string>();
+    tokens.forEach((tok) => {
+      const normalized = tok.replace(/[^a-z]/g, "");
+      if (normalized.length >= 3) {
+        hits.add(normalized);
+      }
+    });
+    common.forEach((c) => {
+      if (lower.includes(c)) hits.add(c);
+    });
+    return Array.from(hits).slice(0, 6);
+  };
+
   const handleIntent = async (lower: string, original: string) => {
     try {
+      const platforms = extractPlatforms(lower);
+      if (platforms.length) {
+        setFocusPlatforms(platforms);
+        void emitTelemetry("conversation_context_updated", { projectId, focusPlatforms: platforms });
+      }
       const tone = pickTone(lower, messages);
       const phrases = toneProfile[tone];
       if (lower.includes("harmoniz") || lower.includes("graph")) {
@@ -125,7 +156,11 @@ export function ChatPane({ projectId }: { projectId: string }) {
         );
         const deeplink =
           data?.transitionUrl ||
-          `/project/${projectId}/digital-enterprise?embed=0&platform=${contextFilters.platform}`;
+          `/project/${projectId}/digital-enterprise?embed=0&platform=${encodeURIComponent(
+            Array.isArray(contextFilters.platform)
+              ? contextFilters.platform.join(",")
+              : String(contextFilters.platform ?? "all"),
+          )}`;
         pushReply("Open Digital Enterprise view", {
           link: { label: "Digital Enterprise", href: deeplink },
         });
@@ -140,6 +175,7 @@ export function ChatPane({ projectId }: { projectId: string }) {
           summary: data.summary,
           tone,
           context: contextFilters,
+          platforms: contextFilters.platform,
         });
       } else if (lower.includes("sequence") || lower.includes("roadmap") || lower.includes("plan")) {
         pushReply(phrases.sequence);
@@ -175,8 +211,11 @@ export function ChatPane({ projectId }: { projectId: string }) {
         });
       } else if (lower.includes("roi")) {
         pushReply(phrases.roi);
+        const platformParam = Array.isArray(contextFilters.platform)
+          ? contextFilters.platform.join(",")
+          : String(contextFilters.platform ?? "all");
         const res = await fetch(
-          `/api/roi/forecast?project=${encodeURIComponent(projectId)}&platform=${contextFilters.platform}`,
+          `/api/roi/forecast?project=${encodeURIComponent(projectId)}&platform=${encodeURIComponent(platformParam)}`,
         );
         const data = await res.json();
         const netROI = data?.predictions?.netROI ?? data?.predictions?.roi ?? "—";

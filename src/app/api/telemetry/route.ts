@@ -13,6 +13,9 @@ type TelemetryPayload = {
   timestamp?: string;
   data?: Record<string, unknown>;
   simplification_score?: number;
+  anticipation_id?: string;
+  context_route?: string;
+  time_to_action?: number;
 };
 
 const DATA_DIR = path.join(process.cwd(), ".fuxi", "data");
@@ -83,6 +86,9 @@ export async function POST(req: Request) {
       timestamp: json.timestamp,
       data: json.data,
       simplification_score: json.simplification_score,
+      anticipation_id: json.anticipation_id,
+      context_route: json.context_route,
+      time_to_action: json.time_to_action,
     });
     if (!workspaceEnum.options.includes(parsed.workspace_id as any)) {
       parsed.workspace_id = "digital_enterprise";

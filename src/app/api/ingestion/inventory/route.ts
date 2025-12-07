@@ -20,6 +20,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const formData = await req.formData();
+    const platform = (formData.get("platform") as string | null)?.trim() || undefined;
+    const state = (formData.get("state") as string | null)?.trim() || undefined;
     let file: File | null = null;
     for (const value of formData.values()) {
       if (value instanceof File) {
@@ -34,7 +36,30 @@ export async function POST(req: NextRequest) {
     await fs.mkdir(INGESTED_DIR, { recursive: true });
     await fs.writeFile(path.join(INGESTED_DIR, safeName), buf);
 
-    return NextResponse.json({ ok: true, file: safeName });
+    const metaFile = path.join(INGESTED_DIR, "inventory_meta.json");
+    try {
+      const existingRaw = await fs.readFile(metaFile, "utf8");
+      const parsed = JSON.parse(existingRaw) as Array<Record<string, any>>;
+      parsed.push({
+        file: safeName,
+        uploadedAt: new Date().toISOString(),
+        platform,
+        state,
+      });
+      await fs.writeFile(metaFile, JSON.stringify(parsed, null, 2), "utf8");
+    } catch {
+      const initial = [
+        {
+          file: safeName,
+          uploadedAt: new Date().toISOString(),
+          platform,
+          state,
+        },
+      ];
+      await fs.writeFile(metaFile, JSON.stringify(initial, null, 2), "utf8");
+    }
+
+    return NextResponse.json({ ok: true, file: safeName, platform, state });
   } catch (err: any) {
     console.error("[INGESTION][inventory] failed", err);
     return jsonError(500, "Failed to save inventory file", err?.message);

@@ -1,26 +1,19 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PromptBar } from "./PromptBar";
 import { emitTelemetry } from "./telemetry";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, type Mode } from "./Sidebar";
 import { UXShellLayout } from "./UXShellLayout";
-import {
-  Bars3Icon,
-  GlobeAltIcon,
-  HomeIcon,
-  MagnifyingGlassIcon,
-  RectangleGroupIcon,
-  RectangleStackIcon,
-  Squares2X2Icon,
-} from "@heroicons/react/24/outline";
 import GraphEmbed from "./embeds/GraphEmbed";
 import ROISummaryEmbed from "./embeds/ROISummaryEmbed";
 import SequencerEmbed from "./embeds/SequencerEmbed";
 import ReviewEmbed from "./embeds/ReviewEmbed";
-import { useRef } from "react";
-import { ChatPane } from "./ChatPane";
+import { ConversationalAgent } from "@/components/ConversationalAgent";
+import { AgentMemoryProvider, useAgentMemory, type AgentSuggestion } from "@/hooks/useAgentMemory";
+import { AgentPreviewCard } from "@/components/agent/AgentPreviewCard";
+import { pushWithContext, readRouteContext } from "@/lib/navigation/pushWithContext";
 
 type View = "graph" | "roi" | "sequencer" | "review";
 
@@ -31,26 +24,72 @@ const projects = [
 ];
 
 export function UnifiedLayout({ projectId }: { projectId?: string }) {
-  const [activeView, setActiveView] = useState<View>("graph");
-  const sidebarRef = useRef<HTMLDivElement | null>(null);
   const targetProject = projectId ?? projects[0]?.id ?? "demo";
+  return (
+    <AgentMemoryProvider projectId={targetProject}>
+      <UnifiedLayoutBody projectId={targetProject} />
+    </AgentMemoryProvider>
+  );
+}
+
+function UnifiedLayoutBody({ projectId }: { projectId: string }) {
+  const router = useRouter();
+  const [activeView, setActiveView] = useState<View>("graph");
+  const [activeMode, setActiveMode] = useState<Mode>("Architect");
+  const [agentPrompt, setAgentPrompt] = useState<string | null>(null);
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
+  const { state, queueSuggestion, dismissSuggestion, acceptSuggestion, recordView } = useAgentMemory();
 
   useEffect(() => {
-    void emitTelemetry("uxshell_loaded", { projectId: targetProject });
-    // layout guard
+    void emitTelemetry("uxshell_loaded", { projectId });
     const width = sidebarRef.current?.offsetWidth ?? 0;
     if (width > 320) {
-      void emitTelemetry("uxshell_layout_violation", {
+      void emitTelemetry("uxshell_lock_violation", {
         width,
         maxAllowed: 320,
         timestamp: new Date().toISOString(),
       });
     }
-  }, [targetProject]);
+  }, [projectId]);
+
+  useEffect(() => {
+    recordView(activeView);
+  }, [activeView, recordView]);
+
+  useEffect(() => {
+    const ctx = readRouteContext();
+    if (ctx?.targetView && ctx.href) {
+      const resumeSuggestion: AgentSuggestion = {
+        id: `resume-${ctx.targetView}-${ctx.suggestionId ?? "ctx"}`,
+        title: "Resume where you left off",
+        summary: "Pick up the last flow with your context intact.",
+        ctaLabel: "Continue",
+        route: ctx.href,
+        targetView: ctx.targetView as View,
+        icon: ctx.targetView as View,
+        source: "route_context",
+      };
+      queueSuggestion(resumeSuggestion);
+    }
+  }, [queueSuggestion]);
+
+  useEffect(() => {
+    const suggestion = buildSuggestionForView(activeView, projectId);
+    if (!suggestion) return;
+    const timer = window.setTimeout(() => queueSuggestion(suggestion), 2500);
+    return () => window.clearTimeout(timer);
+  }, [activeView, projectId, queueSuggestion]);
 
   const handleView = (next: View) => {
     setActiveView(next);
-    void emitTelemetry("uxshell_view_selected", { view: next, projectId: targetProject });
+    void emitTelemetry("uxshell_view_selected", { view: next, projectId });
+  };
+
+  const handleAcceptSuggestion = (id: string) => {
+    const accepted = acceptSuggestion(id);
+    if (accepted) {
+      pushWithContext(router, accepted.route, { from: activeView, targetView: accepted.targetView, suggestionId: id });
+    }
   };
 
   return (
@@ -59,50 +98,45 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
         sidebar={
           <div ref={sidebarRef}>
             <Sidebar
-              projectId={targetProject}
-              currentProjectId={targetProject}
-              onModeChange={(mode) => emitTelemetry("uxshell_mode_changed", { projectId: targetProject, mode })}
+              projectId={projectId}
+              currentProjectId={projectId}
+              currentView={activeView}
+              onModeChange={(mode) => {
+                setActiveMode(mode);
+                void emitTelemetry("uxshell_mode_changed", { projectId, mode });
+              }}
             />
           </div>
         }
       >
-        <div className="mb-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white/95 px-4 py-2 shadow-sm">
-          <div className="flex items-center gap-3 text-slate-800">
-            <Bars3Icon className="h-5 w-5" />
-            <span className="text-sm font-semibold tracking-tight">Fuxi · Enterprise Engine</span>
+        {state.suggestions.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {state.suggestions.map((suggestion) => (
+              <AgentPreviewCard
+                key={suggestion.id}
+                title={suggestion.title}
+                summary={suggestion.summary}
+                ctaLabel={suggestion.ctaLabel}
+                onAccept={() => handleAcceptSuggestion(suggestion.id)}
+                onDismiss={() => dismissSuggestion(suggestion.id, "dismissed")}
+              />
+            ))}
           </div>
-          <div className="flex items-center gap-2 text-slate-600">
-            {[HomeIcon, GlobeAltIcon, MagnifyingGlassIcon, RectangleGroupIcon, Squares2X2Icon, RectangleStackIcon].map(
-              (Icon, idx) => (
-                <button
-                  key={Icon.displayName ?? `icon-${idx}`}
-                  type="button"
-                  className="rounded-lg px-2 py-1 hover:bg-slate-100"
-                  aria-label="nav-shortcut"
-                >
-                  <Icon className="h-5 w-5" />
-                </button>
-              ),
-            )}
-          </div>
-        </div>
-
+        )}
         <div className="grid w-full max-w-7xl grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_300px] items-start">
-          {/* Main column */}
           <div className="flex flex-col gap-4">
             <div className="rounded-3xl border border-slate-200 bg-white/95 p-3 shadow">
-              {activeView === "graph" && <GraphEmbed projectId={targetProject} />}
+              {activeView === "graph" && <GraphEmbed projectId={projectId} />}
               {activeView === "roi" && (
                 <div className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
-                  <ROISummaryEmbed projectId={targetProject} />
-                  <SequencerEmbed projectId={targetProject} />
+                  <ROISummaryEmbed projectId={projectId} />
+                  <SequencerEmbed projectId={projectId} />
                 </div>
               )}
-              {activeView === "sequencer" && <SequencerEmbed projectId={targetProject} />}
-              {activeView === "review" && <ReviewEmbed projectId={targetProject} />}
+              {activeView === "sequencer" && <SequencerEmbed projectId={projectId} />}
+              {activeView === "review" && <ReviewEmbed projectId={projectId} />}
             </div>
 
-            {/* Command deck pinned low */}
             <div className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow">
               <div className="flex items-center justify-between">
                 <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Command Deck</p>
@@ -116,21 +150,19 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
               </div>
               <div className="mt-3">
                 <PromptBar
+                  onSubmit={(prompt) => setAgentPrompt(prompt)}
                   onAction={(action) => {
                     if (action.target) {
-                      const href = `/project/${targetProject}/${action.target}`;
+                      const href = `/project/${projectId}/${action.target}`;
                       void emitTelemetry("uxshell_action_invoked", { view: action.view, target: action.target });
-                      window.location.href = href;
+                      pushWithContext(router, href, { from: activeView, targetView: action.view ?? undefined });
                     }
                   }}
                 />
               </div>
             </div>
-
-            <ChatPane projectId={targetProject} />
           </div>
 
-          {/* Right rail */}
           <div className="hidden lg:flex flex-col gap-4">
             <div className="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow">
               <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">Insights</p>
@@ -138,7 +170,65 @@ export function UnifiedLayout({ projectId }: { projectId?: string }) {
             </div>
           </div>
         </div>
+        <ConversationalAgent
+          projectId={projectId}
+          mode={activeMode}
+          view={activeView}
+          incomingPrompt={agentPrompt}
+          onPromptConsumed={() => setAgentPrompt(null)}
+        />
       </UXShellLayout>
     </div>
   );
+}
+
+function buildSuggestionForView(view: View, projectId: string): AgentSuggestion | null {
+  switch (view) {
+    case "graph":
+      return {
+        id: `anticipate-roi-${projectId}`,
+        title: "Model ROI next",
+        summary: "Systems are harmonized—ROI forecasts are ready to open.",
+        ctaLabel: "Open ROI Dashboard",
+        route: `/project/${projectId}/roi/hypothesis`,
+        targetView: "roi",
+        icon: "roi",
+        source: "view_change",
+      };
+    case "roi":
+      return {
+        id: `anticipate-sequencer-${projectId}`,
+        title: "Sequence modernization waves",
+        summary: "Use sequencer to stage modernization before final approval.",
+        ctaLabel: "Open Sequencer",
+        route: `/project/${projectId}/sequencer`,
+        targetView: "sequencer",
+        icon: "sequencer",
+        source: "view_change",
+      };
+    case "sequencer":
+      return {
+        id: `anticipate-review-${projectId}`,
+        title: "Review harmonization deltas",
+        summary: "Confirm dependencies before publishing the roadmap.",
+        ctaLabel: "Open Review",
+        route: `/project/${projectId}/review`,
+        targetView: "review",
+        icon: "review",
+        source: "view_change",
+      };
+    case "review":
+      return {
+        id: `anticipate-graph-${projectId}`,
+        title: "Revisit Digital Enterprise",
+        summary: "Switch back to the enterprise graph to validate scope.",
+        ctaLabel: "Open Graph",
+        route: `/project/${projectId}/digital-enterprise`,
+        targetView: "graph",
+        icon: "graph",
+        source: "view_change",
+      };
+    default:
+      return null;
+  }
 }
