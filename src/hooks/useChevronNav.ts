@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { emitTelemetry } from "@/components/uxshell/telemetry";
 
-type MainSection = "Projects" | "Views" | "Modes";
+type MainSection = "Projects" | "Views" | "Modes" | "Intelligence";
 
 const STORAGE_KEY = "fuxi_nav_state";
 const DEFAULT_SECTION: MainSection = "Projects";

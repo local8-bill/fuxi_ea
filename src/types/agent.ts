@@ -37,6 +37,15 @@ export interface AgentLink {
   href: string;
 }
 
+export interface AgentDesignLock {
+  id: string;
+  directive: string;
+  principle: string;
+  rationale: string;
+  guardrails: string[];
+  references: string[];
+}
+
 export interface AgentMessage {
   id: string;
   role: AgentRole;
@@ -62,6 +71,7 @@ export interface AgentMemory {
   lastView?: string;
   lastMode?: string;
   toneProfile?: ToneProfile;
+  designLocks?: AgentDesignLock[];
 }
 
 export interface AgentSession {

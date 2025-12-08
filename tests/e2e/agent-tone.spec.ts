@@ -2,15 +2,20 @@ import { test, expect } from "@playwright/test";
 import { recordTestResult } from "./utils/telemetry";
 
 const openAgentPanel = async (page: import("@playwright/test").Page) => {
-  const toggle = page.getByRole("button", { name: /Conversational Agent/i });
-  const isVisible = await toggle.isVisible();
-  if (!isVisible) return;
-  await toggle.click();
+  const agentToggle = page.getByRole("button", { name: /^Agent$/i }).first();
+  if ((await agentToggle.count()) > 0) {
+    await agentToggle.click();
+  }
+  const panelToggle = page.getByRole("button", { name: /EAgent/i }).first();
+  if ((await panelToggle.count()) > 0) {
+    await panelToggle.click();
+  }
+  await expect(page.getByPlaceholder("Ask anything…")).toBeVisible();
 };
 
 test.describe("D069A Adaptive Voice Layer", () => {
   test("tone profile shifts to formal for ROI phrasing", async ({ page }) => {
-    await page.goto("/project/700am/dashboard");
+    await page.goto("/project/700am/experience?scene=command");
     await openAgentPanel(page);
 
     const intentResponsePromise = page.waitForResponse((response) =>
@@ -28,7 +33,7 @@ test.describe("D069A Adaptive Voice Layer", () => {
   });
 
   test("speech delay telemetry fires for harmonization", async ({ page }) => {
-    await page.goto("/project/700am/dashboard");
+    await page.goto("/project/700am/experience?scene=command");
     await openAgentPanel(page);
 
     const telemetryPromise = page.waitForResponse(async (response) => {

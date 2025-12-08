@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
-import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { ROIChart } from "@/components/ROIChart";
-import { ROISummaryCard } from "@/components/roi/ROISummaryCard";
 import { TCCSummaryCard } from "@/components/roi/TCCSummaryCard";
 import { AnticipationTelemetryCard } from "@/components/roi/AnticipationTelemetryCard";
 
@@ -73,15 +71,7 @@ export function ROIScene({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <WorkspaceHeader
-        statusLabel="ROI"
-        title="ROI Forecast"
-        description="Mocked ROI forecast by domain using harmonized mapping."
-      />
-      <div className="grid gap-4 md:grid-cols-2">
-        <ROISummaryCard projectId={projectId} />
-        <TCCSummaryCard projectId={projectId} />
-      </div>
+      <TCCSummaryCard projectId={projectId} />
       <Card className="p-4">
         <ROIChart
           data={forecast.timeline}

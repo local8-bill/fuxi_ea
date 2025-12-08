@@ -66,7 +66,7 @@ const navIcons: NavIconConfig[] = [
   },
 ];
 
-export function UXShellTopbar() {
+export function UXShellTopbar({ showShortcuts = true }: { showShortcuts?: boolean }) {
   const router = useRouter();
   const { topbarCue, projectId, state } = useAgentMemory(true);
   const activeView = state?.lastView;
@@ -90,7 +90,7 @@ export function UXShellTopbar() {
 
   return (
     <header className="uxshell-topbar">
-      <div className="flex w-full max-w-7xl items-center justify-between px-4 text-white">
+      <div className="uxshell-topbar-inner text-white">
         <div className="flex items-center gap-3">
           <Bars3Icon className="h-5 w-5" aria-hidden />
           <div>
@@ -98,26 +98,28 @@ export function UXShellTopbar() {
             <p className="text-sm font-semibold">Unified Experience Shell</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-slate-200">
-          {navIcons.map((config) => {
-            const { key, Icon } = config;
-            const isActive = topbarCue === key || (config.targetView && activeView === config.targetView);
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handleNavigate(config)}
-                className={`rounded-xl px-3 py-1 text-xs font-semibold tracking-wide transition ${
-                  isActive ? "bg-white/15 text-emerald-200" : "hover:bg-white/10"
-                } ${topbarCue === key ? "animate-pulse" : ""}`}
-                aria-label={`${config.label} shortcut`}
-                title={config.label}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-              </button>
-            );
-          })}
-        </div>
+        {showShortcuts ? (
+          <div className="flex items-center gap-2 text-slate-200">
+            {navIcons.map((config) => {
+              const { key, Icon } = config;
+              const isActive = topbarCue === key || (config.targetView && activeView === config.targetView);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleNavigate(config)}
+                  className={`rounded-xl px-3 py-1 text-xs font-semibold tracking-wide transition ${
+                    isActive ? "bg-white/15 text-emerald-200" : "hover:bg-white/10"
+                  } ${topbarCue === key ? "animate-pulse" : ""}`}
+                  aria-label={`${config.label} shortcut`}
+                  title={config.label}
+                >
+                  <Icon className="h-4 w-4" aria-hidden />
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     </header>
   );

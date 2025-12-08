@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { LivingMap } from "@/components/LivingMap";
 import type { LivingMapData, LivingNode } from "@/types/livingMap";
-import { MetricCard } from "@/components/ui/MetricCard";
 import { Card } from "@/components/ui/Card";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useTelemetry } from "@/hooks/useTelemetry";
@@ -20,9 +18,11 @@ interface DigitalEnterpriseStats {
 }
 
 type FlowStep = "domain" | "system" | "integration" | "insight";
+type FocusType = "platform" | "domain" | "goal";
 
 interface Props {
   projectId: string;
+  onStatsUpdate?: (stats: DigitalEnterpriseStats | null) => void;
 }
 
 const DIGITAL_TWIN_VERSION = "0.2";
@@ -50,6 +50,21 @@ const ACTIONS = [
     href: (projectId: string) => `/project/${projectId}/experience?scene=sequencer`,
   },
 ];
+
+const FOCUS_LENSES: Array<{ type: FocusType; label: string }> = [
+  { type: "platform", label: "By Platform" },
+  { type: "domain", label: "By Domain" },
+  { type: "goal", label: "By Goal" },
+];
+
+const PLATFORM_OPTIONS = ["ERP", "Commerce", "CRM", "Data", "Supply Chain"];
+const GOAL_OPTIONS = ["Modernization", "Cost", "ROI"];
+
+const GOAL_HEURISTICS: Record<string, (node: LivingNode) => number> = {
+  modernization: (node) => 100 - (node.aiReadiness ?? 50),
+  cost: (node) => node.integrationCount ?? 0,
+  roi: (node) => node.roiScore ?? 0,
+};
 
 function formatNumber(value: number | undefined | null): string {
   if (value == null || Number.isNaN(value)) return "0";
@@ -113,7 +128,7 @@ function buildInsight(role: string, motivation: string, systemName: string, peer
   return `${base} Aligning this connection accelerates ${motivation.toLowerCase()}.${toneSuffix}`;
 }
 
-export function DigitalEnterpriseClient({ projectId }: Props) {
+export function DigitalEnterpriseClient({ projectId, onStatsUpdate }: Props) {
   const { log: logTelemetry } = useTelemetry("digital_twin", { projectId });
   const searchParams = useSearchParams();
   const isEmbed = searchParams.get("embed") === "1";
@@ -132,10 +147,13 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
 
   const [flowStep, setFlowStep] = useState<FlowStep>("domain");
   const flowStepRef = useRef<FlowStep>("domain");
-  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [focusType, setFocusType] = useState<FocusType>("domain");
+  const [selectedFocusValue, setSelectedFocusValue] = useState<string | null>(null);
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [selectedIntegration, setSelectedIntegration] = useState<{ edgeId: string; peerLabel: string } | null>(null);
   const [insightMessage, setInsightMessage] = useState<string | null>(null);
+  const focusPromptLogged = useRef(false);
+  const actionsLogged = useRef(false);
 
   const aiInsights = useAIInsights(graphData?.nodes ?? []);
 
@@ -177,12 +195,22 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const selectedSystem = useMemo(() => livingMapData.nodes.find((node) => node.id === selectedSystemId) ?? null, [livingMapData.nodes, selectedSystemId]);
 
   const systemCandidates = useMemo(() => {
-    if (!selectedDomain) return [];
+    if (!selectedFocusValue) return [];
+    if (focusType === "goal") {
+      const heuristicKey = selectedFocusValue.toLowerCase();
+      const scorer = GOAL_HEURISTICS[heuristicKey] ?? ((node: LivingNode) => node.roiScore ?? 0);
+      return [...livingMapData.nodes]
+        .map((node) => ({ node, score: scorer(node) }))
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 4)
+        .map((entry) => entry.node);
+    }
+    const normalized = selectedFocusValue.toLowerCase();
     return livingMapData.nodes
-      .filter((node) => (node.domain as string)?.toLowerCase() === selectedDomain.toLowerCase())
+      .filter((node) => (node.domain as string)?.toLowerCase() === normalized)
       .sort((a, b) => (b.integrationCount ?? 0) - (a.integrationCount ?? 0))
       .slice(0, 4);
-  }, [livingMapData.nodes, selectedDomain]);
+  }, [livingMapData.nodes, selectedFocusValue, focusType]);
 
   const integrationCandidates = useMemo(() => {
     if (!selectedSystem) return [];
@@ -208,14 +236,22 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       });
       return ids;
     }
-    if (selectedDomain) {
-      const ids = livingMapData.nodes
-        .filter((node) => (node.domain as string)?.toLowerCase() === selectedDomain.toLowerCase())
+    if (!selectedFocusValue) return null;
+    if (focusType === "goal") {
+      const heuristicKey = selectedFocusValue.toLowerCase();
+      const scorer = GOAL_HEURISTICS[heuristicKey] ?? ((node: LivingNode) => node.roiScore ?? 0);
+      const ids = [...livingMapData.nodes]
+        .sort((a, b) => (scorer(b) ?? 0) - (scorer(a) ?? 0))
+        .slice(0, 8)
         .map((node) => node.id);
       return ids.length ? new Set(ids) : null;
     }
-    return null;
-  }, [livingMapData.nodes, livingMapData.edges, selectedSystem, selectedDomain]);
+    const normalized = selectedFocusValue.toLowerCase();
+    const ids = livingMapData.nodes
+      .filter((node) => (node.domain as string)?.toLowerCase() === normalized)
+      .map((node) => node.id);
+    return ids.length ? new Set(ids) : null;
+  }, [livingMapData.nodes, livingMapData.edges, selectedSystem, selectedFocusValue, focusType]);
 
   const focusPulse = useMemo(() => {
     if (!highlightNodeIds || !highlightNodeIds.size) return null;
@@ -231,12 +267,14 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   const hasGraph = (livingMapData.nodes.length ?? 0) > 0;
 
   useEffect(() => {
+    logTelemetry("digital_twin.render_start", { projectId, version: DIGITAL_TWIN_VERSION });
     logTelemetry("workspace_view", { projectId, version: DIGITAL_TWIN_VERSION });
   }, [projectId, logTelemetry]);
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     setStatsError(null);
+    onStatsUpdate?.(null);
     try {
       const res = await fetch(`/api/digital-enterprise/stats?project=${encodeURIComponent(projectId)}`, { cache: "no-store" });
       if (!res.ok) {
@@ -245,13 +283,15 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       }
       const json = (await res.json()) as DigitalEnterpriseStats;
       setStats(json);
+      onStatsUpdate?.(json);
     } catch (err: any) {
       setStatsError(err?.message ?? "Failed to load digital twin metrics.");
       setStats(null);
+      onStatsUpdate?.(null);
     } finally {
       setStatsLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, onStatsUpdate]);
 
   const loadGraph = useCallback(async () => {
     setGraphLoading(true);
@@ -278,6 +318,12 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   }, [loadStats, loadGraph]);
 
   useEffect(() => {
+    if (focusPromptLogged.current || graphLoading) return;
+    focusPromptLogged.current = true;
+    logTelemetry("digital_twin.focus_prompt_shown", { options: FOCUS_LENSES.map((lens) => lens.type) });
+  }, [graphLoading, logTelemetry]);
+
+  useEffect(() => {
     if (!hasGraph || graphLoading) return;
     const timer = window.setTimeout(() => {
       setGraphRevealed(true);
@@ -300,17 +346,27 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
       flowStepRef.current = next;
       setFlowStep(next);
       emitAdaptiveEvent("ux_mode:set", { mode: "focus", step: next });
-      logTelemetry("twin_transition_complete", { from: prev, to: next, role });
+      logTelemetry("digital_twin.transition_complete", { from: prev, to: next, role });
+      logTelemetry("pulse_state_change", { projectId, from: prev, to: next });
     },
-    [logTelemetry, role],
+    [logTelemetry, projectId, role],
   );
 
-  const handleDomainSelect = (domain: string) => {
-    setSelectedDomain(domain);
+  useEffect(() => {
+    setSelectedFocusValue(null);
     setSelectedSystemId(null);
     setSelectedIntegration(null);
     setInsightMessage(null);
-    logTelemetry("twin_focus_entered", { domain, role });
+    flowStepRef.current = "domain";
+    setFlowStep("domain");
+  }, [focusType]);
+
+  const handleFocusValueSelect = (value: string) => {
+    setSelectedFocusValue(value);
+    setSelectedSystemId(null);
+    setSelectedIntegration(null);
+    setInsightMessage(null);
+    logTelemetry("digital_twin.focus_selected", { mode: focusType, value, role });
     advanceFlow("system");
   };
 
@@ -326,29 +382,34 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
     setSelectedIntegration({ edgeId: integrationId, peerLabel });
     const message = buildInsight(role, motivation, selectedSystem.label, peerLabel, preferredTone);
     setInsightMessage(message);
-    logTelemetry("twin_insight_generated", {
+    logTelemetry("digital_twin.insight_generated", {
       system: selectedSystem.label,
       peer: peerLabel,
       role,
+      mode: focusType,
     });
     advanceFlow("insight");
   };
 
   const focusSummary = useMemo(() => {
-    if (!selectedDomain) return "Pick a domain so I can compress the map for you.";
-    if (!selectedSystem) return `Scanning ${selectedDomain}. Pick a system to zoom in.`;
+    if (!selectedFocusValue) return "Pick a focus lens so I can compress the map for you.";
+    const label =
+      focusType === "goal"
+        ? `${selectedFocusValue} objective`
+        : `${selectedFocusValue} ${focusType === "platform" ? "platform" : "domain"}`;
+    if (!selectedSystem) return `Scanning the ${label}. Pick a system to zoom in.`;
     if (!selectedIntegration) return `Tracing ${selectedSystem.label}. Choose an adjacent integration to inspect.`;
     return `Highlighting ${selectedSystem.label} ↔ ${selectedIntegration.peerLabel}. Ready for the next move?`;
-  }, [selectedDomain, selectedSystem, selectedIntegration]);
+  }, [selectedFocusValue, focusType, selectedSystem, selectedIntegration]);
+
+  const lensPrompt =
+    focusType === "goal" ? "Which objective should we chase first?" : focusType === "platform" ? "Which platform should we anchor on?" : "Which domain should we study first?";
 
   const promptsByRole: Record<FlowStep, string> = {
-    domain:
-      interactionStyle === "narrative"
-        ? `Let's ease in, ${role}. Which ecosystem should we study first?`
-        : `Choose a domain to start compressing the map.`,
+    domain: interactionStyle === "narrative" ? `Let's ease in, ${role}. ${lensPrompt}` : lensPrompt,
     system:
       interactionStyle === "narrative"
-        ? "I spotlighted the busiest systems in that domain. Want to zoom into one?"
+        ? "I spotlighted the busiest systems in that focus. Want to zoom into one?"
         : "Pick the system that feels most congested right now.",
     integration:
       interactionStyle === "narrative"
@@ -360,25 +421,41 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
         : "Insight ready. Where should I send you next?",
   };
 
+  useEffect(() => {
+    if (flowStep === "insight" && insightMessage && !actionsLogged.current) {
+      logTelemetry("digital_twin.actions_shown", { options: ACTIONS.map((action) => action.key), role });
+      actionsLogged.current = true;
+    }
+    if (flowStep !== "insight") actionsLogged.current = false;
+  }, [flowStep, insightMessage, role, logTelemetry]);
+
   const renderFlowButtons = () => {
     switch (flowStep) {
       case "domain":
-        return (
-          <div className="flex flex-wrap gap-2">
-            {domainSuggestions.map((domain) => (
-              <button
-                key={domain}
-                type="button"
-                onClick={() => handleDomainSelect(domain)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                  selectedDomain === domain ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-900"
-                }`}
-              >
-                {domain}
-              </button>
-            ))}
-          </div>
-        );
+        {
+          const options =
+            focusType === "platform"
+              ? PLATFORM_OPTIONS
+              : focusType === "goal"
+                ? GOAL_OPTIONS
+                : domainSuggestions;
+          return (
+            <div className="flex flex-wrap gap-2">
+              {options.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => handleFocusValueSelect(option)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                    selectedFocusValue === option ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-900"
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          );
+        }
       case "system":
         return (
           <div className="flex flex-wrap gap-2">
@@ -420,59 +497,13 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
   };
 
   return (
-    <div className={isEmbed ? "px-4 py-6" : "px-6 py-8"}>
+    <div className={isEmbed ? "px-4 py-6" : "px-6 pt-2 pb-6"}>
       {statsError && (
         <div className="mb-4">
           <ErrorBanner message={statsError} onRetry={loadStats} />
         </div>
       )}
-      {!isEmbed && (
-        <WorkspaceHeader
-          statusLabel="DIGITAL TWIN"
-          title={`Digital Twin Experience · v${DIGITAL_TWIN_VERSION}`}
-          description="Here’s the unified technology landscape — harmonized systems, integrations, and telemetry in one guided, conversational flow."
-        />
-      )}
-
-      <section className="mt-6 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)_280px]">
-        <div className="space-y-4">
-          <Card className="space-y-3 border-slate-200 bg-white shadow-sm">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">Recognition</p>
-            <p className="text-sm text-slate-800">
-              “Here’s the full picture — every system and integration you’ve shared, harmonized across your enterprise.”
-            </p>
-            {hasStats && (
-              <div className="grid grid-cols-2 gap-2 text-[0.7rem] text-slate-600">
-                <div>
-                  <p className="text-slate-500">Systems</p>
-                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.systemsFuture)}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500">Integrations</p>
-                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.integrationsFuture)}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500">Domains</p>
-                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.domainsDetected)}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500">View mode</p>
-                  <p className="font-semibold text-slate-900 capitalize">{viewMode}</p>
-                </div>
-              </div>
-            )}
-          </Card>
-
-          <Card className="space-y-4 border-emerald-200 bg-emerald-50">
-            <div>
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-600">Guided focus</p>
-              <p className="text-sm text-emerald-900">{promptsByRole[flowStep]}</p>
-            </div>
-            <p className="text-xs text-emerald-800">{focusSummary}</p>
-            {renderFlowButtons()}
-          </Card>
-        </div>
-
+      <section className="space-y-4">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -512,24 +543,18 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
             </Card>
           )}
 
-          <div className={`rounded-3xl border border-slate-200 bg-white p-3 shadow-lg transition-opacity duration-700 ${graphRevealed ? "opacity-100" : "opacity-0"}`}>
+          <div className={`rounded-3xl border border-slate-200 bg-white p-2 shadow-lg transition-opacity duration-700 min-h-[820px] ${graphRevealed ? "opacity-100" : "opacity-0"}`}>
             {graphLoading && <div className="py-36 text-center text-sm text-slate-500">Loading digital twin map…</div>}
             {!graphLoading && hasGraph && (
-              <LivingMap data={livingMapData} height={isEmbed ? 520 : 680} highlightNodeIds={highlightNodeIds ?? undefined} dimOpacity={0.2} />
+              <LivingMap data={livingMapData} height={isEmbed ? 560 : 820} highlightNodeIds={highlightNodeIds ?? undefined} dimOpacity={0.2} />
             )}
             {!graphLoading && !hasGraph && (
               <div className="py-20 text-center text-sm text-slate-500">No harmonized systems yet. Import data or run onboarding to populate the graph.</div>
             )}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <MetricCard label="Systems" value={formatNumber(stats?.systemsFuture)} />
-            <MetricCard label="Integrations" value={formatNumber(stats?.integrationsFuture)} />
-            <MetricCard label="Domains" value={formatNumber(stats?.domainsDetected)} />
-          </div>
-
           {flowStep === "insight" && insightMessage && (
-            <div className="space-y-3">
+            <div className="space-y-3" data-testid="digital-twin-action-invitation">
               <p className="text-sm font-semibold text-slate-900">Action invitation</p>
               <div className="grid gap-3 md:grid-cols-3">
                 {ACTIONS.map((action) => (
@@ -555,50 +580,106 @@ export function DigitalEnterpriseClient({ projectId }: Props) {
           )}
         </div>
 
-        <div className="space-y-4">
-          <Card className="space-y-3 border-slate-200">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">Telemetry Pulse</p>
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                <p className="text-xs text-slate-500">Readiness</p>
-                <p className="text-2xl font-semibold text-slate-900">{hasStats ? Math.min(95, Math.round(58 + (stats?.systemsFuture ?? 40) / 4)) : 64}%</p>
-                <p className="text-[0.7rem] text-slate-500">Graph fidelity + session stability</p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="space-y-3 border-slate-200 bg-white shadow-sm">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">Recognition</p>
+            <p className="text-sm text-slate-800">
+              “Here’s the full picture — every system and integration you’ve shared, harmonized across your enterprise.”
+            </p>
+            {hasStats && (
+              <div className="grid grid-cols-2 gap-2 text-[0.7rem] text-slate-600">
+                <div>
+                  <p className="text-slate-500">Systems</p>
+                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.systemsFuture)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Integrations</p>
+                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.integrationsFuture)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Domains</p>
+                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.domainsDetected)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">View mode</p>
+                  <p className="font-semibold text-slate-900 capitalize">{viewMode}</p>
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                <p className="text-xs text-slate-500">Impact</p>
-                <p className="text-2xl font-semibold text-slate-900">{hasStats ? Math.min(98, Math.round(60 + (stats?.integrationsFuture ?? 0) / 2.5)) : 72}%</p>
-                <p className="text-[0.7rem] text-slate-500">Projected value of current focus</p>
-              </div>
-              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                <p className="text-xs text-slate-500">Confidence</p>
-                <p className="text-2xl font-semibold text-slate-900">
-                  {hasStats
-                    ? Math.min(94, Math.round(58 + ((stats?.integrationsFuture ?? 1) / Math.max(1, stats?.systemsFuture ?? 1)) * 14))
-                    : 62}%
-                </p>
-                <p className="text-[0.7rem] text-slate-500">Sensor coverage + telemetry freshness</p>
-              </div>
-            </div>
+            )}
           </Card>
 
-          {focusPulse && (
-            <Card className="space-y-3 border-emerald-200 bg-white shadow-sm">
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-600">Focus Pulse</p>
-              <div className="space-y-2 text-sm text-slate-700">
-                <p>
-                  Systems highlighted: <span className="font-semibold">{focusPulse.systems}</span>
-                </p>
-                <p>
-                  Integrations in lens: <span className="font-semibold">{focusPulse.integrations}</span>
-                </p>
-                <p>
-                  Overlap index: <span className="font-semibold">{focusPulse.overlap}</span>
-                </p>
-              </div>
-            </Card>
-          )}
+          <Card className="space-y-4 border-emerald-200 bg-emerald-50">
+            <div>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-600">Guided focus</p>
+              <p className="text-sm text-emerald-900">{promptsByRole[flowStep]}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {FOCUS_LENSES.map((lens) => (
+                <button
+                  key={lens.type}
+                  type="button"
+                  className={`rounded-full px-3 py-1 text-[0.65rem] font-semibold ${
+                    focusType === lens.type ? "bg-emerald-600 text-white shadow" : "bg-white text-emerald-800"
+                  }`}
+                  onClick={() => {
+                    setFocusType(lens.type);
+                    logTelemetry("digital_twin.focus_mode_changed", { mode: lens.type });
+                  }}
+                >
+                  {lens.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-emerald-800">{focusSummary}</p>
+            {renderFlowButtons()}
+          </Card>
         </div>
+
+        {focusPulse && (
+          <Card className="space-y-3 border-emerald-200 bg-white shadow-sm">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-600">Focus Pulse</p>
+            <div className="space-y-2 text-sm text-slate-700">
+              <p>
+                Systems highlighted: <span className="font-semibold">{focusPulse.systems}</span>
+              </p>
+              <p>
+                Integrations in lens: <span className="font-semibold">{focusPulse.integrations}</span>
+              </p>
+              <p>
+                Overlap index: <span className="font-semibold">{focusPulse.overlap}</span>
+              </p>
+            </div>
+          </Card>
+        )}
       </section>
     </div>
+  );
+}
+
+export function DigitalTwinTelemetryCard({ stats }: { stats: DigitalEnterpriseStats | null }) {
+  const hasStats = Boolean(stats);
+  return (
+    <Card className="space-y-3 border-slate-200">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">Telemetry Pulse</p>
+      <div className="space-y-3">
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+          <p className="text-xs text-slate-500">Readiness</p>
+          <p className="text-2xl font-semibold text-slate-900">{hasStats ? Math.min(95, Math.round(58 + (stats?.systemsFuture ?? 40) / 4)) : 64}%</p>
+          <p className="text-[0.7rem] text-slate-500">Graph fidelity + session stability</p>
+        </div>
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+          <p className="text-xs text-slate-500">Impact</p>
+          <p className="text-2xl font-semibold text-slate-900">{hasStats ? Math.min(98, Math.round(60 + (stats?.integrationsFuture ?? 0) / 2.5)) : 72}%</p>
+          <p className="text-[0.7rem] text-slate-500">Projected value of current focus</p>
+        </div>
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+          <p className="text-xs text-slate-500">Confidence</p>
+          <p className="text-2xl font-semibold text-slate-900">
+            {hasStats ? Math.min(94, Math.round(58 + ((stats?.integrationsFuture ?? 1) / Math.max(1, stats?.systemsFuture ?? 1)) * 14)) : 62}%
+          </p>
+          <p className="text-[0.7rem] text-slate-500">Sensor coverage + telemetry freshness</p>
+        </div>
+      </div>
+    </Card>
   );
 }

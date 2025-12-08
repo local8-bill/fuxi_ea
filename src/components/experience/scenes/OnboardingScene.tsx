@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { FileUploadPanel } from "@/components/panels/FileUploadPanel";
 import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
 import { useTelemetry } from "@/hooks/useTelemetry";
-import {
-  loadOnboardingConversation,
-  saveOnboardingConversation,
-} from "@/lib/onboarding/conversationStorage";
+import { useAutoProceedPreference } from "@/hooks/useAgentPreferences";
 
 export type OnboardingSceneProps = {
   projectId: string;
@@ -17,8 +14,11 @@ export type OnboardingSceneProps = {
 
 type Role = "Architect" | "Analyst" | "CIO" | "FP&A";
 
+type ActivityEntry = { id: string; message: string; tone: "system" | "success"; timestamp: string };
+
 export function AgentOnboardingScene({ projectId, onComplete }: OnboardingSceneProps) {
   const telemetry = useTelemetry("guided_onboarding", { projectId });
+  const [autoProceed, setAutoProceed] = useAutoProceedPreference(false);
   const [projectName, setProjectName] = useState(projectId);
   const [role, setRole] = useState<Role>("Architect");
   const [goal, setGoal] = useState("Modernize");
@@ -26,34 +26,33 @@ export function AgentOnboardingScene({ projectId, onComplete }: OnboardingSceneP
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; size: number }[]>([]);
-  const [agentInput, setAgentInput] = useState("");
-  const [agentLoading, setAgentLoading] = useState(false);
-  const defaultAssistantMessage = useMemo(
-    () => [
-      {
-        role: "assistant" as const,
-        content: "I can ingest your inventory, open ROI, or check harmonization. What do you want to do first?",
-      },
-    ],
-    [],
-  );
-  const [agentMessages, setAgentMessages] = useState<Array<{ role: "assistant" | "user" | "system"; content: string }>>(() => {
-    const stored = loadOnboardingConversation(projectId);
-    return stored.length ? stored : defaultAssistantMessage;
-  });
+  const [readyToProceed, setReadyToProceed] = useState(false);
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([
+    {
+      id: "intro",
+      message: "Ready to ingest files or capture quick context. Use Chat Mode above if you need help from the agent.",
+      tone: "system",
+      timestamp: new Date().toISOString(),
+    },
+  ]);
 
-  useEffect(() => {
-    const stored = loadOnboardingConversation(projectId);
-    setAgentMessages(stored.length ? stored : defaultAssistantMessage);
-  }, [projectId, defaultAssistantMessage]);
+  const pushActivity = (message: string, tone: ActivityEntry["tone"] = "system") => {
+    setActivityLog((prev) => {
+      const entry: ActivityEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        message,
+        tone,
+        timestamp: new Date().toISOString(),
+      };
+      return [entry, ...prev].slice(0, 5);
+    });
+  };
 
   useEffect(() => {
     telemetry.log("onboarding_loaded", { projectId });
-  }, [projectId, telemetry]);
-
-  useEffect(() => {
-    saveOnboardingConversation(projectId, agentMessages);
-  }, [projectId, agentMessages]);
+    pushActivity("Project context loaded.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   const [summary, setSummary] = useState({
     systems: 27,
@@ -74,29 +73,18 @@ export function AgentOnboardingScene({ projectId, onComplete }: OnboardingSceneP
         domains: Math.max(1, Math.round(parsed.uniqueSystems / 4)),
       });
       telemetry.log("onboarding_artifact_uploaded", { projectId, file: file.name });
-      onComplete?.();
+      pushActivity(`Ingested ${file.name}. I can summarize or open ROI next.`, "success");
+      if (autoProceed) {
+        pushActivity("Auto-proceed enabled — sending you to Digital Twin.", "success");
+        onComplete?.();
+      } else {
+        setReadyToProceed(true);
+      }
     } catch (err: any) {
       setUploadError(err?.message ?? "Failed to process file");
+      pushActivity("Upload failed — try a different file or ask the agent for help.");
     } finally {
       setUploading(false);
-    }
-  };
-
-  const handleAgentSubmit = async () => {
-    const trimmed = agentInput.trim();
-    if (!trimmed) return;
-    const nextMessages = [...agentMessages, { role: "user" as const, content: trimmed }];
-    setAgentMessages(nextMessages);
-    setAgentInput("");
-    setAgentLoading(true);
-    try {
-      telemetry.log("onboarding_agent_prompt", { projectId, prompt: trimmed });
-      setTimeout(() => {
-        setAgentMessages((prev) => [...prev, { role: "assistant", content: "Got it — I’ll prepare ROI and harmonization next." }]);
-        setAgentLoading(false);
-      }, 800);
-    } catch {
-      setAgentLoading(false);
     }
   };
 
@@ -156,45 +144,50 @@ export function AgentOnboardingScene({ projectId, onComplete }: OnboardingSceneP
             ))}
           </ul>
         ) : null}
+        {readyToProceed && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <p className="font-semibold">Artifacts ingested.</p>
+            <p className="mt-1 text-xs text-emerald-800">Ready to compress into the Digital Twin?</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow hover:bg-emerald-500"
+                onClick={() => {
+                  setReadyToProceed(false);
+                  telemetry.log("decision_taken", { projectId, scene: "onboarding", decision: "proceed_to_digital_twin" });
+                  onComplete?.();
+                }}
+              >
+                Proceed to Digital Twin
+              </button>
+              <label className="flex items-center gap-2 text-xs text-emerald-800">
+                <input
+                  type="checkbox"
+                  checked={autoProceed}
+                  onChange={(e) => {
+                    setAutoProceed(e.target.checked);
+                    pushActivity(e.target.checked ? "Auto-proceed enabled for future uploads." : "Auto-proceed disabled.");
+                  }}
+                />
+                Auto-proceed after future uploads
+              </label>
+            </div>
+          </div>
+        )}
       </Card>
 
-      <Card className="space-y-3 p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Agent conversation</p>
-            <p className="text-xs text-slate-500">Ask anything to configure onboarding.</p>
-          </div>
-          <button
-            type="button"
-            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold"
-            onClick={() => setAgentMessages(defaultAssistantMessage)}
-          >
-            Reset
-          </button>
+      <Card className="space-y-3 border border-slate-200 p-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Recent guidance</p>
+          <p className="text-xs text-slate-500">Use Chat Mode above for live agent help. Highlights appear here as you progress.</p>
         </div>
-        <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-          {agentMessages.map((m, idx) => (
-            <p key={`${m.role}-${idx}`} className={m.role === "user" ? "text-slate-900 font-semibold" : "text-slate-600"}>
-              {m.role === "user" ? "You:" : "Agent:"} {m.content}
-            </p>
+        <div className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 text-sm">
+          {activityLog.map((entry) => (
+            <div key={entry.id} className={entry.tone === "success" ? "text-emerald-700" : "text-slate-700"}>
+              <p>{entry.message}</p>
+              <p className="text-[0.65rem] uppercase tracking-wide text-slate-400">{new Date(entry.timestamp).toLocaleTimeString()}</p>
+            </div>
           ))}
-        </div>
-        <div className="flex gap-2">
-          <input
-            className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            placeholder="Ask me to ingest, summarize, or prep next steps"
-            value={agentInput}
-            onChange={(e) => setAgentInput(e.target.value)}
-            disabled={agentLoading}
-          />
-          <button
-            type="button"
-            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-            onClick={handleAgentSubmit}
-            disabled={agentLoading}
-          >
-            Send
-          </button>
         </div>
       </Card>
 

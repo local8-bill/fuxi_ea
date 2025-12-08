@@ -23,6 +23,14 @@ const beans = [
     cmd: "node scripts/telemetry-summary.js",
     desc: "Print the latest telemetry events from .fuxi/data for quick troubleshooting.",
   },
+  {
+    cmd: "node scripts/dev/emit_test_events.js",
+    desc: "Emit demo sequencer events to refresh adaptive learning metrics (D077C-A).",
+  },
+  {
+    cmd: "node scripts/dev/compute_learning_metrics.js",
+    desc: "Read the current demo learning metrics snapshot (confidence/velocity/maturity).",
+  },
 ];
 
 console.log("🍛 Command beans (common dev commands):\n");

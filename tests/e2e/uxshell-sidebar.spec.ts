@@ -3,7 +3,7 @@ import { recordTestResult } from "./utils/telemetry";
 
 test.describe("D066C UXShell Sidebar Behavior", () => {
   test("expands and collapses sections correctly", async ({ page }) => {
-    await page.goto("/project/700am/dashboard");
+    await page.goto("/project/700am/experience?scene=command");
 
     const projectsToggle = page.getByRole("button", { name: /^PROJECTS$/i }).first();
     await projectsToggle.click();
@@ -19,20 +19,20 @@ test.describe("D066C UXShell Sidebar Behavior", () => {
   });
 
   test("loads ROI view when clicking nav items", async ({ page }) => {
-    await page.goto("/project/700am/dashboard");
+    await page.goto("/project/700am/experience?scene=command");
 
     await page.getByRole("button", { name: /^VIEWS$/i }).first().click();
     await page.getByRole("button", { name: /Σ ROI/ }).click();
     await page.getByText("ROI 1 (Hypothesis)").click();
 
-    await expect(page).toHaveURL(/\/project\/700am\/roi\/hypothesis/);
-    await expect(page.getByRole("heading", { name: /ROI Forecast \(Hypothesis Mode\)/i })).toBeVisible();
+    await expect(page).toHaveURL(/scene=roi/);
+    await expect(page.getByRole("heading", { name: /ROI Dashboard/i })).toBeVisible();
 
     await recordTestResult(page, "uxshell-sidebar.roi-navigation", "D066C");
   });
 
   test("mode changes emit telemetry", async ({ page }) => {
-    await page.goto("/project/700am/dashboard");
+    await page.goto("/project/700am/experience?scene=command");
     await page.getByRole("button", { name: /^MODES$/i }).click();
 
     const telemetryPromise = page.waitForResponse(async (response) => {

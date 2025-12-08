@@ -96,6 +96,7 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
           await new Promise((resolve) => setTimeout(resolve, delay));
           void emitTelemetry("speech_delay_applied", { projectId, action: action.type, delayMs: delay });
         }
+        void emitTelemetry("ai_trust_signal", { projectId, mode, view, action: action.type });
         setMessages(data.session?.messages ?? []);
         setMemory(data.session?.memory ?? memoryFallback);
         const followup = suggestionFromAction(action.type, projectId);
@@ -123,6 +124,7 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
         ts: Date.now(),
       };
       setMessages((prev) => [...prev, optimistic]);
+      void emitTelemetry("agent_message_sent", { projectId, mode, view });
 
       try {
         const res = await fetch("/api/agent/intent", {
@@ -145,6 +147,12 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
         const data = await res.json();
         setMessages(data.session?.messages ?? []);
         setMemory(data.session?.memory ?? memoryFallback);
+        void emitTelemetry("agent_message_received", {
+          projectId,
+          mode,
+          view,
+          intent: data.intent?.id ?? "unknown",
+        });
         if (data.intent?.id) {
           agentMemory.recordIntent(data.intent.id);
         }
@@ -248,7 +256,7 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
         onClick={togglePanel}
         className="flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800"
       >
-        Conversational Agent
+        EAgent
         <span className={`h-2 w-2 rounded-full ${hasUnread ? "bg-emerald-400" : "bg-slate-400"}`} />
       </button>
 

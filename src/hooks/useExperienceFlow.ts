@@ -9,7 +9,8 @@ export type ExperienceScene =
   | "digital"
   | "roi"
   | "sequencer"
-  | "review";
+  | "review"
+  | "insights";
 
 type ExperienceState = {
   scenes: Record<string, ExperienceScene>;

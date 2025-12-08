@@ -100,12 +100,20 @@ export function LivingMap({
       byDomain.get(domain)!.push(n);
     });
 
+    // NOTE: Layout tuning knobs for domain/child placement.
+    // - domainWidth / hGap / vGap control overall grid spacing.
+    // - maxPerRow + cellHeight + padding affect child stacking inside each domain.
+    // If you need to change the visual rhythm, tweak these constants first.
     const domains = Array.from(byDomain.keys()).sort((a, b) => (byDomain.get(b)?.length ?? 0) - (byDomain.get(a)?.length ?? 0));
     const cols = 3;
-    const domainWidth = 420;
-    const hGap = 300; // extra breathing room between domains
+    const domainWidth = 520;
+    const hGap = 200;
     const vGap = 320;
-    const maxPerRow = 2; // fewer per row to reduce clutter
+    const maxPerRow = 3;
+    const cellHeight = 120;
+    const horizontalPadding = 40;
+    const verticalPadding = 60;
+    const cellSpacingX = (domainWidth - horizontalPadding * 1) / maxPerRow;
 
     const groupNodes: Node[] = [];
     const childNodes: Node[] = [];
@@ -118,7 +126,7 @@ export function LivingMap({
 
       const bucket = byDomain.get(domain) ?? [];
       const rowsNeeded = Math.max(1, Math.ceil(bucket.length / maxPerRow));
-      const boxHeight = Math.max(rowsNeeded * 150 + 200, 600);
+      const boxHeight = Math.max(rowsNeeded * cellHeight + verticalPadding * 2, 600);
 
       groupNodes.push({
         id: `group-${domain}`,
@@ -139,6 +147,8 @@ export function LivingMap({
       bucket.forEach((node, i) => {
         const localCol = i % maxPerRow;
         const localRow = Math.floor(i / maxPerRow);
+        const columnsThisRow = Math.min(maxPerRow, bucket.length - localRow * maxPerRow);
+        const rowOffset = ((maxPerRow - columnsThisRow) * cellSpacingX) / 2;
         const label = (node as any).label ?? (node as any).name ?? node.id;
         const isSelected = selectedNodeId === node.id;
         const isFocused = highlightSet?.has(String(node.id));
@@ -148,8 +158,8 @@ export function LivingMap({
           extent: "parent",
           data: { label },
           position: {
-            x: 30 + localCol * 180,
-            y: 60 + localRow * 160,
+            x: horizontalPadding + rowOffset + localCol * cellSpacingX,
+            y: verticalPadding + localRow * cellHeight,
           },
           style: {
             borderRadius: 12,
