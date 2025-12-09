@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { normalizeTelemetryPayload, workspaceEnum } from "@/lib/telemetry/validation";
+import { updateDemoTelemetry } from "@/lib/telemetry/demoMetrics";
+import { processLearningEvent } from "@/lib/learning/engine";
 
 export const runtime = "nodejs";
 
@@ -20,6 +22,15 @@ type TelemetryPayload = {
 
 const DATA_DIR = path.join(process.cwd(), ".fuxi", "data");
 const EVENTS_FILE = path.join(DATA_DIR, "telemetry_events.ndjson");
+const LEARNING_EVENT_TYPES = new Map<string, string>([
+  ["decision_taken", "telemetry.decision_taken"],
+  ["insight_toggle", "telemetry.insight_toggle"],
+  ["insight_export_complete", "telemetry.insight_export_complete"],
+  ["insights_view", "telemetry.insights_view"],
+  ["roi_forecast_viewed", "telemetry.roi_forecast_viewed"],
+  ["onboarding_intent_updated", "telemetry.onboarding_intent_updated"],
+  ["onboarding_artifact_uploaded", "telemetry.onboarding_artifact_uploaded"],
+]);
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60; // per IP per minute
@@ -50,11 +61,11 @@ function rateLimit(ip: string) {
 }
 
 function getIP(req: Request) {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    (req as any)?.ip ||
-    "unknown"
-  );
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (forwarded) return forwarded;
+  const maybeReq = req as Request & { ip?: string };
+  if (typeof maybeReq.ip === "string" && maybeReq.ip.length > 0) return maybeReq.ip;
+  return "unknown";
 }
 
 export async function POST(req: Request) {
@@ -78,10 +89,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid JSON payload" }, { status: 400 });
     }
 
+    const workspaceId = typeof json.workspace_id === "string" ? json.workspace_id : "digital_enterprise";
     const parsed = normalizeTelemetryPayload({
       session_id: json.session_id,
       project_id: json.project_id,
-      workspace_id: (json.workspace_id as any) ?? "digital_enterprise",
+      workspace_id: workspaceId as TelemetryPayload["workspace_id"],
       event_type: json.event_type,
       timestamp: json.timestamp,
       data: json.data,
@@ -90,18 +102,30 @@ export async function POST(req: Request) {
       context_route: json.context_route,
       time_to_action: json.time_to_action,
     });
-    if (!workspaceEnum.options.includes(parsed.workspace_id as any)) {
+    if (!workspaceEnum.options.includes(parsed.workspace_id as (typeof workspaceEnum.options)[number])) {
       parsed.workspace_id = "digital_enterprise";
     }
 
     await fs.mkdir(DATA_DIR, { recursive: true });
     const line = JSON.stringify(parsed) + "\n";
     await fs.appendFile(EVENTS_FILE, line, "utf8");
+    await updateDemoTelemetry(parsed);
+
+    const learningType = LEARNING_EVENT_TYPES.get(parsed.event_type);
+    if (learningType && parsed.project_id) {
+      const intentCandidate = parsed.data?.decision ?? parsed.data?.intent ?? parsed.data?.focus ?? undefined;
+      const intent = typeof intentCandidate === "string" ? intentCandidate : undefined;
+      await processLearningEvent({
+        projectId: parsed.project_id,
+        type: learningType,
+        intent,
+      });
+    }
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error("[TELEMETRY] Failed to record event", err);
-    const message = err?.message || "Invalid telemetry payload";
+    const message = err instanceof Error ? err.message : "Invalid telemetry payload";
     return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 }
@@ -116,7 +140,7 @@ export async function GET() {
       .slice(-50)
       .map((line) => JSON.parse(line));
     return NextResponse.json({ ok: true, events });
-  } catch (err: any) {
+  } catch (err) {
     console.error("[TELEMETRY] Failed to read events", err);
     return NextResponse.json({ ok: false, error: "Failed to read events" }, { status: 500 });
   }

@@ -7,24 +7,47 @@ const beans = [
   { cmd: "npm run build", desc: "Build for production" },
   { cmd: "npm run lint", desc: "Run eslint" },
   { cmd: "npm run test", desc: "Run vitest suite" },
+  {
+    cmd: "npm run dev:lan",
+    desc: "Expose dev server on 0.0.0.0 for LAN testing (script auto-detects your IP and prints http://<LAN-IP>:3000; allow macOS firewall prompt if shown)",
+  },
   { cmd: "npx playwright test --trace=on", desc: "Run Playwright E2E with trace/video" },
   { cmd: "npx playwright show-report", desc: "Open Playwright report" },
   { cmd: "npm run collect:videos", desc: "Copy Playwright videos into playwright-report/videos" },
   { cmd: "npm run dev:nuke", desc: "Kill cached builds (.next/.turbo) then start dev server fresh" },
+  {
+    cmd: "npm run dev:first",
+    desc: "Reset home session + cached builds, then start dev server fresh (forces first-time onboarding)",
+  },
   { cmd: "./scripts/list_routes.sh", desc: "Print common app routes" },
   {
     id: "generate_fuxi_brand_assets",
     cmd: "npm run generate:brand",
-    desc: "Generate Fuxi crown SVG/PNG variants and manifest for UI imports.",
+    desc: "Generate hand-drawn metallic Fuxi crowns (D077) and refresh manifest.",
     env: ["NODE_ENV=production"],
     outputs: ["/public/assets/brand/icons/manifest.json"],
+  },
+  {
+    cmd: "node scripts/telemetry-summary.js",
+    desc: "Print the latest telemetry events from .fuxi/data for quick troubleshooting.",
+  },
+  {
+    cmd: "npm run verify:telemetry -- --project 700am",
+    desc: "Ensure required D080 telemetry events (project_created → roi) exist in the NDJSON log.",
+  },
+  {
+    cmd: "node scripts/dev/emit_test_events.js",
+    desc: "Emit demo sequencer events to refresh adaptive learning metrics (D077C-A).",
+  },
+  {
+    cmd: "node scripts/dev/compute_learning_metrics.js",
+    desc: "Read the current demo learning metrics snapshot (confidence/velocity/maturity).",
   },
 ];
 
 console.log("🍛 Command beans (common dev commands):\n");
 for (const bean of beans) {
-  console.log(`- ${bean.cmd}`);
-  console.log(`  ${bean.desc}`);
+  console.log(`- ${bean.cmd}: ${bean.desc}`);
   if (bean.env?.length) {
     console.log(`  env: ${bean.env.join(", ")}`);
   }

@@ -1,11 +1,12 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useParams } from "next/navigation";
-import { UnifiedLayout } from "@/components/uxshell/UnifiedLayout";
-import "@/styles/uxshell.css";
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
 
-export default function ProjectUXShellPage() {
-  const params = useParams<{ id: string }>();
-  const projectId = params?.id ?? "unknown";
-  return <UnifiedLayout projectId={projectId} />;
+export default async function LegacyUXShellPage({ params }: PageProps) {
+  const resolved = await params;
+  const rawId = resolved?.id ?? "demo";
+  const projectId = typeof rawId === "string" && rawId !== "undefined" ? rawId : "demo";
+  redirect(`/project/${projectId}/experience`);
 }

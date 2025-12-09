@@ -1,18 +1,12 @@
-import type { ReactElement } from "react";
-import { DigitalEnterpriseClient } from "./DigitalEnterpriseClient";
+import { redirect } from "next/navigation";
 
-// Next 16: params is a Promise and must be awaited.
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function DigitalEnterprisePage(
-  { params }: PageProps
-): Promise<ReactElement> {
+export default async function RedirectDigitalEnterprise({ params }: PageProps) {
   const resolved = await params;
-  const rawId = resolved?.id;
-  const projectId =
-    typeof rawId === "string" && rawId !== "undefined" ? rawId : "";
-
-  return <DigitalEnterpriseClient projectId={projectId} />;
+  const rawId = resolved?.id ?? "demo";
+  const projectId = typeof rawId === "string" && rawId !== "undefined" ? rawId : "demo";
+  redirect(`/project/${projectId}/experience?scene=digital`);
 }

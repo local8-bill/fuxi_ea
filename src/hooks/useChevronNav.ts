@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { emitTelemetry } from "@/components/uxshell/telemetry";
 
-type MainSection = "Projects" | "Views" | "Modes";
+type MainSection = "Projects" | "Views" | "Modes" | "Intelligence";
 
 const STORAGE_KEY = "fuxi_nav_state";
 const DEFAULT_SECTION: MainSection = "Projects";
@@ -70,6 +70,7 @@ export function useChevronNav(projectId: string) {
     persist(nextMain, section === "Views" && wasExpanded ? false : roiExpanded, activeItem);
 
     void emitTelemetry("uxshell_click", { projectId, section, action: "toggle" });
+    void emitTelemetry("uxshell_interaction", { projectId, section, action: wasExpanded ? "collapse" : "expand" });
     void emitTelemetry(wasExpanded ? "uxshell_collapse" : "uxshell_expand", { projectId, section });
   };
 
@@ -78,6 +79,7 @@ export function useChevronNav(projectId: string) {
     setRoiExpanded(next);
     persist(expandedMain, next, activeItem);
     void emitTelemetry("uxshell_click", { projectId, section: "Σ ROI", action: "toggle" });
+    void emitTelemetry("uxshell_interaction", { projectId, section: "Σ ROI", action: next ? "expand" : "collapse" });
     void emitTelemetry(next ? "uxshell_expand" : "uxshell_collapse", { projectId, section: "Σ ROI" });
   };
 
@@ -98,6 +100,7 @@ export function useChevronNav(projectId: string) {
     persist(section, section === "Views" ? options?.ensureRoi ?? roiExpanded : roiExpanded, item);
 
     void emitTelemetry("uxshell_click", { projectId, section, item });
+    void emitTelemetry("uxshell_interaction", { projectId, section, action: "select", item });
     void emitTelemetry("uxshell_load_view", { projectId, section, item });
   };
 

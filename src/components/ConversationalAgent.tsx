@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentIntentAction, AgentMessage, AgentTelemetryEvent, AgentMemory } from "@/types/agent";
 import { useAgentMemory, type AgentSuggestion } from "@/hooks/useAgentMemory";
+import { getActionDelay } from "@/lib/agent/timingHooks";
+import { emitTelemetry } from "@/components/uxshell/telemetry";
 
 type ConversationalAgentProps = {
   projectId: string;
@@ -89,6 +91,12 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
           throw new Error("Action execution failed.");
         }
         const data = await res.json();
+        const delay = getActionDelay(action.type);
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          void emitTelemetry("speech_delay_applied", { projectId, action: action.type, delayMs: delay });
+        }
+        void emitTelemetry("ai_trust_signal", { projectId, mode, view, action: action.type });
         setMessages(data.session?.messages ?? []);
         setMemory(data.session?.memory ?? memoryFallback);
         const followup = suggestionFromAction(action.type, projectId);
@@ -116,6 +124,7 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
         ts: Date.now(),
       };
       setMessages((prev) => [...prev, optimistic]);
+      void emitTelemetry("agent_message_sent", { projectId, mode, view });
 
       try {
         const res = await fetch("/api/agent/intent", {
@@ -128,6 +137,7 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
               mode,
               view,
               recentTelemetry,
+              focusAreas: memory.focusAreas,
             },
           }),
         });
@@ -137,6 +147,12 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
         const data = await res.json();
         setMessages(data.session?.messages ?? []);
         setMemory(data.session?.memory ?? memoryFallback);
+        void emitTelemetry("agent_message_received", {
+          projectId,
+          mode,
+          view,
+          intent: data.intent?.id ?? "unknown",
+        });
         if (data.intent?.id) {
           agentMemory.recordIntent(data.intent.id);
         }
@@ -149,7 +165,7 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
         setBusy(false);
       }
     },
-    [busy, projectId, mode, view, recentTelemetry, executeAction, agentMemory],
+    [busy, projectId, mode, view, recentTelemetry, executeAction, agentMemory, memory.focusAreas],
   );
 
   useEffect(() => {
@@ -201,6 +217,20 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
             ))}
           </ul>
         );
+      case "walkthrough":
+        return (
+          <div className="mt-2 space-y-2 text-xs text-slate-700">
+            <p className="font-semibold text-slate-900">{message.card.title}</p>
+            <ol className="space-y-1 pl-4">
+              {message.card.steps.map((step) => (
+                <li key={step.id} className="list-decimal">
+                  <span className="font-semibold">{step.title}:</span> {step.detail}
+                </li>
+              ))}
+            </ol>
+            <p className="text-slate-500">{message.card.completion}</p>
+          </div>
+        );
       default:
         return null;
     }
@@ -226,7 +256,7 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
         onClick={togglePanel}
         className="flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800"
       >
-        Conversational Agent
+        EAgent
         <span className={`h-2 w-2 rounded-full ${hasUnread ? "bg-emerald-400" : "bg-slate-400"}`} />
       </button>
 
@@ -243,6 +273,23 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
               {busy ? "Thinking…" : "Ready"}
             </span>
           </div>
+
+          {memory.focusAreas.length > 0 ? (
+            <div className="mt-2">
+              <p className="text-[0.55rem] uppercase tracking-[0.25em] text-slate-400">Focus Platforms</p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {memory.focusAreas.map((area) => (
+                  <span key={area} className="rounded-full bg-slate-900/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-600">
+                    {area}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-3 py-2 text-[11px] text-slate-500">
+              Tell me which platforms you are assessing (ERP, CRM, Commerce, Data) so I can filter harmonization.
+            </div>
+          )}
 
           {recentChips.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
@@ -334,7 +381,7 @@ function suggestionFromAction(actionType: AgentIntentAction["type"], projectId: 
         title: "Inspect the enterprise map",
         summary: "Review the graph to validate ROI inputs and context.",
         ctaLabel: "Open Digital Enterprise",
-        route: `/project/${projectId}/digital-enterprise`,
+        route: `/project/${projectId}/experience?scene=digital`,
         targetView: "graph",
         icon: "graph",
         source: "agent_action",

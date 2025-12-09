@@ -2,6 +2,7 @@
 import "./globals.css";
 import type { ReactNode } from "react";
 import { GlobalNav } from "@/features/common/GlobalNav";
+import { ModeBridge } from "@/components/system/ModeBridge";
 
 export const metadata = {
   title: "Fuxi • Capability Scoring",
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body className="min-h-screen bg-slate-50 text-slate-900">
         <GlobalNav />
+        <ModeBridge />
         <div className="pt-6">{children}</div>
       </body>
     </html>

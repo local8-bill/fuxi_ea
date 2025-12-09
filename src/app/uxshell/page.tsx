@@ -1,8 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { UnifiedLayout } from "@/components/uxshell/UnifiedLayout";
-import "@/styles/uxshell.css";
-
-export default function UXShellPage() {
-  return <UnifiedLayout />;
+export default function LegacyUXShellRoot() {
+  redirect("/project/700am/experience");
 }

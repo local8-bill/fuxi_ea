@@ -15,14 +15,26 @@ export async function emitTelemetry(eventType: string, payload: Record<string, a
   }
 }
 
-export function mapPromptToAction(prompt: string): { view?: string; target?: string } {
+import type { ExperienceScene } from "@/hooks/useExperienceFlow";
+
+export type PromptAction = { view?: string; target?: string; scene?: ExperienceScene };
+
+export function mapPromptToAction(prompt: string): PromptAction {
   const p = prompt.toLowerCase();
   if (p.includes("onboard") || p.includes("onboarding") || p.includes("start project")) {
-    return { view: "onboarding", target: "onboarding" };
+    return { view: "onboarding", target: "onboarding", scene: "onboarding" };
   }
-  if (p.includes("graph") || p.includes("map")) return { view: "graph", target: "digital-enterprise" };
-  if (p.includes("roi") || p.includes("return") || p.includes("benefit")) return { view: "roi", target: "roi-dashboard" };
-  if (p.includes("sequence") || p.includes("roadmap") || p.includes("stage")) return { view: "sequencer", target: "transformation-dialogue" };
-  if (p.includes("review") || p.includes("harmonization") || p.includes("delta")) return { view: "review", target: "harmonization-review" };
+  if (p.includes("graph") || p.includes("map") || p.includes("twin")) {
+    return { view: "digital", target: "digital-enterprise", scene: "digital" };
+  }
+  if (p.includes("roi") || p.includes("return") || p.includes("benefit")) {
+    return { view: "roi", target: "roi-dashboard", scene: "roi" };
+  }
+  if (p.includes("sequence") || p.includes("roadmap") || p.includes("stage")) {
+    return { view: "sequencer", target: "sequencer", scene: "sequencer" };
+  }
+  if (p.includes("review") || p.includes("harmonization") || p.includes("delta")) {
+    return { view: "review", target: "harmonization-review", scene: "review" };
+  }
   return {};
 }

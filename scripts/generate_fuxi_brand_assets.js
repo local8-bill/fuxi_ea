@@ -8,7 +8,7 @@ const sharp = require("sharp");
 const { optimize } = require("svgo");
 
 const projectRoot = path.join(__dirname, "..");
-const templatePath = path.join(projectRoot, "ux_assets", "master_crown_template.svg");
+const templatePath = path.join(projectRoot, "ux_assets", "master_crown_vectorized.svg");
 const outputDir = path.join(projectRoot, "public", "assets", "brand", "icons");
 const manifestPath = path.join(outputDir, "manifest.json");
 
@@ -58,9 +58,9 @@ const radialGradient = (id, stops, attrs = `cx="50%" cy="45%" r="65%" fx="40%" f
   `<radialGradient id="${id}" ${attrs}>${stopsToSvg(stops)}</radialGradient>`;
 
 const metallicVariant = (variant, config) => {
-  const fillId = `${variant}-fill`;
-  const strokeId = `${variant}-stroke`;
-  const crownId = `${variant}-crown`;
+  const fillId = "circle-fill";
+  const strokeId = "circle-stroke";
+  const crownId = "crown-stroke";
   const defs = [
     config.fillStops ? radialGradient(fillId, config.fillStops, config.fillGradientAttrs) : "",
     config.strokeStops ? linearGradient(strokeId, config.strokeStops, config.strokeGradientAttrs) : "",
@@ -88,81 +88,97 @@ const brandTokens = {
   argent: () =>
     metallicVariant("argent", {
       fillStops: [
-        { offset: "0%", color: "#F5F7FA" },
-        { offset: "65%", color: "#CED4DC" },
-        { offset: "100%", color: "#A7AFBD" },
+        { offset: "0%", color: "#1B1F27" },
+        { offset: "60%", color: "#11141A" },
+        { offset: "100%", color: "#07090D" },
       ],
       strokeStops: [
-        { offset: "0%", color: "#FFFFFF" },
-        { offset: "100%", color: "#7A8698" },
+        { offset: "0%", color: "#E6EBF3" },
+        { offset: "35%", color: "#9EA9BE" },
+        { offset: "100%", color: "#5B6578" },
       ],
       crownStops: [
-        { offset: "0%", color: "#DCE2EA" },
-        { offset: "100%", color: "#9AA3B4" },
+        { offset: "0%", color: "#FCFDFF" },
+        { offset: "50%", color: "#D7DEE9" },
+        { offset: "100%", color: "#8C95A6" },
       ],
+      circleStrokeWidth: 42,
+      crownStrokeWidth: 62,
     }),
   midnight: () =>
     metallicVariant("midnight", {
       fillStops: [
-        { offset: "0%", color: "#0D1F3B" },
-        { offset: "70%", color: "#0A1630" },
-        { offset: "100%", color: "#071026" },
+        { offset: "0%", color: "#072040" },
+        { offset: "55%", color: "#041126" },
+        { offset: "100%", color: "#020A14" },
       ],
       strokeStops: [
-        { offset: "0%", color: "#5E7CCF" },
-        { offset: "100%", color: "#AABBE8" },
+        { offset: "0%", color: "#7CA8F7" },
+        { offset: "60%", color: "#4163A8" },
+        { offset: "100%", color: "#1C2F63" },
       ],
       crownStops: [
-        { offset: "0%", color: "#BBD6FF" },
-        { offset: "100%", color: "#7EA0E3" },
+        { offset: "0%", color: "#C2DAFF" },
+        { offset: "60%", color: "#7EA1DF" },
+        { offset: "100%", color: "#5571A7" },
       ],
+      circleStrokeWidth: 44,
+      crownStrokeWidth: 64,
     }),
   slate: () =>
     metallicVariant("slate", {
       fillStops: [
-        { offset: "0%", color: "#1E222A" },
-        { offset: "65%", color: "#282D37" },
-        { offset: "100%", color: "#303641" },
+        { offset: "0%", color: "#11151B" },
+        { offset: "60%", color: "#0D1015" },
+        { offset: "100%", color: "#080A0D" },
       ],
       strokeStops: [
-        { offset: "0%", color: "#8F9AA9" },
-        { offset: "100%", color: "#4D5664" },
+        { offset: "0%", color: "#838D9E" },
+        { offset: "50%", color: "#3F4651" },
+        { offset: "100%", color: "#23262C" },
       ],
       crownStops: [
-        { offset: "0%", color: "#D4DAE4" },
-        { offset: "100%", color: "#8B96A3" },
+        { offset: "0%", color: "#B8C1D0" },
+        { offset: "100%", color: "#59606C" },
       ],
+      circleStrokeWidth: 40,
+      crownStrokeWidth: 60,
     }),
   obsidian: () =>
     metallicVariant("obsidian", {
       fillStops: [
-        { offset: "0%", color: "#0E0F12" },
-        { offset: "70%", color: "#15171B" },
-        { offset: "100%", color: "#1B1E23" },
+        { offset: "0%", color: "#050506" },
+        { offset: "60%", color: "#070708" },
+        { offset: "100%", color: "#0B0B0D" },
       ],
       strokeStops: [
-        { offset: "0%", color: "#34363C" },
-        { offset: "100%", color: "#1E2024" },
+        { offset: "0%", color: "#2B2B31" },
+        { offset: "100%", color: "#111114" },
       ],
       crownStops: [
-        { offset: "0%", color: "#3F4249" },
-        { offset: "100%", color: "#15161A" },
+        { offset: "0%", color: "#2E3038" },
+        { offset: "100%", color: "#1A1B1F" },
       ],
-      circleStrokeWidth: 32,
+      circleStrokeWidth: 36,
       crownStrokeWidth: 58,
     }),
 };
 
 function renderTemplate(config) {
   const defsBlock = config.defs ? `<defs>${config.defs}</defs>` : "";
-  return template
-    .replace(/{{DEFS}}/g, defsBlock)
-    .replace(/{{CIRCLE_FILL}}/g, config.circleFill ?? "#FFFFFF")
-    .replace(/{{CIRCLE_STROKE}}/g, config.circleStroke ?? BASE_STROKE)
-    .replace(/{{CIRCLE_STROKE_WIDTH}}/g, String(config.circleStrokeWidth ?? DEFAULT_CIRCLE_STROKE_WIDTH))
-    .replace(/{{CROWN_FILL}}/g, config.crownFill ?? "none")
-    .replace(/{{CROWN_STROKE}}/g, config.crownStroke ?? BASE_STROKE)
-    .replace(/{{CROWN_STROKE_WIDTH}}/g, String(config.crownStrokeWidth ?? DEFAULT_CROWN_STROKE_WIDTH));
+  const hasLegacyPlaceholders = template.includes("{{DEFS}}");
+  if (hasLegacyPlaceholders) {
+    return template
+      .replace(/{{DEFS}}/g, defsBlock)
+      .replace(/{{CIRCLE_FILL}}/g, config.circleFill ?? "#FFFFFF")
+      .replace(/{{CIRCLE_STROKE}}/g, config.circleStroke ?? BASE_STROKE)
+      .replace(/{{CIRCLE_STROKE_WIDTH}}/g, String(config.circleStrokeWidth ?? DEFAULT_CIRCLE_STROKE_WIDTH))
+      .replace(/{{CROWN_FILL}}/g, config.crownFill ?? "none")
+      .replace(/{{CROWN_STROKE}}/g, config.crownStroke ?? BASE_STROKE)
+      .replace(/{{CROWN_STROKE_WIDTH}}/g, String(config.crownStrokeWidth ?? DEFAULT_CROWN_STROKE_WIDTH));
+  }
+  if (!defsBlock) return template;
+  return template.replace("</svg>", `${defsBlock}</svg>`);
 }
 
 async function generateVariant(name, configurator) {
@@ -174,8 +190,9 @@ async function generateVariant(name, configurator) {
     floatPrecision: 3,
   }).data;
 
-  const svgFile = `fuxi_crown_${name}.svg`;
-  const pngFile = `fuxi_crown_${name}.png`;
+  const baseFile = `fuxi_crown_${name}_handdrawn`;
+  const svgFile = `${baseFile}.svg`;
+  const pngFile = `${baseFile}.png`;
   const svgPath = path.join(outputDir, svgFile);
   const pngPath = path.join(outputDir, pngFile);
 

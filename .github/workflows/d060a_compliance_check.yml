@@ -1,0 +1,32 @@
+name: D060A Compliance Check
+
+on:
+  pull_request:
+    branches: [ "main", "dev" ]
+
+jobs:
+  verify-naming:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check branch and commit naming
+        run: |
+          echo "🔍 Checking branch and commit naming for D060A compliance..."
+          BRANCH_NAME="${{ github.head_ref }}"
+          LAST_COMMIT="$(git log -1 --pretty=%B)"
+
+          if [[ ! "$BRANCH_NAME" =~ ^feature/D060A-compliance-fix ]]; then
+            echo "⚠️  Warning: Branch name '$BRANCH_NAME' does not match 'feature/D060A-compliance-fix'"
+          fi
+
+          if [[ ! "$LAST_COMMIT" =~ ^\\[D060A\\ Compliance\\] ]]; then
+            echo "⚠️  Warning: Commit message missing '[D060A Compliance]' prefix."
+          fi
+
+          if [[ ! "${{ github.event.pull_request.title }}" =~ D060A ]]; then
+            echo "⚠️  Warning: PR title does not mention D060A or Compliance."
+          fi
+
+          echo "✅ Compliance check complete (non-blocking)."

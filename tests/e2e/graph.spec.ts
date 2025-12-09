@@ -2,11 +2,10 @@ import { test, expect } from "@playwright/test";
 import { recordTestResult } from "./utils/telemetry";
 
 test("Digital Enterprise graph loads", async ({ page }) => {
-  await page.goto("/project/demo/digital-enterprise");
+  await page.goto("/project/demo/experience?scene=digital");
 
-  await expect(page.getByRole("heading", { name: /Ecosystem View for Project/i })).toBeVisible();
-  // Expect graph controls present (legend / filters)
-  await expect(page.getByText("Edge kinds", { exact: false })).toBeVisible();
+  await expect(page.getByText(/Digital Twin graph/i)).toBeVisible();
+  await expect(page.locator("canvas, svg").first()).toBeVisible();
 
   await recordTestResult(page, "graph.spec.digital-enterprise", "D061");
 });

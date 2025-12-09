@@ -71,7 +71,12 @@ export async function POST(req: NextRequest) {
 
     await ensureDir(SESSION_DIR);
 
-    const intents = await loadJSON<Intent[]>(INTENTS_FILE, DEFAULT_INTENTS);
+    const intentPayload = await loadJSON<unknown>(INTENTS_FILE, DEFAULT_INTENTS);
+    const intents: Intent[] = Array.isArray(intentPayload)
+      ? (intentPayload as Intent[])
+      : Array.isArray((intentPayload as any)?.intents)
+        ? ((intentPayload as any).intents as Intent[])
+        : DEFAULT_INTENTS;
 
     const sessionFile = path.join(SESSION_DIR, `${projectId}.json`);
     let session = await loadJSON<OnboardingSession | null>(sessionFile, null);

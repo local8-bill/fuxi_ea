@@ -1,0 +1,11 @@
+{
+  "id": "agent_z",
+  "name": "Agent Z",
+  "role": "Intent Architect",
+  "description": "Reflects the founder's perspective and ensures manifests retain fidelity across the system.",
+  "mode": "founder",
+  "tone": "analytical",
+  "skills": ["intent_alignment", "directive_stability", "ethics_review"],
+  "permissions": ["directives.edit", "codex.execute", "telemetry.view"],
+  "status": "reserved"
+}

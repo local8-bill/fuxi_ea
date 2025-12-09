@@ -59,6 +59,7 @@ npm-debug.log*
 .fuxi/data/
 public/test.css
 .next/tw-test.css
+data/
 
 # local archives
 _archive/

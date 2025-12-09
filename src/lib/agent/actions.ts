@@ -1,12 +1,14 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { forecastByDomain } from "@/domain/services/roi";
 import type { AgentIntentAction, AgentSession, AgentCard, AgentLink } from "@/types/agent";
 import { appendSessionMessage, loadAgentSession, saveAgentSession } from "./sessionStore";
 import { recordTelemetry } from "@/lib/telemetry/server";
-
-const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
-const GRAPH_FILE = path.join(DATA_ROOT, "harmonized", "enterprise_graph.json");
+import { loadHarmonizationSummary } from "@/lib/harmonization/summary";
+import { buildSequencerPlan } from "@/lib/sequencer/plan";
+import { composeUtterance, promptForAction, completionAcknowledgement } from "@/lib/agent/tone";
+import { defaultToneProfile } from "@/lib/agent/toneProfile";
+import { renderActionTemplate } from "@/lib/agent/templates";
+import { getDemoScript } from "@/lib/agent/demoScripts";
+import { getLatestNarrative } from "@/lib/learning/narratives";
 
 type ActionContext = {
   mode?: string;
@@ -19,34 +21,6 @@ type ExecutionResult = {
   card?: AgentCard;
   link?: AgentLink;
 };
-
-async function loadGraphSummary(focusAreas: string[]): Promise<{ systems: number; integrations: number; domains: number }> {
-  try {
-    const raw = await fs.readFile(GRAPH_FILE, "utf8");
-    const json = JSON.parse(raw);
-    let nodes: Array<{ platform?: string; domain?: string }> = Array.isArray(json?.nodes) ? json.nodes : [];
-    if (focusAreas.length) {
-      nodes = nodes.filter((node) => {
-        const platform = String(node.platform ?? "").toLowerCase();
-        return focusAreas.some((focus) => platform.includes(focus));
-      });
-    }
-    const edges = Array.isArray(json?.edges) ? json.edges : [];
-    const domains = new Set(nodes.map((n) => n.domain).filter(Boolean));
-    return { systems: nodes.length, integrations: edges.length, domains: domains.size };
-  } catch {
-    return { systems: 0, integrations: 0, domains: 0 };
-  }
-}
-
-function buildSequencerPlan(focusAreas: string[], strategy = "value") {
-  const base = [
-    { id: "wave-1", title: "Stabilize Core", focus: focusAreas.slice(0, 2).join(", ") || "ERP / OMS", timelineMonths: [0, 3] as [number, number] },
-    { id: "wave-2", title: "Modernize Experience", focus: focusAreas.slice(2, 4).join(", ") || "Commerce / Integration", timelineMonths: [3, 6] as [number, number] },
-    { id: "wave-3", title: "Scale Intelligence", focus: focusAreas.slice(4, 6).join(", ") || "Data / Analytics", timelineMonths: [6, 9] as [number, number] },
-  ];
-  return { waves: base, strategy };
-}
 
 function buildReviewHighlights(focusAreas: string[], mode?: string) {
   const highlights = [
@@ -65,6 +39,11 @@ export async function performAgentAction(
   const { session } = await loadAgentSession(projectId);
   const focusAreas = context.focusAreas ?? session.memory.focusAreas ?? [];
   let result: ExecutionResult;
+  const toneProfile = session.memory.toneProfile ?? defaultToneProfile();
+  const tone = toneProfile.formality;
+  const acknowledge = completionAcknowledgement(tone);
+  const reflect = focusAreas.length ? `Focus: ${focusAreas.join(", ")}.` : undefined;
+  const telemetryQueue: Array<{ event_type: string; data: Record<string, unknown> }> = [];
 
   switch (action.type) {
     case "roi.summary": {
@@ -72,8 +51,20 @@ export async function performAgentAction(
       const { netROI, breakEvenMonth, totalBenefit, totalCost } = forecast.predictions;
       const netPct = typeof netROI === "number" ? `${Math.round(netROI * 100)}%` : "—";
       const summary = `ROI ready. Net ROI ${netPct} with break-even month ${breakEvenMonth ?? "—"}.`;
+      const learningHint = await getLatestNarrative(projectId);
+      const rendered = renderActionTemplate(action.type, tone, { summary });
+      const respondText = learningHint ? `${rendered} ${learningHint}` : rendered;
+      telemetryQueue.push({
+        event_type: "template_used",
+        data: { projectId, intent: action.type, tone, template: action.type },
+      });
       result = {
-        summary,
+        summary: composeUtterance(tone, {
+          acknowledge,
+          reflect,
+          respond: respondText,
+          prompt: promptForAction(action.type),
+        }),
         card: {
           type: "roi",
           netROI,
@@ -87,12 +78,20 @@ export async function performAgentAction(
       break;
     }
     case "graph.harmonize": {
-      const summaryData = await loadGraphSummary(focusAreas);
+      const summaryData = await loadHarmonizationSummary(focusAreas);
+      const topOverlap = summaryData.platformBreakdown.slice(0, 2).map((entry) => entry.platform).join(" & ");
+      const overlapHint = topOverlap ? ` ${topOverlap} show the highest overlap.` : "";
       const summary = `Harmonized ${summaryData.systems} systems across ${summaryData.domains} domains. ${
         summaryData.integrations
-      } integration links ready.`;
+      } integration links ready.${overlapHint}`;
+      const rendered = renderActionTemplate(action.type, tone, { summary, focus: focusAreas.join(", ") });
       result = {
-        summary,
+        summary: composeUtterance(tone, {
+          acknowledge,
+          reflect,
+          respond: rendered,
+          prompt: promptForAction(action.type),
+        }),
         card: {
           type: "harmonization",
           systems: summaryData.systems,
@@ -102,13 +101,38 @@ export async function performAgentAction(
         },
         link: { label: "Open Digital Enterprise", href: `/project/${projectId}/digital-enterprise` },
       };
+      telemetryQueue.push({
+        event_type: "template_used",
+        data: { projectId, intent: action.type, tone, template: action.type },
+      });
+      telemetryQueue.push({
+        event_type: "harmonization_completed",
+        data: {
+          projectId,
+          platforms: focusAreas,
+          summary: summaryData,
+          overlaps: summaryData.platformBreakdown,
+        },
+      });
       break;
     }
     case "sequence.plan": {
       const plan = buildSequencerPlan(focusAreas, String(action.params?.strategy ?? "value"));
       const summary = `Generated ${plan.waves.length} modernization waves (${plan.strategy} strategy).`;
-      result = {
+      const learningHint = await getLatestNarrative(projectId);
+      const rendered = renderActionTemplate(action.type, tone, {
         summary,
+        strategy: plan.strategy,
+        waveCount: plan.waves.length,
+      });
+      const respondText = learningHint ? `${rendered} ${learningHint}` : rendered;
+      result = {
+        summary: composeUtterance(tone, {
+          acknowledge,
+          reflect,
+          respond: respondText,
+          prompt: promptForAction(action.type),
+        }),
         card: {
           type: "sequence",
           waves: plan.waves,
@@ -116,13 +140,36 @@ export async function performAgentAction(
         },
         link: { label: "Open Sequencer", href: `/project/${projectId}/transformation-dialogue` },
       };
+      telemetryQueue.push({
+        event_type: "template_used",
+        data: { projectId, intent: action.type, tone, template: action.type },
+      });
+      telemetryQueue.push({
+        event_type: "sequencing_generated",
+        data: {
+          projectId,
+          strategy: plan.strategy,
+          platforms: focusAreas,
+          waves: plan.waves,
+        },
+      });
       break;
     }
     case "review.resume": {
       const highlights = buildReviewHighlights(focusAreas, context.mode);
       const summary = `Review queue ready with ${highlights.length} highlights.`;
+      const rendered = renderActionTemplate(action.type, tone, { summary });
+      telemetryQueue.push({
+        event_type: "template_used",
+        data: { projectId, intent: action.type, tone, template: action.type },
+      });
       result = {
-        summary,
+        summary: composeUtterance(tone, {
+          acknowledge,
+          reflect,
+          respond: rendered,
+          prompt: promptForAction(action.type),
+        }),
         card: {
           type: "review",
           highlights,
@@ -131,9 +178,35 @@ export async function performAgentAction(
       };
       break;
     }
+    case "demo.explain": {
+      const topic = typeof action.params?.topic === "string" ? action.params.topic : undefined;
+      const script = getDemoScript(topic);
+      telemetryQueue.push({ event_type: "assistive_mode_triggered", data: { projectId, topic: script.topic } });
+      result = {
+        summary: composeUtterance(tone, {
+          acknowledge,
+          respond: script.summary,
+          prompt: script.completion,
+        }),
+        card: {
+          type: "walkthrough",
+          title: script.title,
+          steps: script.steps,
+          completion: script.completion,
+        },
+      };
+      break;
+    }
     default: {
       const summary = "Context noted. I’ll keep listening for the next request.";
-      result = { summary };
+      result = {
+        summary: composeUtterance(tone, {
+          acknowledge,
+          reflect,
+          respond: summary,
+          prompt: promptForAction(action.type),
+        }),
+      };
     }
   }
 
@@ -147,6 +220,14 @@ export async function performAgentAction(
   });
 
   await saveAgentSession(session);
+
+  for (const entry of telemetryQueue) {
+    await recordTelemetry({
+      event_type: entry.event_type,
+      workspace_id: "uxshell",
+      data: entry.data,
+    });
+  }
 
   await recordTelemetry({
     event_type: "agent_action_executed",

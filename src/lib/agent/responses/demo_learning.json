@@ -1,0 +1,5 @@
+{
+  "confidence_up": "Your sequencing rhythm improved — confidence is now {{value}}.",
+  "velocity_down": "Velocity of change slowed; would you like to adjust ROI expectations?",
+  "maturity_up": "Your team's adaptive maturity improved — Fuxi predicts faster recovery next phase."
+}

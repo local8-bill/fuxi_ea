@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AgentMessage, AgentSession } from "@/types/agent";
+import { designLocks } from "@/data/designLocks";
 
 const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
 const SESSION_DIR = path.join(DATA_ROOT, "sessions", "agent");
@@ -26,7 +27,8 @@ export async function loadAgentSession(projectId: string): Promise<{ session: Ag
         lastIntent: parsed.memory?.lastIntent,
         lastView: parsed.memory?.lastView,
         lastMode: parsed.memory?.lastMode,
-        tone: parsed.memory?.tone,
+        toneProfile: parsed.memory?.toneProfile,
+        designLocks,
       },
     };
     return { session, existing: true };
@@ -38,11 +40,12 @@ export async function loadAgentSession(projectId: string): Promise<{ session: Ag
         {
           id: randomUUID(),
           role: "assistant",
-          content: "Hi, I'm your contextual shell companion. Ask for ROI, harmonization, or the next sequence step anytime.",
+          content:
+            "Let's focus the enterprise map. Which platforms are you assessing today? (ERP, CRM, Commerce, Data, Finance...)",
           ts: Date.now(),
         },
       ],
-      memory: { focusAreas: [] },
+      memory: { focusAreas: [], designLocks },
     };
     return { session: fresh, existing: false };
   }
@@ -55,6 +58,11 @@ export async function saveAgentSession(session: AgentSession) {
     ...session,
     messages: session.messages.slice(-MAX_MESSAGES),
     updatedAt: session.updatedAt ?? new Date().toISOString(),
+    memory: {
+      ...session.memory,
+      // design locks are injected on load; avoid persisting duplicates
+      designLocks: undefined,
+    },
   };
   await fs.writeFile(file, JSON.stringify(trimmed, null, 2), "utf8");
 }

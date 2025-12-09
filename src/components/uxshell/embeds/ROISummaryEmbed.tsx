@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Card } from "@/components/ui/Card";
+import { AdaptiveSignalsPanel } from "@/components/learning/AdaptiveSignalsPanel";
+import { useLearningSnapshot } from "@/hooks/useLearningSnapshot";
 
 type ROISummary = {
   netROI: number | null;
@@ -12,6 +15,7 @@ type ROISummary = {
 
 export default function ROISummaryEmbed({ projectId }: { projectId: string }) {
   const [roi, setRoi] = useState<ROISummary | null>(null);
+  const { snapshot } = useLearningSnapshot(projectId);
 
   useEffect(() => {
     const load = async () => {
@@ -34,15 +38,15 @@ export default function ROISummaryEmbed({ projectId }: { projectId: string }) {
   }, []);
 
   return (
-    <div className="uxshell-card rounded-2xl bg-white p-4 h-full flex flex-col gap-2">
-      <div className="flex items-center justify-between">
+    <Card className="h-full space-y-2 border-slate-200 p-4">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-slate-900">ROI Summary</p>
-        <Link href={`/project/${projectId}/roi-dashboard`} className="text-indigo-600 text-sm font-semibold">
+        <Link href={`/project/${projectId}/experience?scene=roi`} className="text-xs font-semibold text-indigo-600">
           Open full view →
         </Link>
       </div>
       {roi ? (
-        <div className="text-sm text-slate-700 space-y-1">
+        <div className="space-y-1 text-sm text-slate-700">
           <p>
             Net ROI:{" "}
             <span className={roi.netROI != null && roi.netROI > 1 ? "text-emerald-600 font-semibold" : "text-amber-600"}>
@@ -57,6 +61,7 @@ export default function ROISummaryEmbed({ projectId }: { projectId: string }) {
       ) : (
         <p className="text-sm text-slate-600">Loading ROI…</p>
       )}
-    </div>
+      <AdaptiveSignalsPanel snapshot={snapshot} />
+    </Card>
   );
 }

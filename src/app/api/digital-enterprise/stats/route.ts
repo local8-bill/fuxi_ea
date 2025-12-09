@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 export const runtime = "nodejs";
 
 const rateLimit = createRateLimiter({ windowMs: 60_000, max: 60, name: "de-stats" });
+const RATE_LIMIT_ENABLED = process.env.NODE_ENV === "production";
 const DATA_ROOT = process.env.FUXI_DATA_ROOT ?? path.join(process.cwd(), ".fuxi", "data");
 const HARMONIZED_GRAPH = path.join(DATA_ROOT, "harmonized", "enterprise_graph.json");
 
@@ -14,8 +15,10 @@ export async function GET(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth) return auth;
 
-  const limited = rateLimit(req);
-  if (limited) return limited;
+  if (RATE_LIMIT_ENABLED) {
+    const limited = rateLimit(req);
+    if (limited) return limited;
+  }
 
   const url = new URL(req.url);
   const projectId = url.searchParams.get("project") ?? "default";

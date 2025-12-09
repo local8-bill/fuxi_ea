@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <circle
+    cx="512"
+    cy="512"
+    r="460"
+    fill="url(#circle-fill)"
+    stroke="url(#circle-stroke)"
+    stroke-width="40"
+  />
+  <path
+    d="
+      M230 632
+      L322 348
+      Q332 316 360 322
+      L474 590
+      L512 380
+      L550 590
+      L664 322
+      Q692 316 702 348
+      L794 632
+    "
+    fill="none"
+    stroke="url(#crown-stroke)"
+    stroke-width="56"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="
+      M230 650
+      H794
+      Q812 650 812 668
+      Q812 686 794 686
+      H230
+      Q212 686 212 668
+      Q212 650 230 650
+      Z
+    "
+    fill="none"
+    stroke="url(#crown-stroke)"
+    stroke-width="40"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
