@@ -5,6 +5,10 @@ import { Card } from "@/components/ui/Card";
 import { ROIChart } from "@/components/ROIChart";
 import { TCCSummaryCard } from "@/components/roi/TCCSummaryCard";
 import { AnticipationTelemetryCard } from "@/components/roi/AnticipationTelemetryCard";
+import { AdaptiveSignalsPanel } from "@/components/learning/AdaptiveSignalsPanel";
+import { useLearningSnapshot } from "@/hooks/useLearningSnapshot";
+import { useTelemetry } from "@/hooks/useTelemetry";
+import { ROIClassificationBreakdown } from "@/components/roi/ROIClassificationBreakdown";
 
 interface DomainROIData {
   domain: string;
@@ -33,6 +37,8 @@ export function ROIScene({ projectId }: { projectId: string }) {
   const [forecast, setForecast] = useState<ROIForecast | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { snapshot } = useLearningSnapshot(projectId);
+  const telemetry = useTelemetry("roi_dashboard", { projectId });
 
   useEffect(() => {
     let cancelled = false;
@@ -47,8 +53,9 @@ export function ROIScene({ projectId }: { projectId: string }) {
         }
         const json = (await res.json()) as ROIForecast;
         if (!cancelled) setForecast(json);
-      } catch (err: any) {
-        if (!cancelled) setError(err?.message ?? "Failed to load ROI forecast");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to load ROI forecast";
+        if (!cancelled) setError(message);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -58,6 +65,16 @@ export function ROIScene({ projectId }: { projectId: string }) {
       cancelled = true;
     };
   }, [projectId]);
+
+  useEffect(() => {
+    if (!forecast) return;
+    telemetry.log("roi_forecast_viewed", {
+      projectId,
+      breakEvenMonth: forecast.predictions.breakEvenMonth,
+      netROI: forecast.predictions.netROI,
+      tccRatio: forecast.predictions.tccRatio,
+    });
+  }, [forecast, projectId, telemetry]);
 
   if (loading) {
     return <p className="text-sm text-slate-600">Loading ROI forecast…</p>;
@@ -72,6 +89,8 @@ export function ROIScene({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-4">
       <TCCSummaryCard projectId={projectId} />
+      <ROIClassificationBreakdown projectId={projectId} />
+      <AdaptiveSignalsPanel snapshot={snapshot} title="ROI Signals" subtitle="Finance confidence" />
       <Card className="p-4">
         <ROIChart
           data={forecast.timeline}

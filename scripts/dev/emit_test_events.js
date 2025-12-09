@@ -18,9 +18,11 @@ Module._resolveFilename = function patched(request, parent, isMain, options) {
 const { runSequencerEvent } = require("../../src/lib/sequencer/engine");
 
 async function main() {
-  await runSequencerEvent("sequencer_action_confirmed", { project_id: "deckers", wave: 1 });
-  await runSequencerEvent("sequencer_timeline_shifted", { project_id: "deckers", wave: 2 });
-  await runSequencerEvent("sequencer_dependency_blocked", { project_id: "deckers", wave: 3 });
+  const projectId = process.argv[2] ?? "700am";
+  console.log(`[ALE-Lite] emitting demo sequencer events for project ${projectId}`);
+  await runSequencerEvent("sequencer_action_confirmed", { project_id: projectId, wave: 1 });
+  await runSequencerEvent("sequencer_timeline_shifted", { project_id: projectId, wave: 2 });
+  await runSequencerEvent("sequencer_dependency_blocked", { project_id: projectId, wave: 3 });
 }
 
 main().catch((error) => {

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
+import { AdaptiveSignalsPanel } from "@/components/learning/AdaptiveSignalsPanel";
+import { useLearningSnapshot } from "@/hooks/useLearningSnapshot";
 
 type ROISummary = {
   netROI: number | null;
@@ -13,6 +15,7 @@ type ROISummary = {
 
 export default function ROISummaryEmbed({ projectId }: { projectId: string }) {
   const [roi, setRoi] = useState<ROISummary | null>(null);
+  const { snapshot } = useLearningSnapshot(projectId);
 
   useEffect(() => {
     const load = async () => {
@@ -58,6 +61,7 @@ export default function ROISummaryEmbed({ projectId }: { projectId: string }) {
       ) : (
         <p className="text-sm text-slate-600">Loading ROI…</p>
       )}
+      <AdaptiveSignalsPanel snapshot={snapshot} />
     </Card>
   );
 }

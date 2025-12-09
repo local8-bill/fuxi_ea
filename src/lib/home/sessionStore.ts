@@ -34,7 +34,7 @@ export async function writeHomeSession(partial: Partial<HomeSessionState> & { pr
     ...next,
     ...partial,
     projectId: partial.projectId ?? next.projectId ?? "700am",
-    firstTime: partial.firstTime ?? false,
+    firstTime: partial.firstTime ?? next.firstTime ?? false,
     lastSeen: partial.lastSeen ?? next.lastSeen ?? new Date().toISOString(),
   };
   await fs.mkdir(path.dirname(SESSION_FILE), { recursive: true });

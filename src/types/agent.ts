@@ -72,6 +72,7 @@ export interface AgentMemory {
   lastMode?: string;
   toneProfile?: ToneProfile;
   designLocks?: AgentDesignLock[];
+  feedbackAwaiting?: boolean;
 }
 
 export interface AgentSession {

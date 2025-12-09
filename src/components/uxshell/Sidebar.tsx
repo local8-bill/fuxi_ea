@@ -6,6 +6,7 @@ import { useChevronNav } from "@/hooks/useChevronNav";
 import { emitTelemetry } from "./telemetry";
 import { pushWithContext } from "@/lib/navigation/pushWithContext";
 import { setExperienceScene, type ExperienceScene } from "@/hooks/useExperienceFlow";
+import { useEffect, useState } from "react";
 
 export type Mode = "Architect" | "Analyst" | "CFO" | "FP&A" | "CIO";
 
@@ -17,11 +18,14 @@ interface SidebarProps {
   onModeChange?: (mode: Mode) => void;
 }
 
-const projects = [
+type ProjectOption = { id: string; name: string; status?: string };
+
+const FALLBACK_PROJECTS: ProjectOption[] = [
   { id: "700am", name: "700am — Core" },
   { id: "951pm", name: "951pm — Pilot" },
   { id: "demo", name: "Demo Workspace" },
 ];
+const MAX_PROJECTS = 5;
 
 const roiViews = [
   { key: "roi-hypothesis", label: "ROI 1 (Hypothesis)", roiId: "hypothesis" },
@@ -62,6 +66,32 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
   const router = useRouter();
   const targetProject = currentProjectId || projectId;
   const { expandedMain, roiExpanded, activeItem, toggleMain, toggleRoi, selectItem } = useChevronNav(projectId);
+  const [projectOptions, setProjectOptions] = useState<ProjectOption[]>(FALLBACK_PROJECTS);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadProjects = async () => {
+      try {
+        const res = await fetch("/api/projects/list", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && Array.isArray(json.projects) && json.projects.length) {
+          let list: ProjectOption[] = json.projects.slice(0, MAX_PROJECTS);
+          if (targetProject && !list.some((item) => item.id === targetProject)) {
+            const active = json.projects.find((item: ProjectOption) => item.id === targetProject);
+            if (active) list = [...list, active];
+          }
+          setProjectOptions(list);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void loadProjects();
+    return () => {
+      cancelled = true;
+    };
+  }, [targetProject]);
 
   const handleProjectSelect = (id: string) => {
     const key = `project-${id}`;
@@ -76,7 +106,7 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
 
   const handleNewProject = () => {
     selectItem("Projects", "new-project");
-    pushWithContext(router, "/project/new", { from: currentView ?? "command" });
+    router.push("/home");
   };
 
   const handleViewRoute = (key: string, scene: string) => {
@@ -129,7 +159,7 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
         isExpanded={expandedMain === "Projects"}
         onToggle={() => toggleMain("Projects")}
         items={[
-          ...projects.map((p) => ({
+          ...projectOptions.map((p) => ({
             label: p.name,
             isActive: activeItem === `project-${p.id}` || targetProject === p.id,
             onClick: () => handleProjectSelect(p.id),

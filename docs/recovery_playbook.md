@@ -40,6 +40,9 @@ Run `./scripts/recover_codex_session.sh` to print the current repo snapshot, ver
 | D062/D067 Onboarding | ✅ | Remodeled scene under Experience Shell, auto-proceed toggle, telemetry. |
 | D071 Command Deck Home | ✅ | `/home` Playwright coverage; `/` redirects to `/home`. |
 | D075 Anticipatory Preview | ✅ | E2E covered via command deck spec. |
+| D077C-L ALE Lite | ✅ | `/lib/learning/*`, `/api/learning/metrics`, ROI/Sequencer/Digital Twin embeds show Adaptive Signals. |
+| D078 Inventory Metadata | ✅ | Classification schema + mix loader feeds ALE risk/velocity + ROI segmentation (`ROIClassificationBreakdown`). |
+| D079 Contextual Modes | ✅ | `window.FuxiModeSwitcher` bridge, tone profiles, Playwright mode-switch spec. |
 | Telemetry Dashboard | ✅ | `scene_viewed`, `agent_message_sent`, `decision_taken`, `ai_trust_signal`, `pulse_state_change` events aggregated and visualized in Insights scene. |
 
 ---
@@ -70,7 +73,7 @@ Run `./scripts/recover_codex_session.sh` to print the current repo snapshot, ver
    - `/project/700am/experience?scene=insights` — telemetry dashboard cards + charts.
 
 5. **Beans reference**
-   - `npm run beans` prints: dev, build, lint, `npx playwright test --trace=on`, `npm run collect:videos`, `npm run dev:nuke`, `node scripts/telemetry-summary.js`, `npm run generate:brand`, etc.
+   - `npm run beans` prints: dev, build, lint, `npx playwright test --trace=on`, `npm run collect:videos`, `npm run dev:nuke`, `node scripts/telemetry-summary.js`, `npm run generate:brand`, `node scripts/dev/emit_test_events.js <project>` / `node scripts/dev/compute_learning_metrics.js`, etc.
 
 6. **Telemetry sanity check**
    ```bash

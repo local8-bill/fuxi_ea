@@ -6,6 +6,8 @@ import { FileUploadPanel } from "@/components/panels/FileUploadPanel";
 import { parseInventoryCsv } from "@/domain/services/inventoryIngestion";
 import { useTelemetry } from "@/hooks/useTelemetry";
 import { useAutoProceedPreference } from "@/hooks/useAgentPreferences";
+import { ONBOARDING_SCRIPT } from "@/lib/agent/scripts/onboarding";
+import { emitTelemetry } from "@/components/uxshell/telemetry";
 
 export type OnboardingSceneProps = {
   projectId: string;
@@ -54,11 +56,16 @@ export function AgentOnboardingScene({ projectId, onComplete }: OnboardingSceneP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
+  useEffect(() => {
+    telemetry.log("onboarding_intent_updated", { projectId, role, goal, pace });
+  }, [telemetry, projectId, role, goal, pace]);
+
   const [summary, setSummary] = useState({
     systems: 27,
     integrations: 54,
     domains: 7,
   });
+  const scriptPreview = ONBOARDING_SCRIPT.slice(0, 4);
 
   const handleUpload = async (file: File) => {
     setUploading(true);
@@ -73,6 +80,7 @@ export function AgentOnboardingScene({ projectId, onComplete }: OnboardingSceneP
         domains: Math.max(1, Math.round(parsed.uniqueSystems / 4)),
       });
       telemetry.log("onboarding_artifact_uploaded", { projectId, file: file.name });
+      void emitTelemetry("artifact_uploaded", { projectId, file: file.name, workspace_id: "uxshell" });
       pushActivity(`Ingested ${file.name}. I can summarize or open ROI next.`, "success");
       if (autoProceed) {
         pushActivity("Auto-proceed enabled — sending you to Digital Twin.", "success");
@@ -80,8 +88,9 @@ export function AgentOnboardingScene({ projectId, onComplete }: OnboardingSceneP
       } else {
         setReadyToProceed(true);
       }
-    } catch (err: any) {
-      setUploadError(err?.message ?? "Failed to process file");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to process file";
+      setUploadError(message);
       pushActivity("Upload failed — try a different file or ask the agent for help.");
     } finally {
       setUploading(false);
@@ -189,6 +198,22 @@ export function AgentOnboardingScene({ projectId, onComplete }: OnboardingSceneP
             </div>
           ))}
         </div>
+      </Card>
+
+      <Card className="space-y-3 border border-slate-200 p-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">EAgent onboarding script</p>
+          <p className="text-xs text-slate-500">Preview of the conversational path the agent follows for first-time users.</p>
+        </div>
+        <ol className="space-y-2 text-sm text-slate-700">
+          {scriptPreview.map((step) => (
+            <li key={step.step} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Step {step.step}</p>
+              <p className="mt-1 font-semibold text-slate-900">{step.greeting}</p>
+              <p className="text-xs text-slate-600">{step.follow_up}</p>
+            </li>
+          ))}
+        </ol>
       </Card>
 
       <div className="grid gap-3 md:grid-cols-3">

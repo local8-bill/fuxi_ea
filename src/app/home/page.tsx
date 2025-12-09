@@ -42,6 +42,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [helpTopic, setHelpTopic] = useState<string>("");
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [ctaError, setCtaError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadContext = async () => {
@@ -99,6 +101,35 @@ export default function HomePage() {
     }
   }, [projectId]);
 
+  const handleCreateProject = useCallback(async () => {
+    setCreatingProject(true);
+    setCtaError(null);
+    try {
+      const res = await fetch("/api/projects/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metadata: { source: "home_cta" } }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      const newProjectId = data?.projectId;
+      if (!newProjectId) throw new Error("Project id missing from response.");
+      await persistHomeState({
+        projectId: newProjectId,
+        lastStage: "onboarding",
+        lastIntent: "create_project",
+        firstTime: false,
+        lastSeen: new Date().toISOString(),
+      });
+      void emitTelemetry("project_created", { workspace_id: "uxshell", projectId: newProjectId, source: "home_cta" });
+      router.push(`/project/${newProjectId}/experience?scene=onboarding`);
+    } catch (err: any) {
+      setCtaError(err?.message ?? "Unable to create a project. Try again.");
+    } finally {
+      setCreatingProject(false);
+    }
+  }, [persistHomeState, router]);
+
   const handlePrompt = useCallback(async (prompt: string) => {
     const trimmed = prompt.trim();
     if (!trimmed) return;
@@ -155,29 +186,67 @@ export default function HomePage() {
     }
   }, [context, persistHomeState, projectId, router]);
 
+  const conversationPairs = useMemo(() => {
+    const pairs: Array<{ id: string; user: AgentMessage; replies: AgentMessage[] }> = [];
+    messages.forEach((msg) => {
+      if (msg.role === "user") {
+        pairs.push({ id: msg.id, user: msg, replies: [] });
+        return;
+      }
+      if (!pairs.length) return;
+      const last = pairs[pairs.length - 1];
+      if (msg.role === "assistant" || msg.role === "system") {
+        last.replies.push(msg);
+      }
+    });
+    return pairs;
+  }, [messages]);
+
+  const [openPairs, setOpenPairs] = useState<Record<string, boolean>>({});
+
+  const togglePair = useCallback((id: string) => {
+    setOpenPairs((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
   const renderedMessages = useMemo(() => {
-    if (!messages.length) {
+    if (!conversationPairs.length) {
       return (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
           I can harmonize systems, forecast ROI, or walk you through a guided demo. Ask anything.
         </div>
       );
     }
-    return messages.map((message) => (
-      <div
-        key={message.id}
-        className={`w-full rounded-2xl px-3 py-2 text-sm ${
-          message.role === "assistant"
-            ? "bg-slate-50 text-slate-800 border border-slate-200"
-            : message.role === "system"
-              ? "bg-white/70 text-slate-500 border border-dashed border-slate-200"
-              : "bg-slate-900 text-white ml-auto"
-        }`}
-      >
-        <div className="whitespace-pre-wrap text-left">{message.content}</div>
-      </div>
-    ));
-  }, [messages]);
+    return conversationPairs.map((pair) => {
+      const isOpen = openPairs[pair.id];
+      return (
+        <div key={pair.id} className="rounded-2xl border border-slate-200 bg-white/90">
+          <button
+            type="button"
+            onClick={() => togglePair(pair.id)}
+            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm font-semibold text-slate-900"
+          >
+            <span className="truncate">{pair.user.content}</span>
+            <span className="text-xs uppercase tracking-[0.25em] text-slate-500">{isOpen ? "Hide" : "Show"}</span>
+          </button>
+          {isOpen ? (
+            <div className="space-y-2 px-3 pb-3">
+              {pair.replies.length ? (
+                pair.replies.map((reply) => (
+                  <div key={reply.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    <div className="whitespace-pre-wrap">{reply.content}</div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-slate-500">Waiting for the assistant response…</p>
+              )}
+            </div>
+          ) : (
+            <p className="px-3 pb-3 text-xs text-slate-500">Tap to view the assistant’s response</p>
+          )}
+        </div>
+      );
+    });
+  }, [conversationPairs, openPairs, togglePair]);
 
   useEffect(() => {
     saveOnboardingConversation(
@@ -194,6 +263,24 @@ export default function HomePage() {
             <p className="text-[0.55rem] uppercase tracking-[0.5em] text-slate-400">Command Deck</p>
             <h1 className="text-4xl font-semibold text-slate-900">{context?.userType === "first_time" ? "Welcome" : "Welcome back"}</h1>
             <p className="text-sm text-slate-500">{context?.prompt ?? "I remember where we left off and can guide the next step."}</p>
+          </div>
+
+          <div className="mx-auto w-full max-w-3xl rounded-3xl border border-slate-200 bg-white/95 p-6 shadow">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Start here</p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-900">Create a Project</h2>
+            <p className="mt-1 text-sm text-slate-600">Spin up a guided workspace, upload your tech inventory, and let the EAgent narrate Digital Twin → ROI within minutes.</p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleCreateProject()}
+                disabled={creatingProject}
+                className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {creatingProject ? "Preparing workspace…" : "Create a Project"}
+              </button>
+              <p className="text-xs text-slate-500">No setup required — CSV, Excel, PDF, or sample data supported.</p>
+            </div>
+            {ctaError ? <p className="mt-2 text-xs text-rose-500">{ctaError}</p> : null}
           </div>
 
           <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_1fr]">
@@ -216,19 +303,21 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 lg:grid-cols-2">
-                {(context?.suggestions ?? []).map((suggestion) => (
-                  <button
-                    key={suggestion.id}
-                    type="button"
-                    onClick={() => void handleSuggestion(suggestion)}
-                    className="rounded-2xl border border-slate-200 bg-white/90 p-4 text-left transition hover:border-slate-900"
-                  >
-                    <p className="text-sm font-semibold text-slate-900">{suggestion.label}</p>
-                    <p className="text-xs text-slate-600">{suggestion.description}</p>
-                  </button>
-                ))}
-              </div>
+              {context?.userType === "returning" && (context?.suggestions ?? []).length ? (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {(context?.suggestions ?? []).map((suggestion) => (
+                    <button
+                      key={suggestion.id}
+                      type="button"
+                      onClick={() => void handleSuggestion(suggestion)}
+                      className="rounded-2xl border border-slate-200 bg-white/90 p-4 text-left transition hover:border-slate-900"
+                    >
+                      <p className="text-sm font-semibold text-slate-900">{suggestion.label}</p>
+                      <p className="text-xs text-slate-600">{suggestion.description}</p>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
 
               {helpTopic ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

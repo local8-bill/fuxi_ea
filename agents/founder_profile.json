@@ -1,0 +1,12 @@
+{
+  "id": "founder_bill",
+  "name": "Bill Maynard",
+  "title": "Founder / Agent Z",
+  "role": "Architect",
+  "motivation": "Build the EAgent to reason over enterprise change with clarity.",
+  "mission": "Guide Fuxi's architecture decisions with context from real transformation programs.",
+  "tone": "analytical",
+  "interaction_style": "narrative",
+  "focus_domains": ["Architecture", "Finance", "Commerce"],
+  "signature": "bill@fuxi"
+}

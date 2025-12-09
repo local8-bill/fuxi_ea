@@ -18,11 +18,14 @@ import { DigitalEnterpriseClient, DigitalTwinTelemetryCard, type DigitalEnterpri
 import { InsightsScene } from "./scenes/InsightsScene";
 import { useExperienceFlow, setExperienceScene, type ExperienceScene } from "@/hooks/useExperienceFlow";
 import { useTelemetry } from "@/hooks/useTelemetry";
-import { useUserGenome } from "@/lib/context/userGenome";
+import { useUserGenome, type InteractionStyle, type UserGenomeState } from "@/lib/context/userGenome";
 import { useAgentModePreference } from "@/hooks/useAgentPreferences";
 import { routeQuery } from "@/lib/agent/queryRouter";
 import { SearchModal, type SearchItem } from "../uxshell/SearchModal";
 import "@/styles/uxshell.css";
+import { getCurrentMode, switchMode } from "@/lib/context/modeSwitcher";
+import { AdaptiveSignalsPanel } from "@/components/learning/AdaptiveSignalsPanel";
+import { useLearningSnapshot, type LearningSnapshot } from "@/hooks/useLearningSnapshot";
 
 const sceneMeta: Record<ExperienceScene, { title: string; summary: string }> = {
   command: { title: "Command Deck", summary: "Resume where you left off or ask the agent what's next." },
@@ -54,11 +57,57 @@ function ExperienceBody({ projectId }: { projectId: string }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [digitalStats, setDigitalStats] = useState<DigitalEnterpriseStats | null>(null);
-  const sceneTimingRef = useRef<{ scene: ExperienceScene; ts: number }>({ scene, ts: Date.now() });
+  const { snapshot: learningSnapshot } = useLearningSnapshot(projectId);
+  const [initialSceneTs] = useState(() => Date.now());
+  const sceneTimingRef = useRef<{ scene: ExperienceScene; ts: number }>({ scene, ts: initialSceneTs });
   const genome = useUserGenome();
+  const updateGenome = useUserGenome((state) => state.updateGenome);
   useAgentMemory();
 
   const intelligenceFocus = searchParams?.get("focus");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.FuxiModeSwitcher = { switchMode, getCurrentMode };
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadManifest = async () => {
+      try {
+        const res = await fetch("/api/identity/manifest", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        if (json?.founder) {
+          const patch: Partial<UserGenomeState> = {};
+          if (json.founder.role) patch.role = json.founder.role;
+          if (json.founder.mission) patch.motivation = json.founder.mission;
+          if (json.founder.interaction_style) {
+            patch.interactionStyle = json.founder.interaction_style as InteractionStyle;
+          }
+          if (json.founder.tone) {
+            patch.preferredTone = json.founder.tone as UserGenomeState["preferredTone"];
+          }
+          if (Array.isArray(json.founder.focus_domains)) {
+            patch.focusDomains = json.founder.focus_domains;
+          }
+          patch.manifestId = json.founder.id;
+          updateGenome(patch);
+        }
+        if (json?.pairing?.pairing_status) {
+          updateGenome({ pairingStatus: json.pairing.pairing_status });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void loadManifest();
+    return () => {
+      cancelled = true;
+    };
+  }, [updateGenome]);
 
   useEffect(() => {
     const queryScene = searchParams?.get("scene") as ExperienceScene | null;
@@ -247,10 +296,10 @@ function ExperienceBody({ projectId }: { projectId: string }) {
 
         <div className="space-y-4">
           {scene === "command" && (
-            <CommandDeckScene projectId={projectId} onNavigate={handleSceneChange} role={genome.role} motivation={genome.motivation} />
+            <CommandDeckScene projectId={projectId} onNavigate={handleSceneChange} role={genome.role} motivation={genome.motivation} learningSnapshot={learningSnapshot} />
           )}
           {scene === "onboarding" && <AgentOnboardingScene projectId={projectId} onComplete={() => handleSceneChange("digital")} />}
-          {scene === "digital" && <DigitalEnterpriseClient projectId={projectId} onStatsUpdate={setDigitalStats} />}
+          {scene === "digital" && <DigitalEnterpriseClient projectId={projectId} onStatsUpdate={setDigitalStats} learningSnapshot={learningSnapshot} />}
           {scene === "roi" && <ROIScene projectId={projectId} />}
             {scene === "sequencer" && <SequencerEmbed projectId={projectId} />}
             {scene === "review" && <ReviewEmbed projectId={projectId} />}
@@ -273,9 +322,10 @@ type CommandDeckProps = {
   onNavigate: (scene: ExperienceScene) => void;
   role: string;
   motivation: string;
+  learningSnapshot: LearningSnapshot | null | undefined;
 };
 
-function CommandDeckScene({ projectId, onNavigate, role, motivation }: CommandDeckProps) {
+function CommandDeckScene({ projectId, onNavigate, role, motivation, learningSnapshot }: CommandDeckProps) {
   const personaCopy = useMemo(() => {
     const base = motivation ? motivation : "Ready to resume sequence?";
     if (role.toLowerCase().includes("cfo")) return `Finance lane is warmed up. ${base}`;
@@ -311,6 +361,7 @@ function CommandDeckScene({ projectId, onNavigate, role, motivation }: CommandDe
             </button>
           ))}
         </div>
+        <AdaptiveSignalsPanel snapshot={learningSnapshot} title="Command Signals" subtitle="Cadence overview" className="mt-4" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

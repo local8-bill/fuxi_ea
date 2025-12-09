@@ -10,6 +10,8 @@ import { useTelemetry } from "@/hooks/useTelemetry";
 import { useAIInsights } from "@/hooks/useAIInsights";
 import { useUserGenome } from "@/lib/context/userGenome";
 import { emitAdaptiveEvent } from "@/lib/adaptive/eventBus";
+import { AdaptiveSignalsPanel } from "@/components/learning/AdaptiveSignalsPanel";
+import type { LearningSnapshot } from "@/hooks/useLearningSnapshot";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -23,6 +25,7 @@ type FocusType = "platform" | "domain" | "goal";
 interface Props {
   projectId: string;
   onStatsUpdate?: (stats: DigitalEnterpriseStats | null) => void;
+  learningSnapshot?: LearningSnapshot | null;
 }
 
 const DIGITAL_TWIN_VERSION = "0.2";
@@ -128,7 +131,7 @@ function buildInsight(role: string, motivation: string, systemName: string, peer
   return `${base} Aligning this connection accelerates ${motivation.toLowerCase()}.${toneSuffix}`;
 }
 
-export function DigitalEnterpriseClient({ projectId, onStatsUpdate }: Props) {
+export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnapshot }: Props) {
   const { log: logTelemetry } = useTelemetry("digital_twin", { projectId });
   const searchParams = useSearchParams();
   const isEmbed = searchParams.get("embed") === "1";
@@ -331,9 +334,14 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate }: Props) {
         nodes: livingMapData.nodes.length,
         edges: livingMapData.edges.length,
       });
+      logTelemetry("digital_twin_loaded", {
+        projectId,
+        nodes: livingMapData.nodes.length,
+        edges: livingMapData.edges.length,
+      });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [graphLoading, hasGraph, livingMapData.nodes.length, livingMapData.edges.length, logTelemetry]);
+  }, [graphLoading, hasGraph, livingMapData.nodes.length, livingMapData.edges.length, logTelemetry, projectId]);
 
   useEffect(() => {
     emitAdaptiveEvent("ux_mode:set", { mode: "focus", step: flowStep });
@@ -633,6 +641,8 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate }: Props) {
             <p className="text-xs text-emerald-800">{focusSummary}</p>
             {renderFlowButtons()}
           </Card>
+
+          <AdaptiveSignalsPanel snapshot={learningSnapshot} title="Adaptive Signals" subtitle="Digital twin" />
         </div>
 
         {focusPulse && (

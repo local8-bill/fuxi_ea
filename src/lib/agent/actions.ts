@@ -8,7 +8,7 @@ import { composeUtterance, promptForAction, completionAcknowledgement } from "@/
 import { defaultToneProfile } from "@/lib/agent/toneProfile";
 import { renderActionTemplate } from "@/lib/agent/templates";
 import { getDemoScript } from "@/lib/agent/demoScripts";
-import { getDemoLearningNarrative } from "@/lib/change-intelligence/demoLearning";
+import { getLatestNarrative } from "@/lib/learning/narratives";
 
 type ActionContext = {
   mode?: string;
@@ -51,7 +51,7 @@ export async function performAgentAction(
       const { netROI, breakEvenMonth, totalBenefit, totalCost } = forecast.predictions;
       const netPct = typeof netROI === "number" ? `${Math.round(netROI * 100)}%` : "—";
       const summary = `ROI ready. Net ROI ${netPct} with break-even month ${breakEvenMonth ?? "—"}.`;
-      const learningHint = await getDemoLearningNarrative(projectId);
+      const learningHint = await getLatestNarrative(projectId);
       const rendered = renderActionTemplate(action.type, tone, { summary });
       const respondText = learningHint ? `${rendered} ${learningHint}` : rendered;
       telemetryQueue.push({
@@ -119,7 +119,7 @@ export async function performAgentAction(
     case "sequence.plan": {
       const plan = buildSequencerPlan(focusAreas, String(action.params?.strategy ?? "value"));
       const summary = `Generated ${plan.waves.length} modernization waves (${plan.strategy} strategy).`;
-      const learningHint = await getDemoLearningNarrative(projectId);
+      const learningHint = await getLatestNarrative(projectId);
       const rendered = renderActionTemplate(action.type, tone, {
         summary,
         strategy: plan.strategy,
