@@ -14,7 +14,7 @@ import { ConversationalAgent } from "../ConversationalAgent";
 import { AgentMemoryProvider, useAgentMemory } from "@/hooks/useAgentMemory";
 import { AgentOnboardingScene } from "./scenes/OnboardingScene";
 import { ROIScene } from "./scenes/ROIScene";
-import { DigitalEnterpriseClient, DigitalTwinTelemetryCard, type DigitalEnterpriseStats } from "@/app/project/[id]/digital-enterprise/DigitalEnterpriseClient";
+import { DigitalEnterpriseClient } from "@/app/project/[id]/digital-enterprise/DigitalEnterpriseClient";
 import { InsightsScene } from "./scenes/InsightsScene";
 import { useExperienceFlow, setExperienceScene, type ExperienceScene } from "@/hooks/useExperienceFlow";
 import { useTelemetry } from "@/hooks/useTelemetry";
@@ -56,7 +56,6 @@ function ExperienceBody({ projectId }: { projectId: string }) {
   const [pendingAgentPrompt, setPendingAgentPrompt] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [digitalStats, setDigitalStats] = useState<DigitalEnterpriseStats | null>(null);
   const { snapshot: learningSnapshot } = useLearningSnapshot(projectId);
   const [initialSceneTs] = useState(() => Date.now());
   const sceneTimingRef = useRef<{ scene: ExperienceScene; ts: number }>({ scene, ts: initialSceneTs });
@@ -251,8 +250,8 @@ function ExperienceBody({ projectId }: { projectId: string }) {
         </div>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+      <div className={`grid gap-4 ${scene === "digital" ? "" : "lg:grid-cols-[minmax(0,1fr)_320px]"}`}>
+        <div className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${scene === "digital" ? "" : "lg:col-span-2"}`}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-[0.6rem] uppercase tracking-[0.3em] text-slate-500">Experience Flow</p>
@@ -299,18 +298,19 @@ function ExperienceBody({ projectId }: { projectId: string }) {
             <CommandDeckScene projectId={projectId} onNavigate={handleSceneChange} role={genome.role} motivation={genome.motivation} learningSnapshot={learningSnapshot} />
           )}
           {scene === "onboarding" && <AgentOnboardingScene projectId={projectId} onComplete={() => handleSceneChange("digital")} />}
-          {scene === "digital" && <DigitalEnterpriseClient projectId={projectId} onStatsUpdate={setDigitalStats} learningSnapshot={learningSnapshot} />}
+          {scene === "digital" && <DigitalEnterpriseClient projectId={projectId} learningSnapshot={learningSnapshot} />}
           {scene === "roi" && <ROIScene projectId={projectId} />}
-            {scene === "sequencer" && <SequencerEmbed projectId={projectId} />}
-            {scene === "review" && <ReviewEmbed projectId={projectId} />}
-            {scene === "insights" && <InsightsScene projectId={projectId} />}
+          {scene === "sequencer" && <SequencerEmbed projectId={projectId} />}
+          {scene === "review" && <ReviewEmbed projectId={projectId} />}
+          {scene === "insights" && <InsightsScene projectId={projectId} />}
         </div>
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <ROISummaryEmbed projectId={projectId} />
+        {scene !== "digital" ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <ROISummaryEmbed projectId={projectId} />
+            </div>
           </div>
-          {scene === "digital" ? <DigitalTwinTelemetryCard stats={digitalStats} /> : null}
-        </div>
+        ) : null}
       </div>
       <SearchModal open={searchOpen} initialQuery={searchQuery} items={searchItems} onClose={() => setSearchOpen(false)} />
     </UXShellLayout>

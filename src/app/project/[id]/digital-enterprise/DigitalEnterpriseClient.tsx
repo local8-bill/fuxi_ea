@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { LivingMap } from "@/components/LivingMap";
+import { GraphCanvas } from "@/components/graph/GraphCanvas";
+import { NodeInspector } from "@/components/graph/NodeInspector";
+import { GraphSimulationControls, PhaseInsightStrip, type GraphTimelineBand, type PhaseInsight } from "@/components/graph/GraphSimulationControls";
+import { GraphSequencerPanel, GraphEventConsole, type GraphSequencerItem } from "@/components/graph/GraphSequencerPanel";
+import { GraphPredictivePanel } from "@/components/graph/GraphPredictivePanel";
+import sequencerDataset from "@/data/sequencer.json";
 import type { LivingMapData, LivingNode } from "@/types/livingMap";
 import { Card } from "@/components/ui/Card";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -12,6 +17,9 @@ import { useUserGenome } from "@/lib/context/userGenome";
 import { emitAdaptiveEvent } from "@/lib/adaptive/eventBus";
 import { AdaptiveSignalsPanel } from "@/components/learning/AdaptiveSignalsPanel";
 import type { LearningSnapshot } from "@/hooks/useLearningSnapshot";
+import type { GraphFocus, GraphRevealStage, GraphViewMode } from "@/hooks/useGraphTelemetry";
+import { useGraphTelemetry } from "@/hooks/useGraphTelemetry";
+import { usePredictiveScenarios } from "@/hooks/usePredictiveScenarios";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -29,6 +37,13 @@ interface Props {
 }
 
 const DIGITAL_TWIN_VERSION = "0.2";
+const DIGITAL_TWIN_TIMELINE: GraphTimelineBand[] = [
+  { id: "fy26", label: "FY26", summary: "Stabilize foundation" },
+  { id: "fy27", label: "FY27", summary: "Unify experiences" },
+  { id: "fy28", label: "FY28", summary: "Unlock adaptive network" },
+];
+type SequencerItem = GraphSequencerItem;
+const sequencerData = sequencerDataset as SequencerItem[];
 
 const ACTIONS = [
   {
@@ -67,6 +82,15 @@ const GOAL_HEURISTICS: Record<string, (node: LivingNode) => number> = {
   modernization: (node) => 100 - (node.aiReadiness ?? 50),
   cost: (node) => node.integrationCount ?? 0,
   roi: (node) => node.roiScore ?? 0,
+};
+
+const DOMAIN_ALE_TAGS: Record<string, string[]> = {
+  commerce: ["inventory_visibility_dependency", "temporary_integration_path"],
+  finance: ["foundational_system_coupling", "parallel_legacy_enhancement"],
+  supply: ["inventory_snapshot_logic", "virtual_warehouse_segmentation"],
+  "supply chain": ["inventory_snapshot_logic", "virtual_warehouse_segmentation"],
+  goal: ["effort_based_option_pruning"],
+  default: ["governance_alignment_checkpoint"],
 };
 
 function formatNumber(value: number | undefined | null): string {
@@ -146,7 +170,16 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   const [graphError, setGraphError] = useState<string | null>(null);
 
   const [graphRevealed, setGraphRevealed] = useState(false);
-  const [viewMode, setViewMode] = useState<"roi" | "risk" | "modernization">("roi");
+  const [graphViewMode, setGraphViewMode] = useState<GraphViewMode>("systems");
+  const [revealStage, setRevealStage] = useState<GraphRevealStage>("orientation");
+  const [activePhase, setActivePhase] = useState(DIGITAL_TWIN_TIMELINE[0]?.id ?? "fy26");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(2600);
+  const playbackTimer = useRef<NodeJS.Timeout | null>(null);
+  const [sequence, setSequence] = useState<SequencerItem[]>(sequencerData);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [eventLog, setEventLog] = useState<string[]>([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
 
   const [flowStep, setFlowStep] = useState<FlowStep>("domain");
   const flowStepRef = useRef<FlowStep>("domain");
@@ -159,6 +192,132 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   const actionsLogged = useRef(false);
 
   const aiInsights = useAIInsights(graphData?.nodes ?? []);
+  const sendReasoningEvent = useCallback(
+    (nodeId: string, action: string, tags: string[]) => {
+      void fetch("/api/ale/reasoning", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          node_id: nodeId,
+          user_action: action,
+          context_tags: tags,
+          user_mode: role,
+        }),
+      }).catch(() => null);
+    },
+    [role],
+  );
+  const graphTelemetry = useGraphTelemetry(projectId);
+  const phaseInsights: PhaseInsight[] = useMemo(
+    () =>
+      DIGITAL_TWIN_TIMELINE.map((band) => {
+        const items = sequence.filter((step) => step.phase === band.id);
+        if (!items.length) {
+          return { phase: band.id, label: band.label, roi: 0, tcc: 0, risk: 0.5 };
+        }
+        const totals = items.reduce(
+          (acc, step) => {
+            acc.roi += step.impact;
+            acc.tcc += step.cost;
+            acc.risk += 1 - step.impact;
+            return acc;
+          },
+          { roi: 0, tcc: 0, risk: 0 },
+        );
+        return {
+          phase: band.id,
+          label: band.label,
+          roi: totals.roi / items.length,
+          tcc: totals.tcc,
+          risk: totals.risk / items.length,
+        };
+      }),
+    [sequence],
+  );
+  const predictiveScenarios = usePredictiveScenarios(phaseInsights, activePhase);
+  const activeScenario = useMemo(
+    () => predictiveScenarios.find((scenario) => scenario.id === selectedScenarioId) ?? null,
+    [predictiveScenarios, selectedScenarioId],
+  );
+  const logLearningEvent = useCallback((code: string, details?: Record<string, unknown>) => {
+    setEventLog((prev) => [`${new Date().toLocaleTimeString()} · ${code}`, ...prev].slice(0, 6));
+    void fetch("/api/ale/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, details, source: "digital_twin" }),
+    }).catch(() => null);
+  }, []);
+  const handleDragStart = (id: string) => setDragId(id);
+  const handleDragOver = (id: string) => {
+    if (!dragId || dragId === id) return;
+    const currentIndex = sequence.findIndex((item) => item.id === dragId);
+    const targetIndex = sequence.findIndex((item) => item.id === id);
+    if (currentIndex === -1 || targetIndex === -1) return;
+    const updated = [...sequence];
+    const [moved] = updated.splice(currentIndex, 1);
+    updated.splice(targetIndex, 0, moved);
+    setSequence(updated);
+    logLearningEvent("LE-002", { from: currentIndex, to: targetIndex, item: moved.id });
+  };
+  const handleDragEnd = () => setDragId(null);
+  const handlePhaseChange = useCallback(
+    (phase: string) => {
+      setActivePhase(phase);
+      logTelemetry("digital_twin.phase_changed", { phase });
+      emitAdaptiveEvent("ux_mode:set", { mode: "digital-phase", phase });
+      logLearningEvent("LE-001", { phase });
+    },
+    [logTelemetry, logLearningEvent],
+  );
+  const phaseOrder = useMemo(() => DIGITAL_TWIN_TIMELINE.map((band) => band.id), []);
+  const stepPhaseForward = useCallback(() => {
+    setActivePhase((current) => {
+      const currentIndex = phaseOrder.indexOf(current);
+      const nextPhase = phaseOrder[(currentIndex + 1) % phaseOrder.length];
+      logLearningEvent("LE-004", { nextPhase });
+      return nextPhase;
+    });
+  }, [phaseOrder, logLearningEvent]);
+  useEffect(() => {
+    if (!isPlaying) {
+      if (playbackTimer.current) clearInterval(playbackTimer.current);
+      playbackTimer.current = null;
+      return;
+    }
+    playbackTimer.current = setInterval(() => {
+      stepPhaseForward();
+    }, playbackSpeed);
+    return () => {
+      if (playbackTimer.current) clearInterval(playbackTimer.current);
+    };
+  }, [isPlaying, playbackSpeed, stepPhaseForward]);
+  const handlePlaybackToggle = () => {
+    setIsPlaying((prev) => {
+      const next = !prev;
+      logLearningEvent(next ? "LE-006" : "LE-007", { playing: next });
+      return next;
+    });
+  };
+  const handleScenarioSelect = (scenarioId: string) => {
+    setSelectedScenarioId(scenarioId);
+    const scenario = predictiveScenarios.find((item) => item.id === scenarioId);
+    if (scenario) {
+      logTelemetry("digital_twin.scenario_selected", { scenario: scenario.id, phase: scenario.phase });
+      logLearningEvent("LE-008", { scenario: scenario.id });
+    }
+  };
+  const handleScenarioActivate = (scenarioId: string) => {
+    const scenario = predictiveScenarios.find((item) => item.id === scenarioId);
+    if (!scenario) return;
+    handlePhaseChange(scenario.phase);
+    logTelemetry("digital_twin.scenario_applied", {
+      scenario: scenario.id,
+      roiDelta: scenario.roiDelta,
+      tccDelta: scenario.tccDelta,
+      timelineDelta: scenario.timelineDeltaMonths,
+    });
+    logLearningEvent("LE-009", { scenario: scenario.id });
+  };
 
   const livingMapData = useMemo<LivingMapData>(() => {
     const fallback = graphData ?? { nodes: [], edges: [] };
@@ -268,6 +427,17 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
 
   const hasStats = Boolean(stats);
   const hasGraph = (livingMapData.nodes.length ?? 0) > 0;
+  const graphFocus: GraphFocus = useMemo(() => {
+    if (flowStep === "integration") return "stage";
+    return focusType === "goal" ? "goal" : "domain";
+  }, [focusType, flowStep]);
+  const inspectorTags = useMemo(() => {
+    const domainKey = (selectedSystem?.domain ?? selectedFocusValue ?? "").toString().toLowerCase();
+    if (focusType === "goal") return DOMAIN_ALE_TAGS.goal;
+    return DOMAIN_ALE_TAGS[domainKey] ?? DOMAIN_ALE_TAGS.default;
+  }, [selectedSystem, selectedFocusValue, focusType]);
+  const inspectorName = selectedSystem?.label ?? (selectedFocusValue ? `${selectedFocusValue} lens` : null);
+  const inspectorDomain = selectedSystem?.domain ?? selectedFocusValue ?? null;
 
   useEffect(() => {
     logTelemetry("digital_twin.render_start", { projectId, version: DIGITAL_TWIN_VERSION });
@@ -330,6 +500,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     if (!hasGraph || graphLoading) return;
     const timer = window.setTimeout(() => {
       setGraphRevealed(true);
+       setRevealStage((prev) => (prev === "orientation" ? "exploration" : prev));
       logTelemetry("digital_twin.graph_revealed", {
         nodes: livingMapData.nodes.length,
         edges: livingMapData.edges.length,
@@ -346,6 +517,18 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   useEffect(() => {
     emitAdaptiveEvent("ux_mode:set", { mode: "focus", step: flowStep });
   }, []);
+
+  useEffect(() => {
+    graphTelemetry.trackFocus(graphFocus, selectedFocusValue ? { value: selectedFocusValue } : undefined);
+  }, [graphTelemetry, graphFocus, selectedFocusValue]);
+
+  useEffect(() => {
+    graphTelemetry.trackMode(graphViewMode);
+  }, [graphTelemetry, graphViewMode]);
+
+  useEffect(() => {
+    graphTelemetry.trackStage(revealStage);
+  }, [graphTelemetry, revealStage]);
 
   const advanceFlow = useCallback(
     (next: FlowStep) => {
@@ -375,13 +558,21 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     setSelectedIntegration(null);
     setInsightMessage(null);
     logTelemetry("digital_twin.focus_selected", { mode: focusType, value, role });
+    const key = value.toLowerCase();
+    const focusTags = focusType === "goal" ? DOMAIN_ALE_TAGS.goal : DOMAIN_ALE_TAGS[key] ?? DOMAIN_ALE_TAGS.default;
+    sendReasoningEvent(key || "focus", "focus_selected", focusTags);
     advanceFlow("system");
   };
 
   const handleSystemSelect = (systemId: string) => {
+    const system = livingMapData.nodes.find((node) => node.id === systemId);
+    if (!system) return;
     setSelectedSystemId(systemId);
     setSelectedIntegration(null);
     setInsightMessage(null);
+    const domainKey = (system.domain as string | undefined)?.toLowerCase() ?? "";
+    const tagSet = DOMAIN_ALE_TAGS[domainKey] ?? DOMAIN_ALE_TAGS.default;
+    sendReasoningEvent(systemId, "system_selected", tagSet);
     advanceFlow("integration");
   };
 
@@ -396,7 +587,19 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
       role,
       mode: focusType,
     });
+    const domainKey = (selectedSystem.domain as string | undefined)?.toLowerCase() ?? "";
+    const tagSet = DOMAIN_ALE_TAGS[domainKey] ?? DOMAIN_ALE_TAGS.default;
+    sendReasoningEvent(integrationId, "integration_selected", tagSet);
     advanceFlow("insight");
+  };
+
+  const handleGraphViewModeChange = (mode: GraphViewMode) => {
+    setGraphViewMode(mode);
+    logTelemetry("digital_twin.view_mode_changed", { mode });
+  };
+
+  const handleRevealStageChange = (stage: GraphRevealStage) => {
+    setRevealStage(stage);
   };
 
   const focusSummary = useMemo(() => {
@@ -518,22 +721,10 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
               <p className="text-sm font-semibold text-slate-900">Digital Twin graph</p>
               <p className="text-xs text-slate-500">Fade-in reveals and progressive focus transitions.</p>
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <span>View Mode</span>
-              <select
-                className="rounded-xl border border-slate-300 bg-white px-2 py-1 text-sm"
-                value={viewMode}
-                onChange={(event) => {
-                  const next = event.target.value as typeof viewMode;
-                  setViewMode(next);
-                  logTelemetry("digital_twin.view_mode_changed", { mode: next });
-                }}
-              >
-                <option value="roi">ROI</option>
-                <option value="risk">Risk</option>
-                <option value="modernization">Modernization</option>
-              </select>
-            </label>
+            <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-600 shadow-sm">
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-slate-500">View Mode</p>
+              <p className="font-semibold text-slate-900">{graphViewMode}</p>
+            </div>
           </div>
 
           {graphError && (
@@ -551,14 +742,83 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
             </Card>
           )}
 
-          <div className={`rounded-3xl border border-slate-200 bg-white p-2 shadow-lg transition-opacity duration-700 min-h-[820px] ${graphRevealed ? "opacity-100" : "opacity-0"}`}>
-            {graphLoading && <div className="py-36 text-center text-sm text-slate-500">Loading digital twin map…</div>}
-            {!graphLoading && hasGraph && (
-              <LivingMap data={livingMapData} height={isEmbed ? 560 : 820} highlightNodeIds={highlightNodeIds ?? undefined} dimOpacity={0.2} />
-            )}
-            {!graphLoading && !hasGraph && (
-              <div className="py-20 text-center text-sm text-slate-500">No harmonized systems yet. Import data or run onboarding to populate the graph.</div>
-            )}
+          <div className="space-y-4">
+            <GraphSimulationControls
+              isPlaying={isPlaying}
+              onToggle={handlePlaybackToggle}
+              onStep={stepPhaseForward}
+              speed={playbackSpeed}
+              onSpeedChange={(speed) => setPlaybackSpeed(speed)}
+              phases={DIGITAL_TWIN_TIMELINE}
+              activePhase={activePhase}
+              onScrub={(phaseId) => handlePhaseChange(phaseId)}
+              extra={
+                activeScenario ? (
+                  <p className="text-[0.7rem] text-slate-500">
+                    Scenario: <span className="font-semibold text-slate-900">{activeScenario.title}</span> — ROI {(activeScenario.roiDelta * 100).toFixed(1)}%, timeline{" "}
+                    {activeScenario.timelineDeltaMonths >= 0 ? "+" : ""}
+                    {activeScenario.timelineDeltaMonths} mo
+                  </p>
+                ) : null
+              }
+            />
+            <PhaseInsightStrip insights={phaseInsights} activePhase={activePhase} onSelect={(phaseId) => handlePhaseChange(phaseId)} />
+          </div>
+
+          <div className={`grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] transition-opacity duration-700 ${graphRevealed ? "opacity-100" : "opacity-0"}`}>
+            <div className="rounded-3xl border border-slate-200 bg-white p-2 shadow-lg min-h-[820px]">
+              {graphLoading && <div className="py-36 text-center text-sm text-slate-500">Loading digital twin map…</div>}
+              {!graphLoading && hasGraph && (
+                <GraphCanvas
+                  nodes={livingMapData.nodes}
+                  edges={livingMapData.edges}
+                  focus={graphFocus}
+                  focusLabel={selectedFocusValue}
+                  focusSummary={focusSummary}
+                  viewMode={graphViewMode}
+                  stage={revealStage}
+                  highlightNodeIds={highlightNodeIds ?? undefined}
+                  selectedNodeId={selectedSystemId}
+                  onNodeSelect={(nodeId) => {
+                    if (!nodeId) {
+                      setSelectedSystemId(null);
+                      setSelectedIntegration(null);
+                      return;
+                    }
+                    handleSystemSelect(nodeId);
+                  }}
+                  onViewModeChange={handleGraphViewModeChange}
+                  onStageChange={handleRevealStageChange}
+                  height={isEmbed ? 560 : 820}
+                  projectId={projectId}
+                  scenarioPhase={activeScenario?.phase ?? null}
+                  sequence={sequence}
+                />
+              )}
+              {!graphLoading && !hasGraph && (
+                <div className="py-20 text-center text-sm text-slate-500">No harmonized systems yet. Import data or run onboarding to populate the graph.</div>
+              )}
+            </div>
+            <div className="space-y-4">
+              <GraphSequencerPanel
+                sequence={sequence}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+                activePhase={activePhase}
+                onSimulate={(phase) => handlePhaseChange(phase)}
+                onTogglePlayback={handlePlaybackToggle}
+                isPlaying={isPlaying}
+              />
+              <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={inspectorTags} />
+              <GraphEventConsole events={eventLog} emptyMessage="Interact with the sequencer or graph to log learning." />
+              <GraphPredictivePanel
+                scenarios={predictiveScenarios}
+                selectedScenarioId={selectedScenarioId}
+                onSelect={handleScenarioSelect}
+                onActivate={handleScenarioActivate}
+              />
+            </div>
           </div>
 
           {flowStep === "insight" && insightMessage && (
@@ -610,7 +870,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
                 </div>
                 <div>
                   <p className="text-slate-500">View mode</p>
-                  <p className="font-semibold text-slate-900 capitalize">{viewMode}</p>
+                  <p className="font-semibold text-slate-900 capitalize">{graphViewMode}</p>
                 </div>
               </div>
             )}
