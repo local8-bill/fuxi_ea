@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type FormEvent } from "react";
 import clsx from "clsx";
 import { UXShellLayout } from "@/components/uxshell/UXShellLayout";
 import { emitTelemetry } from "@/components/uxshell/telemetry";
@@ -19,7 +19,14 @@ import {
 } from "@/components/graph/GraphSimulationControls";
 import { GraphSequencerPanel, GraphEventConsole, type GraphSequencerItem } from "@/components/graph/GraphSequencerPanel";
 import { GraphPredictivePanel } from "@/components/graph/GraphPredictivePanel";
+import { DecisionBacklogPanel } from "@/components/graph/DecisionBacklogPanel";
+import { GraphFinancialSummary, type PhaseFinancialSummary } from "@/components/graph/GraphFinancialSummary";
+import { GraphTransitionCompare, type TransitionPath } from "@/components/graph/GraphTransitionCompare";
 import { usePredictiveScenarios, type PredictiveScenario } from "@/hooks/usePredictiveScenarios";
+import { useSequencerBridge } from "@/hooks/useSequencerBridge";
+import { useDecisionBacklog, type DecisionNode } from "@/hooks/useDecisionBacklog";
+import { useTransformationLens } from "@/hooks/useTransformationLens";
+import roiSummaryData from "@/data/roi_tcc_summary.json";
 
 const guidedFocusOptions = [
   { id: "domain", label: "By Domain", helper: "Clusters by business function." },
@@ -69,8 +76,18 @@ type SelectedNode =
   | { kind: "domain"; domain: GraphDomain }
   | { kind: "system"; domain: GraphDomain; system: GraphSystem };
 
+type GraphLensFilters = {
+  id: string;
+  label: string;
+  description: string;
+  hasFilters: boolean;
+  shouldMuteDomain: (domain: GraphDomain) => boolean;
+  shouldMuteSystem: (system: GraphSystem, domain: GraphDomain) => boolean;
+};
+
 const dataset = graphData as GraphDataset;
 const roiData = roiMetricsData as Record<string, { roi: number; tcc: number; risk: number }>;
+const roiSummary = roiSummaryData as { phases: PhaseFinancialSummary[]; paths: TransitionPath[] };
 type SequencerItem = GraphSequencerItem;
 const sequencerData = sequencerDataset as SequencerItem[];
 const DOMAIN_TAGS: Record<string, string[]> = {
@@ -83,6 +100,11 @@ const DOMAIN_TAGS: Record<string, string[]> = {
 
 const timelineBands = dataset.timeline;
 const domains = dataset.domains;
+
+const domainFallbacks = dataset.domains.reduce<Record<string, Pick<GraphDomain, "color" | "regions">>>((acc, domain) => {
+  acc[domain.id.toLowerCase()] = { color: domain.color, regions: domain.regions };
+  return acc;
+}, {});
 
 function buildGraphDatasetFromApi(data: { nodes?: any[] } | null | undefined): GraphDataset | null {
   if (!data?.nodes) return null;
@@ -104,12 +126,16 @@ function buildGraphDatasetFromApi(data: { nodes?: any[] } | null | undefined): G
     const domainKey = (node.domain ?? node.data?.domain ?? node.metadata?.domain ?? "unassigned").toLowerCase();
     const title = node.domain ?? node.data?.domain ?? node.metadata?.domain ?? "Unassigned";
     if (!domainsMap.has(domainKey)) {
+      const fallback = domainFallbacks[domainKey];
       domainsMap.set(domainKey, {
         domain: {
           id: domainKey,
           title,
-          color: domainPalette[domainKey] ?? "from-slate-200 via-slate-100 to-white",
-          regions: [],
+          color:
+            domainPalette[domainKey] ??
+            fallback?.color ??
+            "from-slate-200 via-slate-100 to-white",
+          regions: fallback?.regions?.length ? [...fallback.regions] : ["NA", "EMEA", "APAC"],
           systems: [],
           aleTags: [],
         },
@@ -151,19 +177,104 @@ export default function GraphPrototypePage() {
   const [sequence, setSequence] = useState<SequencerItem[]>(sequencerData);
   const [dragId, setDragId] = useState<string | null>(null);
   const [eventLog, setEventLog] = useState<string[]>([]);
+  const [intentCommand, setIntentCommand] = useState("");
+  const [intentConfirmation, setIntentConfirmation] = useState<string | null>(null);
+  const handleIntentConfirmationDisplay = useCallback((message: string) => {
+    setIntentConfirmation(message);
+    setEventLog((prev) => [`${new Date().toLocaleTimeString()} · ${message}`, ...prev].slice(0, 6));
+  }, []);
+  const { submitIntent, status: intentStatus, error: intentError, confirmation: lastIntentResult } = useSequencerBridge({
+    sequence,
+    setSequence,
+    onConfirmation: handleIntentConfirmationDisplay,
+  });
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [aleTags, setAleTags] = useState<string[]>([]);
   const { summary: storeSummary } = useStoreData();
+  const { nodes: decisionNodes } = useDecisionBacklog();
+  const { lensId, activeLens, lensOptions, setLens } = useTransformationLens();
+  const [activeTransitionPath, setActiveTransitionPath] = useState<string | null>(null);
 
   const domains = graphDataset.domains;
+
+  const systemDomainMap = useMemo(() => {
+    const map = new Map<string, string>();
+    domains.forEach((domain) => {
+      domain.systems.forEach((system) => {
+        map.set(system.id, domain.id);
+      });
+    });
+    return map;
+  }, [domains]);
+
+  const lensFilters = useMemo(() => {
+    const toKey = (value?: string) => (value ?? "").toLowerCase().replace(/[\s_]+/g, " ").trim();
+    const domainSet = new Set((activeLens.domains ?? []).map(toKey).filter(Boolean));
+    const systemSet = new Set((activeLens.systems ?? []).map(toKey).filter(Boolean));
+    const phaseSet = new Set((activeLens.phases ?? []).map(toKey).filter(Boolean));
+    const regionSet = new Set((activeLens.regions ?? []).map(toKey).filter(Boolean));
+    const hasFilters = domainSet.size > 0 || systemSet.size > 0 || phaseSet.size > 0 || regionSet.size > 0;
+
+    const domainMatches = (domain: GraphDomain | string | undefined) => {
+      if (!domainSet.size) return true;
+      if (!domain) return false;
+      const id = typeof domain === "string" ? domain : domain.id;
+      const title = typeof domain === "string" ? domain : domain.title;
+      const candidates = [toKey(id), toKey(title)];
+      return candidates.some((candidate) => domainSet.has(candidate));
+    };
+
+    const systemMatches = (system: GraphSystem, domain: GraphDomain) => {
+      if (!hasFilters) return true;
+      if (domainSet.size && !domainMatches(domain)) return false;
+      if (systemSet.size) {
+        const candidates = [toKey(system.id), toKey(system.title)];
+        if (!candidates.some((candidate) => systemSet.has(candidate))) return false;
+      }
+      if (phaseSet.size && !phaseSet.has(toKey(system.phase))) return false;
+      return true;
+    };
+
+    const sequenceMatches = (item: SequencerItem) => {
+      if (!hasFilters) return true;
+      if (phaseSet.size && !phaseSet.has(toKey(item.phase))) return false;
+      if (regionSet.size && !regionSet.has(toKey(item.region))) return false;
+      if (systemSet.size && item.system && !systemSet.has(toKey(item.system))) return false;
+      if (domainSet.size && item.system) {
+        const domainId = systemDomainMap.get(item.system);
+        if (!domainId || !domainSet.has(toKey(domainId))) return false;
+      }
+      return true;
+    };
+
+    const decisionMatches = (node: DecisionNode) => {
+      if (!hasFilters) return true;
+      if (regionSet.size && !node.region.some((region) => regionSet.has(toKey(region)))) return false;
+      if (phaseSet.size && !phaseSet.has(toKey(node.timeline))) return false;
+      return true;
+    };
+
+    return {
+      id: activeLens.id,
+      label: activeLens.label,
+      description: activeLens.description,
+      hasFilters,
+      shouldMuteDomain: (domain: GraphDomain) => hasFilters && !domainMatches(domain),
+      shouldMuteSystem: (system: GraphSystem, domain: GraphDomain) => hasFilters && !systemMatches(system, domain),
+      matchesSequenceItem: sequenceMatches,
+      matchesDecisionNode: decisionMatches,
+    };
+  }, [activeLens, systemDomainMap, domains]);
 
   const stageMeta = useMemo(() => revealStages.find((s) => s.id === stage) ?? revealStages[0], [stage]);
   const phaseOrder = useMemo(() => timelineBands.map((band) => band.id), [timelineBands]);
 
   const aggregatedPhaseMetrics: PhaseInsight[] = useMemo(() => {
     return timelineBands.map((band) => {
-      const systems = domains.flatMap((domain) => domain.systems.filter((system) => system.phase === band.id));
+      const systems = domains.flatMap((domain) =>
+        domain.systems.filter((system) => system.phase === band.id && !(lensFilters.shouldMuteSystem(system, domain) ?? false)),
+      );
       const totals = systems.reduce(
         (acc, system) => {
           const metrics = roiData[system.id];
@@ -184,13 +295,27 @@ export default function GraphPrototypePage() {
         risk: totals.count ? totals.risk / totals.count : 0,
       };
     });
-  }, [timelineBands, domains]);
+  }, [timelineBands, domains, lensFilters]);
 
   const predictiveScenarios = usePredictiveScenarios(aggregatedPhaseMetrics, activePhase);
   const activeScenario = useMemo(
     () => predictiveScenarios.find((scenario) => scenario.id === selectedScenarioId) ?? null,
     [predictiveScenarios, selectedScenarioId],
   );
+  const financialPhases = useMemo(() => roiSummary.phases ?? [], []);
+  const transitionPaths = useMemo(() => roiSummary.paths ?? [], []);
+
+  const sequenceForRender = useMemo(() => {
+    if (!lensFilters.hasFilters) return sequence;
+    const subset = sequence.filter((item) => lensFilters.matchesSequenceItem(item));
+    return subset.length ? subset : sequence;
+  }, [sequence, lensFilters]);
+
+  const decisionNodesForRender = useMemo(() => {
+    if (!lensFilters.hasFilters) return decisionNodes;
+    const subset = decisionNodes.filter((node) => lensFilters.matchesDecisionNode(node));
+    return subset.length ? subset : decisionNodes;
+  }, [decisionNodes, lensFilters]);
 
   const focusOption = useMemo(() => guidedFocusOptions.find((option) => option.id === focus) ?? guidedFocusOptions[0], [focus]);
 
@@ -202,6 +327,32 @@ export default function GraphPrototypePage() {
       body: JSON.stringify({ code, details }),
     }).catch(() => null);
   }, []);
+
+  useEffect(() => {
+    if (!lastIntentResult) return;
+    const { context } = lastIntentResult;
+    logLearningEvent("LE_INTENT_APPLIED", {
+      command: context.command,
+      region: context.event.payload.region,
+      phase: context.event.payload.phase,
+      action: context.event.payload.action ?? "update",
+      channels: context.event.payload.channels,
+      target: context.event.payload.target,
+    });
+    emitTelemetry("intent_sequence_applied", {
+      workspace_id: "prototype",
+      region: context.event.payload.region,
+      phase: context.event.payload.phase,
+      action: context.event.payload.action ?? "update",
+      channels: context.event.payload.channels,
+      target: context.event.payload.target,
+    });
+  }, [lastIntentResult, logLearningEvent, emitTelemetry]);
+
+  useEffect(() => {
+    if (!lensId) return;
+    logLearningEvent("LE_LENS_CHANGED", { lens: lensId });
+  }, [lensId, logLearningEvent]);
 
   const handleFocusChange = (next: string) => {
     setFocus(next);
@@ -297,6 +448,17 @@ export default function GraphPrototypePage() {
     });
   };
 
+  const handleIntentSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const command = intentCommand.trim();
+    if (!command) return;
+    setIntentConfirmation(null);
+    const handled = await submitIntent(command);
+    if (handled) {
+      setIntentCommand("");
+    }
+  };
+
   const handleDragStart = (id: string) => setDragId(id);
   const handleDragOver = (id: string) => {
     if (!dragId || dragId === id) return;
@@ -324,6 +486,11 @@ export default function GraphPrototypePage() {
       tccDelta: scenario.tccDelta,
       timelineDelta: scenario.timelineDeltaMonths,
     });
+  };
+
+  const handleTransitionPathSelect = (path: TransitionPath) => {
+    setActiveTransitionPath(path.id);
+    logLearningEvent("LE_PATH_SELECTED", { path: path.id, roi: path.roi, tcc: path.tcc });
   };
 
   const handleSelectNode = (node: SelectedNode | null) => {
@@ -364,7 +531,7 @@ export default function GraphPrototypePage() {
             <p className="text-sm text-slate-600">FY26–FY28 sequencing, ALE overlays, and EAgent guidance.</p>
           </header>
 
-          <section className="grid gap-4 lg:grid-cols-3">
+          <section className="grid gap-4 lg:grid-cols-4">
             <ControlPanel title="Guided Focus">
               {guidedFocusOptions.map((option) => (
                 <ControlButton
@@ -400,6 +567,17 @@ export default function GraphPrototypePage() {
                 />
               ))}
             </ControlPanel>
+            <ControlPanel title="Transformation Lens">
+              {lensOptions.map((lens) => (
+                <ControlButton
+                  key={lens.id}
+                  active={lensId === lens.id}
+                  label={lens.label}
+                  helper={lens.description}
+                  onClick={() => setLens(lens.id)}
+                />
+              ))}
+            </ControlPanel>
           </section>
 
           <GraphSimulationControls
@@ -427,6 +605,31 @@ export default function GraphPrototypePage() {
             }}
           />
           <PhaseInsightStrip insights={aggregatedPhaseMetrics} activePhase={activePhase} onSelect={(phase) => handlePhaseChange(phase)} />
+          <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Intent Bridge</p>
+            <p className="text-sm text-slate-600">Send a quick `/intent` command to reshape the sequencer.</p>
+            <form className="mt-3 flex flex-col gap-2 md:flex-row" onSubmit={handleIntentSubmit}>
+              <input
+                type="text"
+                value={intentCommand}
+                onChange={(event) => setIntentCommand(event.target.value)}
+                placeholder="/intent start Canada with B2B+B2C decouple EBS"
+                className="flex-1 rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-900 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={intentStatus === "working"}
+                className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {intentStatus === "working" ? "Processing…" : "Send Intent"}
+              </button>
+            </form>
+            {intentError ? (
+              <p className="mt-2 text-xs text-rose-600">{intentError}</p>
+            ) : intentConfirmation ? (
+              <p className="mt-2 text-xs text-emerald-600">{intentConfirmation}</p>
+            ) : null}
+          </section>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
             <GraphCanvas
@@ -443,13 +646,14 @@ export default function GraphPrototypePage() {
               storeSummary={storeSummary}
               onSelectNode={handleSelectNode}
               roiData={roiData}
-              sequence={sequence}
+              sequence={sequenceForRender}
               highlightedPhaseMetrics={aggregatedPhaseMetrics.find((metric) => metric.phase === activePhase)}
               scenarioPhase={activeScenario?.phase ?? null}
+              lensFilters={lensFilters}
             />
             <div className="space-y-4">
               <GraphSequencerPanel
-                sequence={sequence}
+                sequence={sequenceForRender}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
@@ -463,6 +667,19 @@ export default function GraphPrototypePage() {
                 selectedScenarioId={selectedScenarioId}
                 onSelect={(scenario) => handleScenarioSelect(scenario)}
                 onActivate={(scenario) => handleScenarioActivate(scenario)}
+              />
+              <GraphFinancialSummary phases={financialPhases} activePhase={activePhase} />
+              <GraphTransitionCompare
+                paths={transitionPaths}
+                activePathId={activeTransitionPath}
+                onSelect={handleTransitionPathSelect}
+              />
+              <DecisionBacklogPanel
+                nodes={decisionNodesForRender}
+                onSelect={(node) => {
+                  setEventLog((prev) => [`${new Date().toLocaleTimeString()} · Decision: ${node.title}`, ...prev].slice(0, 6));
+                  logLearningEvent("LE_DECISION_SELECTED", { node: node.id, timeline: node.timeline });
+                }}
               />
               <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={aleTags} />
               <GraphEventConsole events={eventLog} />
@@ -516,6 +733,7 @@ function GraphCanvas({
   sequence,
   scenarioPhase,
   highlightedPhaseMetrics,
+  lensFilters,
 }: {
   focus: string;
   focusHelper: string;
@@ -533,20 +751,36 @@ function GraphCanvas({
   sequence: SequencerItem[];
   scenarioPhase?: string | null;
   highlightedPhaseMetrics?: { phase: string; label: string; roi: number; tcc: number; risk: number };
+  lensFilters?: GraphLensFilters;
 }) {
   const showEdges = stage === "connectivity" || stage === "insight";
   const showNodes = stage !== "orientation";
   const showOverlays = stage === "insight";
   const sequenceLookup = useMemo(() => new Map(sequence.map((item, index) => [item.system ?? item.id, { item, order: index }])), [sequence]);
+  const orderedDomains = useMemo(() => {
+    if (!lensFilters?.hasFilters) return domains;
+    return domains
+      .slice()
+      .sort((a, b) => Number(lensFilters.shouldMuteDomain(a)) - Number(lensFilters.shouldMuteDomain(b)));
+  }, [domains, lensFilters]);
 
   return (
     <section className="relative rounded-[32px] border border-slate-200 bg-white p-6 shadow-xl">
       <TimelineBands bands={timeline} activePhase={activePhase} />
+      {lensFilters?.hasFilters ? (
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <span className="font-semibold text-slate-900">{lensFilters.label}</span>
+          <span>{lensFilters.description}</span>
+        </div>
+      ) : null}
       <div className="relative mt-6 grid gap-4 lg:grid-cols-3">
-        {domains.map((domain) => (
+        {orderedDomains.map((domain) => (
           <div
             key={domain.id}
-            className="group cursor-pointer rounded-[32px] border border-slate-200 bg-white p-4 shadow-[0_35px_90px_-70px_rgba(15,23,42,0.8)]"
+            className={clsx(
+              "group cursor-pointer rounded-[32px] border border-slate-200 bg-white p-4 shadow-[0_35px_90px_-70px_rgba(15,23,42,0.8)]",
+              lensFilters?.shouldMuteDomain(domain) ? "opacity-30" : "opacity-100",
+            )}
             onClick={() => onSelectNode({ kind: "domain", domain })}
           >
             <div className="flex items-center justify-between gap-3">
@@ -568,12 +802,20 @@ function GraphCanvas({
                 ))}
               </div>
             ) : null}
-            <div className={clsx("mt-4 space-y-3", showNodes ? "opacity-100" : "opacity-100")}
-              aria-label={`${domain.title} systems`}>
-              {domain.systems.map((system) => {
+            <div className={clsx("mt-4 space-y-3", showNodes ? "opacity-100" : "opacity-100")} aria-label={`${domain.title} systems`}>
+              {(lensFilters?.hasFilters
+                ? domain.systems
+                    .slice()
+                    .sort(
+                      (a, b) =>
+                        Number(lensFilters.shouldMuteSystem(a, domain)) - Number(lensFilters.shouldMuteSystem(b, domain)),
+                    )
+                : domain.systems
+              ).map((system) => {
                 const sequenceInfo = sequenceLookup.get(system.id);
                 const isActivePhase = system.phase === activePhase;
                 const isScenarioPhase = scenarioPhase && scenarioPhase === system.phase;
+                const systemMuted = lensFilters?.shouldMuteSystem(system, domain) ?? false;
                 return (
                   <button
                     key={system.id}
@@ -589,6 +831,7 @@ function GraphCanvas({
                         : isScenarioPhase
                           ? "border-indigo-400 bg-indigo-50"
                           : "border-slate-200 bg-white",
+                      systemMuted ? "opacity-40" : "opacity-100",
                       showEdges ? "hover:border-slate-900" : undefined,
                     )}
                   >

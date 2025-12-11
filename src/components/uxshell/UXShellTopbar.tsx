@@ -66,7 +66,7 @@ const navIcons: NavIconConfig[] = [
   },
 ];
 
-export function UXShellTopbar({ showShortcuts = true }: { showShortcuts?: boolean }) {
+export function UXShellTopbar({ showShortcuts = true, onTips }: { showShortcuts?: boolean; onTips?: () => void }) {
   const router = useRouter();
   const { topbarCue, projectId, state } = useAgentMemory(true);
   const activeView = state?.lastView;
@@ -118,6 +118,17 @@ export function UXShellTopbar({ showShortcuts = true }: { showShortcuts?: boolea
                 </button>
               );
             })}
+            {onTips ? (
+              <button
+                type="button"
+                onClick={() => onTips()}
+                className="rounded-xl px-3 py-1 text-xs font-semibold tracking-wide text-slate-100 transition hover:bg-white/10"
+                aria-label="Tips overlay"
+                title="Tips overlay"
+              >
+                💡 Tips
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>

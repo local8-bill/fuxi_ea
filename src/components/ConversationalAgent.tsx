@@ -12,11 +12,12 @@ type ConversationalAgentProps = {
   view: string;
   incomingPrompt?: string | null;
   onPromptConsumed?: () => void;
+  onCommand?: (command: string) => string | null;
 };
 
 const memoryFallback: AgentMemory = { focusAreas: [] };
 
-export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onPromptConsumed }: ConversationalAgentProps) {
+export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onPromptConsumed, onCommand }: ConversationalAgentProps) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [recentTelemetry, setRecentTelemetry] = useState<AgentTelemetryEvent[]>([]);
   const [memory, setMemory] = useState<AgentMemory>(memoryFallback);
@@ -126,6 +127,19 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
       setMessages((prev) => [...prev, optimistic]);
       void emitTelemetry("agent_message_sent", { projectId, mode, view });
 
+      const commandResponse = onCommand?.(prompt);
+      if (commandResponse) {
+        const ack: AgentMessage = {
+          id: `command-${Date.now()}`,
+          role: "assistant",
+          content: commandResponse,
+          ts: Date.now(),
+        };
+        setMessages((prev) => [...prev, ack]);
+        setBusy(false);
+        return;
+      }
+
       try {
         const res = await fetch("/api/agent/intent", {
           method: "POST",
@@ -165,7 +179,7 @@ export function ConversationalAgent({ projectId, mode, view, incomingPrompt, onP
         setBusy(false);
       }
     },
-    [busy, projectId, mode, view, recentTelemetry, executeAction, agentMemory, memory.focusAreas],
+    [busy, projectId, mode, view, recentTelemetry, executeAction, agentMemory, memory.focusAreas, onCommand],
   );
 
   useEffect(() => {

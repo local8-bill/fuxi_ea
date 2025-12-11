@@ -7,7 +7,10 @@ import { NodeInspector } from "@/components/graph/NodeInspector";
 import { GraphSimulationControls, PhaseInsightStrip, type GraphTimelineBand, type PhaseInsight } from "@/components/graph/GraphSimulationControls";
 import { GraphSequencerPanel, GraphEventConsole, type GraphSequencerItem } from "@/components/graph/GraphSequencerPanel";
 import { GraphPredictivePanel } from "@/components/graph/GraphPredictivePanel";
+import { GraphFinancialSummary, type PhaseFinancialSummary } from "@/components/graph/GraphFinancialSummary";
+import { GraphTransitionCompare, type TransitionPath } from "@/components/graph/GraphTransitionCompare";
 import sequencerDataset from "@/data/sequencer.json";
+import roiSummaryData from "@/data/roi_tcc_summary.json";
 import type { LivingMapData, LivingNode } from "@/types/livingMap";
 import { Card } from "@/components/ui/Card";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -239,6 +242,29 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     () => predictiveScenarios.find((scenario) => scenario.id === selectedScenarioId) ?? null,
     [predictiveScenarios, selectedScenarioId],
   );
+  const financialPhases = useMemo<PhaseFinancialSummary[]>(() => {
+    const raw = roiSummaryData.phases ?? [];
+    return DIGITAL_TWIN_TIMELINE.map((band, index) => {
+      const summary = raw[index] ?? raw[raw.length - 1] ?? {
+        costToday: 0,
+        transitionCost: 0,
+        valueTomorrow: 0,
+        roi: 0,
+        tcc: 0,
+      };
+      return {
+        id: band.id,
+        label: summary.label ?? band.label,
+        costToday: summary.costToday ?? 0,
+        transitionCost: summary.transitionCost ?? 0,
+        valueTomorrow: summary.valueTomorrow ?? 0,
+        roi: summary.roi ?? 0,
+        tcc: summary.tcc ?? 0,
+      };
+    });
+  }, []);
+  const transitionPaths = useMemo<TransitionPath[]>(() => (roiSummaryData.paths ?? []) as TransitionPath[], []);
+  const [activeTransitionPathId, setActiveTransitionPathId] = useState<string | null>(() => transitionPaths[0]?.id ?? null);
   const logLearningEvent = useCallback((code: string, details?: Record<string, unknown>) => {
     setEventLog((prev) => [`${new Date().toLocaleTimeString()} · ${code}`, ...prev].slice(0, 6));
     void fetch("/api/ale/events", {
@@ -575,6 +601,11 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     sendReasoningEvent(systemId, "system_selected", tagSet);
     advanceFlow("integration");
   };
+  const handleTransitionPathSelect = (path: TransitionPath) => {
+    setActiveTransitionPathId(path.id);
+    logTelemetry("digital_twin.transition_path_selected", { path: path.id, roi: path.roi, tcc: path.tcc });
+    logLearningEvent("LE_PATH_SELECTED", { path: path.id, roi: path.roi, tcc: path.tcc });
+  };
 
   const handleIntegrationSelect = (integrationId: string, peerLabel: string) => {
     if (!selectedSystem) return;
@@ -818,6 +849,10 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
                 onSelect={handleScenarioSelect}
                 onActivate={handleScenarioActivate}
               />
+              <GraphFinancialSummary phases={financialPhases} activePhase={activePhase} />
+              {transitionPaths.length ? (
+                <GraphTransitionCompare paths={transitionPaths} activePathId={activeTransitionPathId} onSelect={handleTransitionPathSelect} />
+              ) : null}
             </div>
           </div>
 

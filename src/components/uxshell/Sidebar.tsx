@@ -46,6 +46,7 @@ const intelligenceShortcuts = [
   { key: "intel-activity", label: "User Activity", icon: "◎", focus: "activity" },
   { key: "intel-engagement", label: "User Engagement", icon: "◎", focus: "engagement" },
   { key: "intel-actions", label: "User Actions", icon: "◎", focus: "actions" },
+  { key: "intel-reports", label: "Org Intelligence Reports", icon: "◎", focus: "reports" },
 ] as const;
 
 const modes: Mode[] = ["Architect", "Analyst", "CFO", "FP&A", "CIO"];

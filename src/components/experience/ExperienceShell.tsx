@@ -26,6 +26,7 @@ import "@/styles/uxshell.css";
 import { getCurrentMode, switchMode } from "@/lib/context/modeSwitcher";
 import { AdaptiveSignalsPanel } from "@/components/learning/AdaptiveSignalsPanel";
 import { useLearningSnapshot, type LearningSnapshot } from "@/hooks/useLearningSnapshot";
+import { TipsOverlay } from "../agent/TipsOverlay";
 
 const sceneMeta: Record<ExperienceScene, { title: string; summary: string }> = {
   command: { title: "Command Deck", summary: "Resume where you left off or ask the agent what's next." },
@@ -62,14 +63,51 @@ function ExperienceBody({ projectId }: { projectId: string }) {
   const genome = useUserGenome();
   const updateGenome = useUserGenome((state) => state.updateGenome);
   useAgentMemory();
+  const [showTips, setShowTips] = useState(false);
+  const tipsSourceRef = useRef<"auto" | "manual" | "command" | "debug" | null>(null);
 
   const intelligenceFocus = searchParams?.get("focus");
+
+  const openTips = useCallback(
+    (source: "auto" | "manual" | "command" | "debug") => {
+      tipsSourceRef.current = source;
+      setShowTips(true);
+      telemetry.log("tips_shown", { source });
+    },
+    [telemetry],
+  );
+
+  const closeTips = useCallback(() => {
+    if (!showTips) return;
+    setShowTips(false);
+    telemetry.log("tips_closed", { source: tipsSourceRef.current ?? "unknown" });
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("fuxi_tips_seen", "1");
+    }
+  }, [showTips, telemetry]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.FuxiModeSwitcher = { switchMode, getCurrentMode };
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (tipsSourceRef.current) return;
+    const debug = Boolean((window as any).__FUXI_DEBUG_TIPS);
+    const hasProfile = Boolean(window.localStorage.getItem("fuxi_user_profile"));
+    const seenTips = Boolean(window.localStorage.getItem("fuxi_tips_seen"));
+    if (debug) {
+      telemetry.log("tips_triggered_manual", { source: "debug_override" });
+      openTips("debug");
+      return;
+    }
+    if (!seenTips && !hasProfile) {
+      telemetry.log("tips_triggered_auto", { source: "first_time_user" });
+      openTips("auto");
+    }
+  }, [openTips, telemetry]);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +189,24 @@ function ExperienceBody({ projectId }: { projectId: string }) {
       router.replace(`/project/${projectId}/experience?scene=${next}`, { scroll: false });
     },
     [projectId, router, scene, setScene, telemetry],
+  );
+
+  const handleManualTips = useCallback(() => {
+    telemetry.log("tips_triggered_manual", { source: "topbar" });
+    openTips("manual");
+  }, [openTips, telemetry]);
+
+  const handleAgentCommand = useCallback(
+    (command: string) => {
+      const normalized = command.trim().toLowerCase();
+      if (normalized === "/tips" || normalized === "/showtips" || normalized === "tips") {
+        telemetry.log("tips_triggered_manual", { source: "agent_command" });
+        openTips("command");
+        return "Opening guided tips now — check the overlay.";
+      }
+      return null;
+    },
+    [openTips, telemetry],
   );
 
   const meta = sceneMeta[scene];
@@ -244,6 +300,7 @@ function ExperienceBody({ projectId }: { projectId: string }) {
 
   return (
     <UXShellLayout
+      onTips={handleManualTips}
       sidebar={
         <div ref={sidebarRef}>
           <Sidebar projectId={projectId} currentProjectId={projectId} currentView={scene} currentFocus={intelligenceFocus} onModeChange={setMode} />
@@ -288,6 +345,7 @@ function ExperienceBody({ projectId }: { projectId: string }) {
                 view={scene}
                 incomingPrompt={pendingAgentPrompt}
                 onPromptConsumed={() => setPendingAgentPrompt(null)}
+                onCommand={handleAgentCommand}
               />
             )}
           </div>
@@ -313,6 +371,7 @@ function ExperienceBody({ projectId }: { projectId: string }) {
         ) : null}
       </div>
       <SearchModal open={searchOpen} initialQuery={searchQuery} items={searchItems} onClose={() => setSearchOpen(false)} />
+      {showTips ? <TipsOverlay onClose={closeTips} /> : null}
     </UXShellLayout>
   );
 }
