@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import clsx from "clsx";
 import { useSearchParams } from "next/navigation";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
+import { graphSectionLabelClass, GraphControlPanel, GraphControlButton } from "@/components/graph/GraphLayoutSection";
 import { NodeInspector } from "@/components/graph/NodeInspector";
-import { GraphSimulationControls, PhaseInsightStrip, type GraphTimelineBand, type PhaseInsight } from "@/components/graph/GraphSimulationControls";
+import { type GraphTimelineBand, type PhaseInsight } from "@/components/graph/GraphSimulationControls";
 import { GraphSequencerPanel, GraphEventConsole, type GraphSequencerItem } from "@/components/graph/GraphSequencerPanel";
 import { GraphPredictivePanel } from "@/components/graph/GraphPredictivePanel";
 import { GraphFinancialSummary, type PhaseFinancialSummary } from "@/components/graph/GraphFinancialSummary";
@@ -23,6 +25,7 @@ import type { LearningSnapshot } from "@/hooks/useLearningSnapshot";
 import type { GraphFocus, GraphRevealStage, GraphViewMode } from "@/hooks/useGraphTelemetry";
 import { useGraphTelemetry } from "@/hooks/useGraphTelemetry";
 import { usePredictiveScenarios } from "@/hooks/usePredictiveScenarios";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -72,11 +75,27 @@ const ACTIONS = [
   },
 ];
 
-const FOCUS_LENSES: Array<{ type: FocusType; label: string }> = [
-  { type: "platform", label: "By Platform" },
-  { type: "domain", label: "By Domain" },
-  { type: "goal", label: "By Goal" },
+const FOCUS_LENSES: Array<{ type: FocusType; label: string; helper: string }> = [
+  { type: "platform", label: "By Platform", helper: "Cluster systems by ERP/commerce stack." },
+  { type: "domain", label: "By Domain", helper: "Highlight value streams + business units." },
+  { type: "goal", label: "By Goal", helper: "Trace objectives such as modernization or ROI." },
 ];
+
+const GRAPH_VIEW_MODES: Array<{ id: GraphViewMode; label: string; helper: string }> = [
+  { id: "systems", label: "Systems", helper: "Systems + integrations." },
+  { id: "domain", label: "Domain", helper: "Value stream halos." },
+  { id: "roi", label: "ROI", helper: "Impact vs cost gradients." },
+  { id: "sequencer", label: "Sequencer", helper: "Timeline overlays." },
+  { id: "capabilities", label: "Capabilities", helper: "Hierarchy & scoring." },
+];
+
+const GRAPH_REVEAL_STAGES: Array<{ id: GraphRevealStage; label: string; tone: string; summary: string }> = [
+  { id: "orientation", label: "Orientation", tone: "Calm", summary: "Domains only." },
+  { id: "exploration", label: "Exploration", tone: "Curious", summary: "Nodes per domain." },
+  { id: "connectivity", label: "Connectivity", tone: "Energized", summary: "All systems + edges." },
+  { id: "insight", label: "Insight", tone: "Analytical", summary: "ROI / TCC overlays." },
+];
+const SHOW_VIEW_MODE_PANEL = true;
 
 const PLATFORM_OPTIONS = ["ERP", "Commerce", "CRM", "Data", "Supply Chain"];
 const GOAL_OPTIONS = ["Modernization", "Cost", "ROI"];
@@ -163,14 +182,19 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   const searchParams = useSearchParams();
   const isEmbed = searchParams.get("embed") === "1";
   const { role, motivation, interactionStyle, preferredTone } = useUserGenome();
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
 
   const [stats, setStats] = useState<DigitalEnterpriseStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [statsLoading, setStatsLoading] = useState<boolean>(true);
 
   const [graphData, setGraphData] = useState<LivingMapData | null>(null);
-  const [graphLoading, setGraphLoading] = useState<boolean>(true);
+  const [graphLoading, setGraphLoading] = useState<boolean>(false);
   const [graphError, setGraphError] = useState<string | null>(null);
+  const [graphDataMode, setGraphDataMode] = useState<"snapshot" | "live" | null>(null);
+  const [graphMetadata, setGraphMetadata] = useState<{ captured_at?: string; source?: string; scenario?: string; file?: string } | null>(null);
+  const [refreshingSnapshot, setRefreshingSnapshot] = useState(false);
+  const [snapshotRefreshError, setSnapshotRefreshError] = useState<string | null>(null);
 
   const [graphRevealed, setGraphRevealed] = useState(false);
   const [graphViewMode, setGraphViewMode] = useState<GraphViewMode>("systems");
@@ -193,6 +217,11 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   const [insightMessage, setInsightMessage] = useState<string | null>(null);
   const focusPromptLogged = useRef(false);
   const actionsLogged = useRef(false);
+  const [leftLaneCollapsed, setLeftLaneCollapsed] = useState(false);
+  const [rightLaneCollapsed, setRightLaneCollapsed] = useState(false);
+  const [leftLaneRendered, setLeftLaneRendered] = useState(true);
+  const [rightLaneRendered, setRightLaneRendered] = useState(true);
+  const [showIntegrationOverlay, setShowIntegrationOverlay] = useState(true);
 
   const aiInsights = useAIInsights(graphData?.nodes ?? []);
   const sendReasoningEvent = useCallback(
@@ -492,20 +521,47 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     }
   }, [projectId, onStatsUpdate]);
 
-  const loadGraph = useCallback(async () => {
+  const loadGraph = useCallback(async (mode: "snapshot" | "live") => {
     setGraphLoading(true);
     setGraphError(null);
+    const fallback = async () => {
+      try {
+        const resLegacy = await fetch(`/api/digital-enterprise/view?project=${encodeURIComponent(projectId)}&mode=all`, { cache: "no-store" });
+        if (!resLegacy.ok) {
+          const text = await resLegacy.text().catch(() => resLegacy.statusText);
+          throw new Error(text || `Legacy view failed (${resLegacy.status})`);
+        }
+        const json = await resLegacy.json();
+        setGraphMetadata({
+          source: mode === "live" ? "legacy-live" : "legacy-snapshot",
+          captured_at: new Date().toISOString(),
+          scenario: mode === "live" ? "Live fallback" : "Snapshot fallback",
+        });
+        setGraphData(buildLivingMapData(json));
+        setGraphDataMode(mode);
+      } catch (legacyErr: any) {
+        setGraphError(legacyErr?.message ?? "Failed to load graph data.");
+        setGraphData(null);
+        setGraphDataMode(null);
+      }
+    };
+
     try {
-      const res = await fetch(`/api/digital-enterprise/view?project=${encodeURIComponent(projectId)}&mode=all`, { cache: "no-store" });
+      const res = await fetch(`/api/graph/snapshot?project=${encodeURIComponent(projectId)}&mode=${mode}`, { cache: "no-store" });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         throw new Error(`Graph load failed ${res.status}: ${text}`);
       }
       const json = await res.json();
+      setGraphMetadata({
+        ...json.metadata,
+        source: json.source ?? mode,
+        file: json.file,
+      });
       setGraphData(buildLivingMapData(json));
+      setGraphDataMode(mode);
     } catch (err: any) {
-      setGraphError(err?.message ?? "Failed to load graph data.");
-      setGraphData(null);
+      await fallback();
     } finally {
       setGraphLoading(false);
     }
@@ -513,8 +569,28 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
 
   useEffect(() => {
     loadStats();
-    loadGraph();
-  }, [loadStats, loadGraph]);
+  }, [loadStats]);
+
+  const handleSnapshotRefresh = useCallback(async () => {
+    setRefreshingSnapshot(true);
+    setSnapshotRefreshError(null);
+    try {
+      const res = await fetch("/api/graph/snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: projectId, scenario: "Digital Twin Refresh" }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || "Snapshot refresh failed");
+      }
+      await loadGraph("snapshot");
+    } catch (err: any) {
+      setSnapshotRefreshError(err?.message ?? "Snapshot refresh failed.");
+    } finally {
+      setRefreshingSnapshot(false);
+    }
+  }, [projectId, loadGraph]);
 
   useEffect(() => {
     if (focusPromptLogged.current || graphLoading) return;
@@ -555,6 +631,24 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   useEffect(() => {
     graphTelemetry.trackStage(revealStage);
   }, [graphTelemetry, revealStage]);
+
+  useEffect(() => {
+    if (!leftLaneCollapsed) {
+      setLeftLaneRendered(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setLeftLaneRendered(false), 280);
+    return () => window.clearTimeout(timer);
+  }, [leftLaneCollapsed]);
+
+  useEffect(() => {
+    if (!rightLaneCollapsed) {
+      setRightLaneRendered(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setRightLaneRendered(false), 280);
+    return () => window.clearTimeout(timer);
+  }, [rightLaneCollapsed]);
 
   const advanceFlow = useCallback(
     (next: FlowStep) => {
@@ -644,25 +738,6 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     return `Highlighting ${selectedSystem.label} ↔ ${selectedIntegration.peerLabel}. Ready for the next move?`;
   }, [selectedFocusValue, focusType, selectedSystem, selectedIntegration]);
 
-  const lensPrompt =
-    focusType === "goal" ? "Which objective should we chase first?" : focusType === "platform" ? "Which platform should we anchor on?" : "Which domain should we study first?";
-
-  const promptsByRole: Record<FlowStep, string> = {
-    domain: interactionStyle === "narrative" ? `Let's ease in, ${role}. ${lensPrompt}` : lensPrompt,
-    system:
-      interactionStyle === "narrative"
-        ? "I spotlighted the busiest systems in that focus. Want to zoom into one?"
-        : "Pick the system that feels most congested right now.",
-    integration:
-      interactionStyle === "narrative"
-        ? "These connections carry most of the load. Which one should we interrogate?"
-        : "Select the integration that needs clarity.",
-    insight:
-      interactionStyle === "narrative"
-        ? "Here’s the insight I generated. Want me to route it somewhere?"
-        : "Insight ready. Where should I send you next?",
-  };
-
   useEffect(() => {
     if (flowStep === "insight" && insightMessage && !actionsLogged.current) {
       logTelemetry("digital_twin.actions_shown", { options: ACTIONS.map((action) => action.key), role });
@@ -671,33 +746,38 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     if (flowStep !== "insight") actionsLogged.current = false;
   }, [flowStep, insightMessage, role, logTelemetry]);
 
+  const gridTemplateColumns = useMemo(() => {
+    if (!isDesktop) return undefined;
+    const leftColumn = leftLaneCollapsed ? "0px" : "240px";
+    const centerColumn = "minmax(0,1fr)";
+    const rightColumn = rightLaneCollapsed ? "0px" : "minmax(320px,1fr)";
+    return [leftColumn, centerColumn, rightColumn].join(" ");
+  }, [isDesktop, leftLaneCollapsed, rightLaneCollapsed]);
+  const showLeftAuxPanel = leftLaneCollapsed && !leftLaneRendered;
+  const showRightAuxPanel = rightLaneCollapsed && !rightLaneRendered;
+
   const renderFlowButtons = () => {
     switch (flowStep) {
-      case "domain":
-        {
-          const options =
-            focusType === "platform"
-              ? PLATFORM_OPTIONS
-              : focusType === "goal"
-                ? GOAL_OPTIONS
-                : domainSuggestions;
-          return (
-            <div className="flex flex-wrap gap-2">
-              {options.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => handleFocusValueSelect(option)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                    selectedFocusValue === option ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-900"
-                  }`}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
-          );
-        }
+      case "domain": {
+        const options =
+          focusType === "platform" ? PLATFORM_OPTIONS : focusType === "goal" ? GOAL_OPTIONS : domainSuggestions;
+        return (
+          <div className="flex flex-wrap gap-2">
+            {options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => handleFocusValueSelect(option)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                  selectedFocusValue === option ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-900"
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        );
+      }
       case "system":
         return (
           <div className="flex flex-wrap gap-2">
@@ -738,6 +818,71 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     }
   };
 
+  const leftRailContent = (
+    <div className="space-y-4">
+      {SHOW_VIEW_MODE_PANEL ? (
+        <GraphControlPanel title="View Mode">
+          {GRAPH_VIEW_MODES.map((modeOption) => (
+            <GraphControlButton
+              key={modeOption.id}
+              active={graphViewMode === modeOption.id}
+              label={modeOption.label}
+              helper={modeOption.helper}
+              onClick={() => handleGraphViewModeChange(modeOption.id)}
+            />
+          ))}
+        </GraphControlPanel>
+      ) : null}
+
+      <GraphControlPanel title="Guided Focus">
+        {FOCUS_LENSES.map((lens) => (
+          <GraphControlButton
+            key={lens.type}
+            active={focusType === lens.type}
+            label={lens.label}
+            helper={lens.helper}
+            onClick={() => setFocusType(lens.type)}
+          />
+        ))}
+        <p className="text-xs text-neutral-500">{focusSummary}</p>
+        <div className="space-y-2">{renderFlowButtons()}</div>
+      </GraphControlPanel>
+
+      <GraphControlPanel title="Reveal States">
+        {GRAPH_REVEAL_STAGES.map((stageOption) => (
+          <GraphControlButton
+            key={stageOption.id}
+            active={revealStage === stageOption.id}
+            label={`${stageOption.label} · ${stageOption.tone}`}
+            helper={stageOption.summary}
+            onClick={() => handleRevealStageChange(stageOption.id)}
+          />
+        ))}
+      </GraphControlPanel>
+    </div>
+  );
+
+
+  const rightRailPanels = (
+    <>
+      <GraphSequencerPanel
+        sequence={sequence}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        activePhase={activePhase}
+        onSimulate={(phase) => handlePhaseChange(phase)}
+        onTogglePlayback={handlePlaybackToggle}
+        isPlaying={isPlaying}
+      />
+      <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={inspectorTags} />
+      <GraphEventConsole events={eventLog} emptyMessage="Interact with the sequencer or graph to log learning." />
+      <GraphPredictivePanel scenarios={predictiveScenarios} selectedScenarioId={selectedScenarioId} onSelect={handleScenarioSelect} onActivate={handleScenarioActivate} />
+      <GraphFinancialSummary phases={financialPhases} activePhase={activePhase} />
+      {transitionPaths.length ? <GraphTransitionCompare paths={transitionPaths} activePathId={activeTransitionPathId} onSelect={handleTransitionPathSelect} /> : null}
+    </>
+  );
+
   return (
     <div className={isEmbed ? "px-4 py-6" : "px-6 pt-2 pb-6"}>
       {statsError && (
@@ -752,109 +897,195 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
               <p className="text-sm font-semibold text-slate-900">Digital Twin graph</p>
               <p className="text-xs text-slate-500">Fade-in reveals and progressive focus transitions.</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-600 shadow-sm">
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-slate-500">View Mode</p>
-              <p className="font-semibold text-slate-900">{graphViewMode}</p>
-            </div>
           </div>
 
-          {graphError && (
-            <Card className="border-rose-200 bg-rose-50">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-rose-700">{graphError}</p>
+          <section className="flex flex-col gap-3 rounded-3xl border border-slate-200/70 bg-white/80 p-4 text-slate-800 shadow-sm">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className={clsx(graphSectionLabelClass, "text-slate-500")}>Layout Controls</p>
+                <p className="text-sm text-slate-600">Collapse focus/insight lanes or refresh the data source.</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
-                  onClick={loadGraph}
+                  className={clsx(
+                    "rounded-full border px-3 py-1 text-sm font-semibold transition",
+                    graphDataMode === "snapshot" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600",
+                  )}
+                  disabled={graphLoading || refreshingSnapshot}
+                  onClick={() => loadGraph("snapshot")}
                 >
-                  Retry
+                  Load Snapshot
+                </button>
+                <button
+                  type="button"
+                  className={clsx(
+                    "rounded-full border px-3 py-1 text-sm font-semibold transition",
+                    graphDataMode === "live" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600",
+                  )}
+                  disabled={graphLoading || refreshingSnapshot}
+                  onClick={() => loadGraph("live")}
+                >
+                  Load Live Data
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-slate-200 px-3 py-1 text-sm font-semibold text-slate-700 transition hover:border-slate-500 disabled:opacity-60"
+                  onClick={handleSnapshotRefresh}
+                  disabled={graphLoading || refreshingSnapshot}
+                >
+                  Refresh Snapshot
                 </button>
               </div>
-            </Card>
-          )}
+              <div className="text-xs text-slate-500">
+                {graphLoading ? (
+                  <span>Loading {graphDataMode ?? "snapshot"} dataset…</span>
+                ) : graphMetadata ? (
+                  <span>
+                    {graphDataMode === "live" ? "Live graph" : "Snapshot"} ·{" "}
+                    {graphMetadata.captured_at ? new Date(graphMetadata.captured_at).toLocaleString() : "timestamp unknown"}
+                    {graphMetadata.scenario ? ` · ${graphMetadata.scenario}` : null}
+                  </span>
+                ) : (
+                  <span>No dataset loaded yet. Use the buttons above to pull a snapshot or live view.</span>
+                )}
+                {snapshotRefreshError ? <span className="ml-2 text-rose-500">{snapshotRefreshError}</span> : null}
+              </div>
+            </div>
+          </section>
 
-          <div className="space-y-4">
-            <GraphSimulationControls
-              isPlaying={isPlaying}
-              onToggle={handlePlaybackToggle}
-              onStep={stepPhaseForward}
-              speed={playbackSpeed}
-              onSpeedChange={(speed) => setPlaybackSpeed(speed)}
-              phases={DIGITAL_TWIN_TIMELINE}
-              activePhase={activePhase}
-              onScrub={(phaseId) => handlePhaseChange(phaseId)}
-              extra={
-                activeScenario ? (
-                  <p className="text-[0.7rem] text-slate-500">
-                    Scenario: <span className="font-semibold text-slate-900">{activeScenario.title}</span> — ROI {(activeScenario.roiDelta * 100).toFixed(1)}%, timeline{" "}
-                    {activeScenario.timelineDeltaMonths >= 0 ? "+" : ""}
-                    {activeScenario.timelineDeltaMonths} mo
-                  </p>
-                ) : null
-              }
-            />
-            <PhaseInsightStrip insights={phaseInsights} activePhase={activePhase} onSelect={(phaseId) => handlePhaseChange(phaseId)} />
+          <div className="relative">
+            <div
+              className={clsx("grid gap-6", "transition-[grid-template-columns] duration-300 ease-out", !isDesktop ? "auto-rows-auto" : undefined)}
+              style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
+            >
+              <div
+                className={clsx(
+                  "min-w-0 overflow-hidden transition-[opacity,transform] duration-300 ease-out",
+                  leftLaneCollapsed ? "-translate-x-2 opacity-0" : "opacity-100",
+                  !isDesktop ? "order-1" : undefined,
+                )}
+                aria-hidden={leftLaneCollapsed && !leftLaneRendered}
+                style={{ pointerEvents: leftLaneCollapsed ? "none" : undefined }}
+              >
+                {leftLaneRendered ? leftRailContent : null}
+              </div>
+
+              <div className={clsx("space-y-4 min-w-0", !isDesktop ? "order-2" : undefined)}>
+                {graphError && (
+                  <Card className="border-rose-200 bg-rose-50">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-rose-700">{graphError}</p>
+                      <button
+                        type="button"
+                        className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
+                        onClick={() => loadGraph(graphDataMode ?? "snapshot")}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  </Card>
+                )}
+                <div
+                  className={clsx(
+                    "rounded-3xl border bg-white p-2 shadow-lg min-h-[820px] transition-opacity duration-700",
+                    showIntegrationOverlay ? "border-emerald-200" : "border-slate-200",
+                    graphRevealed ? "opacity-100" : "opacity-0",
+                  )}
+                >
+                  {graphLoading && <div className="py-36 text-center text-sm text-slate-500">Loading digital twin map…</div>}
+                  {!graphLoading && hasGraph && (
+                    <GraphCanvas
+                      nodes={livingMapData.nodes}
+                      edges={livingMapData.edges}
+                      focus={graphFocus}
+                      focusLabel={selectedFocusValue}
+                      focusSummary={focusSummary}
+                      viewMode={graphViewMode}
+                      stage={revealStage}
+                      highlightNodeIds={highlightNodeIds ?? undefined}
+                      selectedNodeId={selectedSystemId}
+                      onNodeSelect={(nodeId) => {
+                        if (!nodeId) {
+                          setSelectedSystemId(null);
+                          setSelectedIntegration(null);
+                          return;
+                        }
+                        handleSystemSelect(nodeId);
+                      }}
+                      onViewModeChange={handleGraphViewModeChange}
+                      onStageChange={handleRevealStageChange}
+                      height={isEmbed ? 560 : 820}
+                      projectId={projectId}
+                      scenarioPhase={activeScenario?.phase ?? null}
+                      sequence={sequence}
+                      showIntegrationOverlay={showIntegrationOverlay}
+                      domainColumns={2}
+                      systemColumns={2}
+                      showCanvasControls={false}
+                      domainWidth={760}
+                      domainHorizontalGap={36}
+                      domainVerticalGap={180}
+                      domainPaddingX={28}
+                      domainPaddingY={44}
+                      systemCellHeight={80}
+                      domainMinHeight={580}
+                      systemColumnGap={16}
+                      systemColumns={2}
+                      fitViewPadding={0.12}
+                    />
+                  )}
+                  {!graphLoading && !hasGraph && (
+                    <div className="py-20 text-center text-sm text-slate-500">No harmonized systems yet. Import data or run onboarding to populate the graph.</div>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className={clsx(
+                  "min-w-0 overflow-hidden transition-[opacity,transform] duration-300 ease-out",
+                  rightLaneCollapsed ? "translate-x-2 opacity-0" : "opacity-100",
+                  !isDesktop ? "order-3" : undefined,
+                )}
+                aria-hidden={rightLaneCollapsed && !rightLaneRendered}
+                style={{ pointerEvents: rightLaneCollapsed ? "none" : undefined }}
+              >
+                {rightLaneRendered ? <div className="space-y-4">{rightRailPanels}</div> : null}
+              </div>
+            </div>
+
+            {isDesktop ? (
+              <>
+                <button
+                  type="button"
+                  className={clsx(
+                    "absolute left-0 top-8 hidden -translate-x-1/2 rounded-full border border-slate-200 bg-white/85 px-2 py-1 text-sm font-semibold text-slate-600 shadow hover:bg-white",
+                    "lg:flex items-center justify-center",
+                  )}
+                  onClick={() => setLeftLaneCollapsed((prev) => !prev)}
+                  aria-label={leftLaneCollapsed ? "Expand focus rail" : "Collapse focus rail"}
+                >
+                  {leftLaneCollapsed ? "›" : "‹"}
+                </button>
+                <button
+                  type="button"
+                  className={clsx(
+                    "absolute right-0 top-8 hidden translate-x-1/2 rounded-full border border-slate-200 bg-white/85 px-2 py-1 text-sm font-semibold text-slate-600 shadow hover:bg-white",
+                    "lg:flex items-center justify-center",
+                  )}
+                  onClick={() => setRightLaneCollapsed((prev) => !prev)}
+                  aria-label={rightLaneCollapsed ? "Expand insight rail" : "Collapse insight rail"}
+                >
+                  {rightLaneCollapsed ? "‹" : "›"}
+                </button>
+              </>
+            ) : null}
           </div>
 
-          <div className={`grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] transition-opacity duration-700 ${graphRevealed ? "opacity-100" : "opacity-0"}`}>
-            <div className="rounded-3xl border border-slate-200 bg-white p-2 shadow-lg min-h-[820px]">
-              {graphLoading && <div className="py-36 text-center text-sm text-slate-500">Loading digital twin map…</div>}
-              {!graphLoading && hasGraph && (
-                <GraphCanvas
-                  nodes={livingMapData.nodes}
-                  edges={livingMapData.edges}
-                  focus={graphFocus}
-                  focusLabel={selectedFocusValue}
-                  focusSummary={focusSummary}
-                  viewMode={graphViewMode}
-                  stage={revealStage}
-                  highlightNodeIds={highlightNodeIds ?? undefined}
-                  selectedNodeId={selectedSystemId}
-                  onNodeSelect={(nodeId) => {
-                    if (!nodeId) {
-                      setSelectedSystemId(null);
-                      setSelectedIntegration(null);
-                      return;
-                    }
-                    handleSystemSelect(nodeId);
-                  }}
-                  onViewModeChange={handleGraphViewModeChange}
-                  onStageChange={handleRevealStageChange}
-                  height={isEmbed ? 560 : 820}
-                  projectId={projectId}
-                  scenarioPhase={activeScenario?.phase ?? null}
-                  sequence={sequence}
-                />
-              )}
-              {!graphLoading && !hasGraph && (
-                <div className="py-20 text-center text-sm text-slate-500">No harmonized systems yet. Import data or run onboarding to populate the graph.</div>
-              )}
-            </div>
-            <div className="space-y-4">
-              <GraphSequencerPanel
-                sequence={sequence}
-                onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
-                onDragEnd={handleDragEnd}
-                activePhase={activePhase}
-                onSimulate={(phase) => handlePhaseChange(phase)}
-                onTogglePlayback={handlePlaybackToggle}
-                isPlaying={isPlaying}
-              />
-              <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={inspectorTags} />
-              <GraphEventConsole events={eventLog} emptyMessage="Interact with the sequencer or graph to log learning." />
-              <GraphPredictivePanel
-                scenarios={predictiveScenarios}
-                selectedScenarioId={selectedScenarioId}
-                onSelect={handleScenarioSelect}
-                onActivate={handleScenarioActivate}
-              />
-              <GraphFinancialSummary phases={financialPhases} activePhase={activePhase} />
-              {transitionPaths.length ? (
-                <GraphTransitionCompare paths={transitionPaths} activePathId={activeTransitionPathId} onSelect={handleTransitionPathSelect} />
-              ) : null}
-            </div>
-          </div>
+          {showLeftAuxPanel ? <div className="space-y-4">{leftRailContent}</div> : null}
+          {showRightAuxPanel ? <div className="space-y-4">{rightRailPanels}</div> : null}
 
           {flowStep === "insight" && insightMessage && (
             <div className="space-y-3" data-testid="digital-twin-action-invitation">
@@ -884,8 +1115,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="space-y-3 border-slate-200 bg-white shadow-sm">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">Recognition</p>
+      <Card className="space-y-3 border-slate-200 bg-white shadow-sm">
             <p className="text-sm text-slate-800">
               “Here’s the full picture — every system and integration you’ve shared, harmonized across your enterprise.”
             </p>
@@ -903,40 +1133,9 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
                   <p className="text-slate-500">Domains</p>
                   <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.domainsDetected)}</p>
                 </div>
-                <div>
-                  <p className="text-slate-500">View mode</p>
-                  <p className="font-semibold text-slate-900 capitalize">{graphViewMode}</p>
-                </div>
               </div>
             )}
           </Card>
-
-          <Card className="space-y-4 border-emerald-200 bg-emerald-50">
-            <div>
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-600">Guided focus</p>
-              <p className="text-sm text-emerald-900">{promptsByRole[flowStep]}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {FOCUS_LENSES.map((lens) => (
-                <button
-                  key={lens.type}
-                  type="button"
-                  className={`rounded-full px-3 py-1 text-[0.65rem] font-semibold ${
-                    focusType === lens.type ? "bg-emerald-600 text-white shadow" : "bg-white text-emerald-800"
-                  }`}
-                  onClick={() => {
-                    setFocusType(lens.type);
-                    logTelemetry("digital_twin.focus_mode_changed", { mode: lens.type });
-                  }}
-                >
-                  {lens.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-emerald-800">{focusSummary}</p>
-            {renderFlowButtons()}
-          </Card>
-
           <AdaptiveSignalsPanel snapshot={learningSnapshot} title="Adaptive Signals" subtitle="Digital twin" />
         </div>
 
