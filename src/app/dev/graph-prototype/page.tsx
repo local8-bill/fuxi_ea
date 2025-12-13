@@ -23,7 +23,7 @@ import { DecisionBacklogPanel } from "@/components/graph/DecisionBacklogPanel";
 import { GraphFinancialSummary, type PhaseFinancialSummary } from "@/components/graph/GraphFinancialSummary";
 import { GraphTransitionCompare, type TransitionPath } from "@/components/graph/GraphTransitionCompare";
 import { usePredictiveScenarios, type PredictiveScenario } from "@/hooks/usePredictiveScenarios";
-import { useSequencerBridge } from "@/hooks/useSequencerBridge";
+import { useSequencerBridge, type IntentConfirmationContext } from "@/hooks/useSequencerBridge";
 import { useDecisionBacklog, type DecisionNode } from "@/hooks/useDecisionBacklog";
 import { useTransformationLens } from "@/hooks/useTransformationLens";
 import roiSummaryData from "@/data/roi_tcc_summary.json";
@@ -50,6 +50,21 @@ const revealStages = [
 ];
 
 type TimelineBand = GraphTimelineBand & { summary: string; highlight?: boolean };
+type IntegrationFlow = {
+  flow_id: string;
+  source: string;
+  system_from: string;
+  system_to: string;
+  env?: string;
+  status?: string;
+  last_seen?: string;
+  latency_ms?: number;
+  error_rate?: number;
+  owner_team?: string;
+  confidence?: number;
+  direction?: "source" | "target";
+};
+
 type GraphSystem = {
   id: string;
   title: string;
@@ -58,6 +73,8 @@ type GraphSystem = {
   phase: string;
   vendors?: string[];
   aleTags?: string[];
+  integrationCount?: number;
+  integrationFlows?: IntegrationFlow[];
 };
 type GraphDomain = {
   id: string;
@@ -71,6 +88,17 @@ type GraphDataset = {
   timeline: TimelineBand[];
   domains: GraphDomain[];
 };
+
+type IntegrationStats = {
+  domains: GraphDomain[];
+  unmatched: IntegrationFlow[];
+};
+
+const normalizeKey = (value?: string | null) =>
+  (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 type SelectedNode =
   | { kind: "domain"; domain: GraphDomain }
@@ -106,13 +134,75 @@ const domainFallbacks = dataset.domains.reduce<Record<string, Pick<GraphDomain, 
   return acc;
 }, {});
 
+function applyIntegrationStats(domains: GraphDomain[], flows: IntegrationFlow[]): IntegrationStats {
+  if (!flows.length) {
+    return {
+      domains: domains.map((domain) => ({
+        ...domain,
+        systems: domain.systems.map((system) => ({
+          ...system,
+          integrationCount: system.integrationCount ?? 0,
+          integrationFlows: system.integrationFlows ?? [],
+        })),
+      })),
+      unmatched: [],
+    };
+  }
+
+  const keyIndex = new Map<string, { domainId: string; systemId: string }>();
+  domains.forEach((domain) => {
+    domain.systems.forEach((system) => {
+      const keys = [system.id, system.title, ...(system.vendors ?? [])];
+      keys.forEach((value) => {
+        if (!value) return;
+        keyIndex.set(normalizeKey(value), { domainId: domain.id, systemId: system.id });
+      });
+    });
+  });
+
+  const stats = new Map<string, IntegrationFlow[]>();
+  const unmatched: IntegrationFlow[] = [];
+
+  const attach = (value: string | undefined, flow: IntegrationFlow) => {
+    if (!value) return false;
+    const match = keyIndex.get(normalizeKey(value));
+    if (!match) return false;
+    if (!stats.has(match.systemId)) stats.set(match.systemId, []);
+    const direction: "source" | "target" = normalizeKey(flow.system_from) === normalizeKey(value) ? "source" : "target";
+    stats.get(match.systemId)!.push({ ...flow, direction });
+    return true;
+  };
+
+  flows.forEach((flow) => {
+    const matchedFrom = attach(flow.system_from, flow);
+    const matchedTo = attach(flow.system_to, flow);
+    if (!matchedFrom && !matchedTo) {
+      unmatched.push(flow);
+    }
+  });
+
+  const enriched = domains.map((domain) => ({
+    ...domain,
+    systems: domain.systems.map((system) => ({
+      ...system,
+      integrationCount: stats.get(system.id)?.length ?? system.integrationCount ?? 0,
+      integrationFlows: stats.get(system.id) ?? system.integrationFlows ?? [],
+    })),
+  }));
+
+  return { domains: enriched, unmatched };
+}
+
 function buildGraphDatasetFromApi(data: { nodes?: any[] } | null | undefined): GraphDataset | null {
   if (!data?.nodes) return null;
   const domainPalette: Record<string, string> = {
-    commerce: "from-amber-200 via-amber-100 to-amber-50",
-    finance: "from-sky-200 via-sky-100 to-sky-50",
-    supply: "from-emerald-200 via-emerald-100 to-emerald-50",
-    "supply chain": "from-emerald-200 via-emerald-100 to-emerald-50",
+    commerce: "#fef3c7",
+    finance: "#e0f2fe",
+    operations: "#e0e7ff",
+    data: "#e0e7ff",
+    supply: "#dcfce7",
+    "supply chain": "#dcfce7",
+    default: "#f4f4f5",
   };
 
   const domainsMap = new Map<
@@ -131,10 +221,7 @@ function buildGraphDatasetFromApi(data: { nodes?: any[] } | null | undefined): G
         domain: {
           id: domainKey,
           title,
-          color:
-            domainPalette[domainKey] ??
-            fallback?.color ??
-            "from-slate-200 via-slate-100 to-white",
+          color: domainPalette[domainKey] ?? fallback?.color ?? domainPalette.default,
           regions: fallback?.regions?.length ? [...fallback.regions] : ["NA", "EMEA", "APAC"],
           systems: [],
           aleTags: [],
@@ -179,9 +266,18 @@ export default function GraphPrototypePage() {
   const [eventLog, setEventLog] = useState<string[]>([]);
   const [intentCommand, setIntentCommand] = useState("");
   const [intentConfirmation, setIntentConfirmation] = useState<string | null>(null);
-  const handleIntentConfirmationDisplay = useCallback((message: string) => {
+  const [highlightedRegionKey, setHighlightedRegionKey] = useState<string | null>(null);
+  const [highlightedSystemIds, setHighlightedSystemIds] = useState<Set<string> | null>(null);
+  const handleIntentConfirmationDisplay = useCallback((message: string, context: IntentConfirmationContext) => {
     setIntentConfirmation(message);
     setEventLog((prev) => [`${new Date().toLocaleTimeString()} · ${message}`, ...prev].slice(0, 6));
+    if (context?.mutation?.targetRegion) {
+      setHighlightedRegionKey(context.mutation.targetRegion.toLowerCase());
+    }
+    const systems = context?.mutation?.updates?.systems;
+    if (systems?.length) {
+      setHighlightedSystemIds(new Set(systems));
+    }
   }, []);
   const { submitIntent, status: intentStatus, error: intentError, confirmation: lastIntentResult } = useSequencerBridge({
     sequence,
@@ -191,12 +287,20 @@ export default function GraphPrototypePage() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [aleTags, setAleTags] = useState<string[]>([]);
+  const [integrationFlows, setIntegrationFlows] = useState<IntegrationFlow[]>([]);
+  const [integrationLoading, setIntegrationLoading] = useState(true);
+  const [integrationError, setIntegrationError] = useState<string | null>(null);
   const { summary: storeSummary } = useStoreData();
   const { nodes: decisionNodes } = useDecisionBacklog();
   const { lensId, activeLens, lensOptions, setLens } = useTransformationLens();
   const [activeTransitionPath, setActiveTransitionPath] = useState<string | null>(null);
+  const sequenceItemRefs = useRef<Map<string, HTMLLIElement | null>>(new Map());
 
-  const domains = graphDataset.domains;
+  const integrationStats = useMemo(() => applyIntegrationStats(graphDataset.domains, integrationFlows), [graphDataset, integrationFlows]);
+  const domains = integrationStats.domains;
+  const unmatchedIntegrationFlows = integrationStats.unmatched;
+  const totalIntegrationFlows = integrationFlows.length;
+  const matchedIntegrationFlows = totalIntegrationFlows - unmatchedIntegrationFlows.length;
 
   const systemDomainMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -305,11 +409,27 @@ export default function GraphPrototypePage() {
   const financialPhases = useMemo(() => roiSummary.phases ?? [], []);
   const transitionPaths = useMemo(() => roiSummary.paths ?? [], []);
 
+  const regionToSequenceId = useMemo(() => {
+    const map = new Map<string, string>();
+    sequence.forEach((item) => {
+      const key = item.region.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, item.id);
+      }
+    });
+    return map;
+  }, [sequence]);
+
   const sequenceForRender = useMemo(() => {
     if (!lensFilters.hasFilters) return sequence;
     const subset = sequence.filter((item) => lensFilters.matchesSequenceItem(item));
     return subset.length ? subset : sequence;
   }, [sequence, lensFilters]);
+
+  const highlightedSequenceId = useMemo(() => {
+    if (!highlightedRegionKey) return null;
+    return regionToSequenceId.get(highlightedRegionKey) ?? null;
+  }, [highlightedRegionKey, regionToSequenceId]);
 
   const decisionNodesForRender = useMemo(() => {
     if (!lensFilters.hasFilters) return decisionNodes;
@@ -318,6 +438,22 @@ export default function GraphPrototypePage() {
   }, [decisionNodes, lensFilters]);
 
   const focusOption = useMemo(() => guidedFocusOptions.find((option) => option.id === focus) ?? guidedFocusOptions[0], [focus]);
+
+  useEffect(() => {
+    if (!highlightedSequenceId) return;
+    const element = sequenceItemRefs.current.get(highlightedSequenceId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    const timer = setTimeout(() => setHighlightedRegionKey(null), 5000);
+    return () => clearTimeout(timer);
+  }, [highlightedSequenceId]);
+
+  useEffect(() => {
+    if (!highlightedSystemIds || highlightedSystemIds.size === 0) return;
+    const timer = setTimeout(() => setHighlightedSystemIds(null), 5000);
+    return () => clearTimeout(timer);
+  }, [highlightedSystemIds]);
 
   const logLearningEvent = useCallback((code: string, details?: Record<string, unknown>) => {
     setEventLog((prev) => [`${new Date().toLocaleTimeString()} · ${code}`, ...prev].slice(0, 6));
@@ -440,6 +576,30 @@ export default function GraphPrototypePage() {
     };
   }, []);
 
+  const refreshIntegrationFlows = useCallback(async () => {
+    setIntegrationLoading(true);
+    setIntegrationError(null);
+    try {
+      const response = await fetch("/api/ale/integration-flows?source=datadog", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`Failed to load integration flows (${response.status})`);
+      const json = await response.json();
+      setIntegrationFlows(Array.isArray(json.flows) ? json.flows : []);
+    } catch (error: any) {
+      setIntegrationError(error?.message ?? "Unable to load integration flows");
+      setIntegrationFlows([]);
+    } finally {
+      setIntegrationLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshIntegrationFlows();
+  }, [refreshIntegrationFlows]);
+
   const handlePlaybackToggle = () => {
     setIsPlaying((prev) => {
       const next = !prev;
@@ -523,15 +683,15 @@ export default function GraphPrototypePage() {
 
   return (
     <UXShellLayout sidebarHidden sidebar={null}>
-      <div className="min-h-screen bg-slate-50 py-10">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4">
-          <header>
-            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Prototype</p>
-            <h1 className="text-3xl font-semibold text-slate-900">Enterprise OMS Transformation Graph</h1>
-            <p className="text-sm text-slate-600">FY26–FY28 sequencing, ALE overlays, and EAgent guidance.</p>
+      <div className="min-h-screen bg-[#1E1E2E] py-12 font-[var(--font-shadcn)]">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 text-neutral-200">
+          <header className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-neutral-400">Prototype</p>
+            <h1 className="text-3xl font-semibold text-white">Enterprise OMS Transformation Graph</h1>
+            <p className="text-sm text-neutral-300">FY26–FY28 sequencing, ALE overlays, and EAgent guidance.</p>
           </header>
 
-          <section className="grid gap-4 lg:grid-cols-4">
+          <section className="grid gap-3 lg:grid-cols-4">
             <ControlPanel title="Guided Focus">
               {guidedFocusOptions.map((option) => (
                 <ControlButton
@@ -591,8 +751,8 @@ export default function GraphPrototypePage() {
             onScrub={(phaseId) => handlePhaseChange(phaseId)}
             extra={
               activeScenario ? (
-                <p className="text-[0.7rem] text-slate-500">
-                  Active scenario · <span className="font-semibold text-slate-900">{activeScenario.title}</span> — ROI {(activeScenario.roiDelta * 100).toFixed(1)}% ·
+                <p className="text-[0.7rem] text-neutral-600">
+                  Active scenario · <span className="font-semibold text-neutral-900">{activeScenario.title}</span> — ROI {(activeScenario.roiDelta * 100).toFixed(1)}% ·
                   {activeScenario.timelineDeltaMonths >= 0 ? " +" : " "}
                   {activeScenario.timelineDeltaMonths} mo
                 </p>
@@ -605,21 +765,21 @@ export default function GraphPrototypePage() {
             }}
           />
           <PhaseInsightStrip insights={aggregatedPhaseMetrics} activePhase={activePhase} onSelect={(phase) => handlePhaseChange(phase)} />
-          <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Intent Bridge</p>
-            <p className="text-sm text-slate-600">Send a quick `/intent` command to reshape the sequencer.</p>
+          <section className="rounded-3xl border border-neutral-200 bg-neutral-50/95 p-4 text-neutral-800 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-neutral-500">Intent Bridge</p>
+            <p className="text-sm text-neutral-600">Send a quick `/intent` command to reshape the sequencer.</p>
             <form className="mt-3 flex flex-col gap-2 md:flex-row" onSubmit={handleIntentSubmit}>
               <input
                 type="text"
                 value={intentCommand}
                 onChange={(event) => setIntentCommand(event.target.value)}
                 placeholder="/intent start Canada with B2B+B2C decouple EBS"
-                className="flex-1 rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-900 focus:outline-none"
+                className="flex-1 rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 focus:border-neutral-500 focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={intentStatus === "working"}
-                className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
               >
                 {intentStatus === "working" ? "Processing…" : "Send Intent"}
               </button>
@@ -647,6 +807,7 @@ export default function GraphPrototypePage() {
               onSelectNode={handleSelectNode}
               roiData={roiData}
               sequence={sequenceForRender}
+              highlightNodeIds={highlightedSystemIds}
               highlightedPhaseMetrics={aggregatedPhaseMetrics.find((metric) => metric.phase === activePhase)}
               scenarioPhase={activeScenario?.phase ?? null}
               lensFilters={lensFilters}
@@ -661,6 +822,14 @@ export default function GraphPrototypePage() {
                 onSimulate={(phase) => handlePhaseChange(phase)}
                 onTogglePlayback={handlePlaybackToggle}
                 isPlaying={isPlaying}
+                highlightSequenceId={highlightedSequenceId}
+                onItemMount={(id, el) => {
+                  if (el) {
+                    sequenceItemRefs.current.set(id, el);
+                  } else {
+                    sequenceItemRefs.current.delete(id);
+                  }
+                }}
               />
               <GraphPredictivePanel
                 scenarios={predictiveScenarios}
@@ -681,7 +850,20 @@ export default function GraphPrototypePage() {
                   logLearningEvent("LE_DECISION_SELECTED", { node: node.id, timeline: node.timeline });
                 }}
               />
-              <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={aleTags} />
+              <NodeInspector
+                nodeName={inspectorName}
+                domain={inspectorDomain}
+                tags={aleTags}
+                integrations={selectedNode?.kind === "system" ? selectedNode.system.integrationFlows ?? [] : []}
+              />
+              <IntegrationTelemetryPanel
+                flows={integrationFlows}
+                matchedCount={matchedIntegrationFlows}
+                unmatchedCount={unmatchedIntegrationFlows.length}
+                loading={integrationLoading}
+                error={integrationError}
+                onRefresh={refreshIntegrationFlows}
+              />
               <GraphEventConsole events={eventLog} />
             </div>
           </div>
@@ -693,8 +875,8 @@ export default function GraphPrototypePage() {
 
 function ControlPanel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">{title}</p>
+    <div className="rounded-3xl border border-neutral-200 bg-neutral-50/95 p-3 text-neutral-800 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-neutral-500">{title}</p>
       <div className="mt-3 space-y-2">{children}</div>
     </div>
   );
@@ -706,13 +888,104 @@ function ControlButton({ active, label, helper, onClick }: { active: boolean; la
       type="button"
       onClick={onClick}
       className={clsx(
-        "w-full rounded-2xl border px-3 py-2 text-left text-sm transition",
-        active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-800",
+        "w-full rounded-2xl border px-3 py-2 text-left text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-200",
+        active ? "border-indigo-600 bg-indigo-600 text-white" : "border-neutral-200 bg-white text-neutral-800",
       )}
     >
       <p className="font-semibold">{label}</p>
-      <p className={clsx("text-xs", active ? "text-slate-200" : "text-slate-500")}>{helper}</p>
+      <p className={clsx("text-xs", active ? "text-white/80" : "text-neutral-500")}>{helper}</p>
     </button>
+  );
+}
+
+function IntegrationTelemetryPanel({
+  flows,
+  matchedCount,
+  unmatchedCount,
+  loading,
+  error,
+  onRefresh,
+}: {
+  flows: IntegrationFlow[];
+  matchedCount: number;
+  unmatchedCount: number;
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => Promise<void>;
+}) {
+  const recent = useMemo(() => {
+    return flows
+      .slice()
+      .sort((a, b) => {
+        const aTime = a.last_seen ? new Date(a.last_seen).getTime() : 0;
+        const bTime = b.last_seen ? new Date(b.last_seen).getTime() : 0;
+        return bTime - aTime;
+      })
+      .slice(0, 6);
+  }, [flows]);
+
+  const formatLatency = (value?: number) => {
+    if (typeof value === "number" && !Number.isNaN(value) && Number.isFinite(value)) {
+      return `${Math.round(value)} ms`;
+    }
+    return "—";
+  };
+
+  const formatErrorRate = (value?: number) => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return `${(value * 100).toFixed(1)}%`;
+    }
+    return "—";
+  };
+
+  return (
+    <section className="rounded-3xl border border-neutral-200 bg-neutral-50/95 p-4 text-neutral-800 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-neutral-500">Integration telemetry</p>
+          <p className="text-xl font-semibold text-neutral-900">{matchedCount} mapped / {flows.length} total</p>
+          {unmatchedCount ? <p className="text-xs text-neutral-500">{unmatchedCount} flows could not be matched to OMS nodes.</p> : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => onRefresh().catch(() => null)}
+          className="rounded-full border border-neutral-200 px-3 py-1 text-xs font-semibold text-neutral-700 hover:border-neutral-500 disabled:opacity-60"
+          disabled={loading}
+        >
+          {loading ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
+      {error ? <p className="mt-2 text-xs text-rose-600">{error}</p> : null}
+      {!flows.length && !loading ? <p className="mt-2 text-xs text-neutral-500">No telemetry ingested yet.</p> : null}
+      {recent.length ? (
+        <div className="mt-3 overflow-auto rounded-2xl border border-neutral-200">
+          <table className="w-full text-left text-xs text-neutral-600">
+            <thead>
+              <tr className="text-[0.6rem] uppercase tracking-[0.35em] text-neutral-500">
+                <th className="px-3 py-2">Flow</th>
+                <th className="px-3 py-2">Env</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Latency</th>
+                <th className="px-3 py-2">Errors</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.map((flow) => (
+                <tr key={flow.flow_id} className="border-t border-neutral-200">
+                  <td className="px-3 py-2 font-semibold text-neutral-900">
+                    {flow.system_from} → {flow.system_to}
+                  </td>
+                  <td className="px-3 py-2">{flow.env ?? "prod"}</td>
+                  <td className="px-3 py-2 capitalize">{flow.status ?? "unknown"}</td>
+                  <td className="px-3 py-2">{formatLatency(flow.latency_ms)}</td>
+                  <td className="px-3 py-2">{formatErrorRate(flow.error_rate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -765,28 +1038,37 @@ function GraphCanvas({
   }, [domains, lensFilters]);
 
   return (
-    <section className="relative rounded-[32px] border border-slate-200 bg-white p-6 shadow-xl">
+    <section className="relative rounded-[32px] border border-neutral-200 bg-neutral-50/95 p-6 text-neutral-900 shadow-xl">
       <TimelineBands bands={timeline} activePhase={activePhase} />
       {lensFilters?.hasFilters ? (
-        <div className="mb-4 flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          <span className="font-semibold text-slate-900">{lensFilters.label}</span>
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-neutral-200 bg-white/90 px-3 py-2 text-xs text-neutral-600">
+          <span className="font-semibold text-neutral-900">{lensFilters.label}</span>
           <span>{lensFilters.description}</span>
         </div>
       ) : null}
       <div className="relative mt-6 grid gap-4 lg:grid-cols-3">
-        {orderedDomains.map((domain) => (
+        {orderedDomains.map((domain) => {
+          const domainIntegrationCount = domain.systems.reduce((sum, system) => sum + (system.integrationCount ?? 0), 0);
+          const topIntegrationSystems = domain.systems
+            .filter((system) => (system.integrationCount ?? 0) > 0)
+            .sort((a, b) => (b.integrationCount ?? 0) - (a.integrationCount ?? 0))
+            .slice(0, 2);
+          return (
           <div
             key={domain.id}
             className={clsx(
-              "group cursor-pointer rounded-[32px] border border-slate-200 bg-white p-4 shadow-[0_35px_90px_-70px_rgba(15,23,42,0.8)]",
+              "group cursor-pointer rounded-[32px] border border-neutral-200 bg-white p-4 shadow-[0_35px_90px_-70px_rgba(15,23,42,0.8)] transition",
               lensFilters?.shouldMuteDomain(domain) ? "opacity-30" : "opacity-100",
             )}
             onClick={() => onSelectNode({ kind: "domain", domain })}
           >
+            {(() => {
+              return null;
+            })()}
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-slate-900">{domain.title}</p>
-                {focus === "stage" ? <p className="text-xs text-slate-500">Stage ribbon</p> : null}
+                <p className="text-sm font-semibold text-neutral-900">{domain.title}</p>
+                {focus === "stage" ? <p className="text-xs text-neutral-500">Stage ribbon</p> : null}
               </div>
             </div>
             {showStoreOverlay ? (
@@ -794,10 +1076,10 @@ function GraphCanvas({
                 {domain.regions.map((region) => (
                   <div
                     key={`${domain.id}-${region}`}
-                    className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[0.6rem]"
+                    className="flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-[0.6rem]"
                   >
-                    <span className="font-semibold uppercase tracking-[0.35em] text-slate-700">{region}</span>
-                    <span className="text-slate-500">· {(storeSummary[region]?.total ?? 0).toLocaleString()} stores</span>
+                    <span className="font-semibold uppercase tracking-[0.35em] text-neutral-700">{region}</span>
+                    <span className="text-neutral-500">· {(storeSummary[region]?.total ?? 0).toLocaleString()} stores</span>
                   </div>
                 ))}
               </div>
@@ -825,26 +1107,26 @@ function GraphCanvas({
                       onSelectNode({ kind: "system", domain, system });
                     }}
                     className={clsx(
-                      "w-full rounded-2xl border px-3 py-2 text-left text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                      "w-full rounded-2xl border px-3 py-2 text-left text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-300/50",
                       isActivePhase
                         ? "border-emerald-500 bg-white"
                         : isScenarioPhase
-                          ? "border-indigo-400 bg-indigo-50"
-                          : "border-slate-200 bg-white",
+                          ? "border-indigo-500 bg-indigo-50"
+                          : "border-neutral-200 bg-white",
                       systemMuted ? "opacity-40" : "opacity-100",
-                      showEdges ? "hover:border-slate-900" : undefined,
+                      showEdges ? "hover:border-neutral-400" : undefined,
                     )}
                   >
                     <p className="font-semibold text-neutral-950">{system.title}</p>
-                    <p className="text-xs text-slate-700">Impact {(system.impact * 100).toFixed(0)}%</p>
+                    <p className="text-xs text-neutral-600">Impact {(system.impact * 100).toFixed(0)}%</p>
                     {system.vendors?.length ? (
-                      <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">{system.vendors.join(", ")}</p>
+                      <p className="text-[0.65rem] uppercase tracking-[0.3em] text-neutral-500">{system.vendors.join(", ")}</p>
                     ) : null}
-                    <p className="text-[0.6rem] uppercase tracking-[0.3em] text-slate-500">
+                    <p className="text-[0.6rem] uppercase tracking-[0.3em] text-neutral-500">
                       {system.stage} · {system.phase.toUpperCase()}
                     </p>
                     {mode === "roi" && roiData[system.id] ? (
-                      <div className="mt-2 text-xs text-slate-600">
+                      <div className="mt-2 text-xs text-neutral-600">
                         ROI {(roiData[system.id].roi * 100).toFixed(0)}% · TCC ${roiData[system.id].tcc.toFixed(1)}M
                         <span className={clsx("ml-2 text-[0.65rem] font-semibold", riskState(roiData[system.id].risk).className)}>
                           {riskState(roiData[system.id].risk).label} risk
@@ -852,14 +1134,14 @@ function GraphCanvas({
                       </div>
                     ) : null}
                     {mode === "sequencer" && sequenceInfo ? (
-                      <div className="mt-2 space-y-1 text-xs text-slate-600">
+                      <div className="mt-2 space-y-1 text-xs text-neutral-600">
                         <p>
                           Sequence #{sequenceInfo.order + 1} · {sequenceInfo.item.phase.toUpperCase()} · {sequenceInfo.item.region}
                         </p>
                         {sequenceInfo.item.dependencies?.length ? (
-                          <div className="flex flex-wrap gap-1 text-[0.6rem] text-slate-500">
+                          <div className="flex flex-wrap gap-1 text-[0.6rem] text-neutral-500">
                             {sequenceInfo.item.dependencies.map((dep) => (
-                              <span key={`${system.id}-${dep}`} className="rounded-full border border-slate-200 px-2 py-0.5">
+                              <span key={`${system.id}-${dep}`} className="rounded-full border border-neutral-200 px-2 py-0.5">
                                 depends on {dep}
                               </span>
                             ))}
@@ -867,18 +1149,55 @@ function GraphCanvas({
                         ) : null}
                       </div>
                     ) : null}
+                    {system.integrationFlows?.length ? (
+                      <div className="mt-2 space-y-1 text-[0.6rem] text-neutral-500">
+                        <p className="font-semibold uppercase tracking-[0.3em] text-neutral-500">
+                          Integrations · {system.integrationCount ?? system.integrationFlows.length}
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {system.integrationFlows.slice(0, 2).map((flow) => {
+                            const counterpart = flow.direction === "source" ? flow.system_to : flow.system_from;
+                            const arrow = flow.direction === "source" ? "→" : "←";
+                            return (
+                              <span key={`${system.id}-${flow.flow_id}-${flow.direction}`} className="rounded-full border border-neutral-200 px-2 py-0.5">
+                                {arrow} {counterpart}
+                              </span>
+                            );
+                          })}
+                          {system.integrationFlows.length > 2 ? (
+                            <span className="text-[0.6rem] text-neutral-400">+{system.integrationFlows.length - 2} more</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
                   </button>
                 );
               })}
             </div>
             {showEdges ? (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-sm">
-                <p className="font-semibold text-neutral-950 uppercase tracking-[0.2em] text-[0.6rem]">Integrations</p>
-                <p className="mt-1 text-sm text-slate-700">OMS ↔ MFCS ↔ EBS connections live</p>
+              <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-3 text-xs text-neutral-600 shadow-sm">
+                <p className="font-semibold text-neutral-900 uppercase tracking-[0.2em] text-[0.6rem]">Integration telemetry</p>
+                {domainIntegrationCount ? (
+                  <>
+                    <p className="mt-1 text-sm text-neutral-600">
+                      Monitoring {domainIntegrationCount} {domainIntegrationCount === 1 ? "flow" : "flows"} (Datadog)
+                    </p>
+                    <ul className="mt-2 space-y-1 text-[0.65rem] text-neutral-500">
+                      {topIntegrationSystems.map((system) => (
+                        <li key={`${domain.id}-${system.id}-summary`}>
+                          <span className="font-semibold text-neutral-800">{system.title}</span> · {system.integrationCount} flows
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-neutral-500">No monitored flows for this domain.</p>
+                )}
               </div>
             ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {showOverlays ? (
@@ -898,11 +1217,11 @@ function TimelineBands({ bands, activePhase }: { bands: TimelineBand[]; activePh
         <div
           key={band.id}
           className={clsx(
-            "flex-1 rounded-[28px] border border-dashed border-white/40 px-3 py-4",
-            band.id === activePhase ? "bg-emerald-50/60" : "bg-white/20",
+            "flex-1 rounded-[28px] border border-dashed border-neutral-200/70 px-3 py-4",
+            band.id === activePhase ? "bg-emerald-50/80" : "bg-transparent",
           )}
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">{band.label}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-neutral-500">{band.label}</p>
         </div>
       ))}
     </div>

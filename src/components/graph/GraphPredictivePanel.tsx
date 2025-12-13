@@ -13,9 +13,9 @@ interface Props {
 export function GraphPredictivePanel({ scenarios, selectedScenarioId, onSelect, onActivate }: Props) {
   if (!scenarios.length) return null;
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Predictive Sequencer</p>
-      <p className="text-xs text-slate-500">ALE-simulated scenarios based on current sequencing.</p>
+    <section className="rounded-3xl border border-neutral-200 bg-neutral-50/95 p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-neutral-500">Predictive Sequencer</p>
+      <p className="text-xs text-neutral-500">ALE-simulated scenarios based on current sequencing.</p>
       <div className="mt-3 space-y-2">
         {scenarios.map((scenario) => {
           const active = selectedScenarioId === scenario.id;
@@ -26,23 +26,23 @@ export function GraphPredictivePanel({ scenarios, selectedScenarioId, onSelect, 
             <div
               key={scenario.id}
               className={`rounded-2xl border px-3 py-2 text-sm shadow-sm transition ${
-                active ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-white"
+                active ? "border-indigo-500 bg-indigo-50" : "border-neutral-200 bg-white"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="font-semibold text-slate-900">{scenario.title}</p>
-                  <p className="text-xs text-slate-500">{scenario.summary}</p>
+                  <p className="font-semibold text-neutral-900">{scenario.title}</p>
+                  <p className="text-xs text-neutral-500">{scenario.summary}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => onActivate(scenario)}
-                  className="rounded-full bg-slate-900 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white"
+                  className="rounded-full bg-neutral-900 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white"
                 >
                   Apply
                 </button>
               </div>
-              <div className="mt-2 flex flex-wrap gap-3 text-[0.7rem] text-slate-600">
+              <div className="mt-2 flex flex-wrap gap-3 text-[0.7rem] text-neutral-600">
                 <Metric label="Confidence" value={`${Math.round(scenario.confidence * 100)}%`} />
                 <Metric label="ROI delta" value={`${roiDeltaPct}%`} tone={scenario.roiDelta >= 0 ? "pos" : "neg"} />
                 <Metric label="TCC delta" value={`${tccDelta >= 0 ? "+" : ""}${tccDelta.toFixed(1)}M`} tone={tccDelta <= 0 ? "pos" : "neg"} />
@@ -53,7 +53,7 @@ export function GraphPredictivePanel({ scenarios, selectedScenarioId, onSelect, 
                 <button
                   type="button"
                   onClick={() => onSelect(scenario)}
-                  className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-600"
+                  className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-neutral-600"
                 >
                   {active ? "Scenario selected" : "Preview"}
                 </button>
@@ -67,10 +67,10 @@ export function GraphPredictivePanel({ scenarios, selectedScenarioId, onSelect, 
 }
 
 function Metric({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
-  const color = tone === "pos" ? "text-emerald-600" : tone === "neg" ? "text-rose-600" : "text-slate-600";
+  const color = tone === "pos" ? "text-emerald-600" : tone === "neg" ? "text-rose-600" : "text-neutral-600";
   return (
     <div>
-      <p className="text-[0.55rem] uppercase tracking-[0.35em] text-slate-400">{label}</p>
+      <p className="text-[0.55rem] uppercase tracking-[0.35em] text-neutral-400">{label}</p>
       <p className={`text-sm font-semibold ${color}`}>{value}</p>
     </div>
   );

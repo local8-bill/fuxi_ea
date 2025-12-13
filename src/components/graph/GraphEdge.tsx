@@ -15,9 +15,9 @@ export function GraphEdge(props: EdgeProps<GraphEdgeData>) {
       id={id}
       path={path}
       style={{
-        stroke: data?.highlight ? "#059669" : "#cbd5f5",
-        opacity: data?.highlight ? 0.9 : 0.45,
-        strokeWidth: data?.highlight ? 2.4 : 1.2,
+        stroke: data?.highlight ? "#4338CA" : "#D4D4D8",
+        opacity: data?.highlight ? 0.85 : 0.5,
+        strokeWidth: data?.highlight ? 2.4 : 1.25,
       }}
     />
   );

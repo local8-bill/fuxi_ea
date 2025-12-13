@@ -36,6 +36,7 @@ interface SimulationControlsProps {
   extra?: ReactNode;
   storeOverlayEnabled?: boolean;
   onStoreOverlayToggle?: (value: boolean) => void;
+  showTimeline?: boolean;
 }
 
 const SPEED_PRESETS = [
@@ -56,14 +57,15 @@ export function GraphSimulationControls({
   extra,
   storeOverlayEnabled,
   onStoreOverlayToggle,
+  showTimeline = true,
 }: SimulationControlsProps) {
   return (
     <div className="space-y-3">
-      <section className="rounded-[32px] border border-slate-200 bg-white/95 p-4 shadow-sm">
+      <section className="rounded-[32px] border border-neutral-200 bg-neutral-50/95 p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
           <div>
-            <p className="text-[0.55rem] font-semibold uppercase tracking-[0.35em] text-slate-500">Simulation Controls</p>
-            <p className="text-xs text-slate-500">Phase playback · ROI/TCC overlays · stage reveal</p>
+            <p className="text-[0.55rem] font-semibold uppercase tracking-[0.35em] text-neutral-500">Simulation Controls</p>
+            <p className="text-xs text-neutral-500">Phase playback · ROI/TCC overlays · stage reveal</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button
@@ -71,7 +73,7 @@ export function GraphSimulationControls({
               onClick={onToggle}
               className={clsx(
                 "rounded-full px-3 py-1 text-[0.65rem] font-semibold transition",
-                isPlaying ? "bg-rose-100 text-rose-600" : "bg-slate-900 text-white",
+                isPlaying ? "bg-rose-100 text-rose-600" : "bg-neutral-900 text-white",
               )}
             >
               {isPlaying ? "Pause" : "Play"}
@@ -79,7 +81,7 @@ export function GraphSimulationControls({
             <button
               type="button"
               onClick={onStep}
-              className="rounded-full border border-slate-200 px-3 py-1 text-[0.65rem] font-semibold text-slate-700"
+              className="rounded-full border border-neutral-200 px-3 py-1 text-[0.65rem] font-semibold text-neutral-700"
             >
               Step →
             </button>
@@ -87,7 +89,7 @@ export function GraphSimulationControls({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <p className="text-[0.55rem] font-semibold uppercase tracking-[0.35em] text-slate-500">Speed</p>
+          <p className="text-[0.55rem] font-semibold uppercase tracking-[0.35em] text-neutral-500">Speed</p>
           <div className="flex flex-wrap gap-1">
             {SPEED_PRESETS.map((preset) => (
               <button
@@ -96,7 +98,7 @@ export function GraphSimulationControls({
                 onClick={() => onSpeedChange(preset.value)}
                 className={clsx(
                   "rounded-full border px-3 py-1 text-[0.6rem] font-semibold",
-                  speed === preset.value ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600",
+                  speed === preset.value ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white text-neutral-600",
                 )}
               >
                 {preset.label}
@@ -105,42 +107,44 @@ export function GraphSimulationControls({
           </div>
         </div>
 
-        {extra ? <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2 text-xs text-slate-600">{extra}</div> : null}
+        {extra ? <div className="mt-3 rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-600">{extra}</div> : null}
       </section>
 
-      <section className="rounded-[28px] border border-slate-200 bg-white/95 px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
+      {showTimeline ? (
+        <section className="rounded-[28px] border border-neutral-200 bg-neutral-50/95 px-4 py-3 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[0.55rem] font-semibold uppercase tracking-[0.35em] text-slate-500">Timeline</p>
-            <div className="flex flex-wrap gap-2">
-              {phases.map((phase) => (
-                <button
-                  key={phase.id}
-                  type="button"
-                  onClick={() => onScrub(phase.id)}
-                  className={clsx(
-                    "rounded-full border px-4 py-1 text-[0.65rem] font-semibold transition",
-                    activePhase === phase.id ? "border-emerald-500 bg-emerald-600 text-white" : "border-slate-200 bg-white text-slate-600",
-                  )}
-                >
-                  {phase.label}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[0.55rem] font-semibold uppercase tracking-[0.35em] text-neutral-500">Timeline</p>
+              <div className="flex flex-wrap gap-2">
+                {phases.map((phase) => (
+                  <button
+                    key={phase.id}
+                    type="button"
+                    onClick={() => onScrub(phase.id)}
+                    className={clsx(
+                      "rounded-full border px-4 py-1 text-[0.65rem] font-semibold transition",
+                      activePhase === phase.id ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-200 bg-white text-neutral-600",
+                    )}
+                  >
+                    {phase.label}
+                  </button>
+                ))}
+              </div>
             </div>
+            {typeof storeOverlayEnabled === "boolean" && onStoreOverlayToggle ? (
+              <label className="ml-auto flex items-center gap-2 text-[0.65rem] font-semibold text-neutral-600">
+                <input
+                  type="checkbox"
+                  checked={storeOverlayEnabled}
+                  onChange={(event) => onStoreOverlayToggle(event.target.checked)}
+                  className="rounded border-neutral-300 accent-neutral-900"
+                />
+                Store overlay
+              </label>
+            ) : null}
           </div>
-          {typeof storeOverlayEnabled === "boolean" && onStoreOverlayToggle ? (
-            <label className="ml-auto flex items-center gap-2 text-[0.65rem] font-semibold text-slate-600">
-              <input
-                type="checkbox"
-                checked={storeOverlayEnabled}
-                onChange={(event) => onStoreOverlayToggle(event.target.checked)}
-                className="rounded border-slate-300 accent-slate-900"
-              />
-              Store overlay
-            </label>
-          ) : null}
-        </div>
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -153,23 +157,25 @@ interface PhaseInsightStripProps {
 
 export function PhaseInsightStrip({ insights, activePhase, onSelect }: PhaseInsightStripProps) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
-      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-slate-500">Phase ROI Overview</p>
+    <section className="rounded-3xl border border-neutral-200 bg-neutral-50/95 px-4 py-3 shadow-sm">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-neutral-500">Phase ROI Overview</p>
       <div className="mt-3 grid gap-3 md:grid-cols-3">
         {insights.map((insight) => {
           const state = riskState(insight.risk);
           return (
             <button
               key={insight.phase}
+              data-phase-pill
+              data-state={activePhase === insight.phase ? "active" : "default"}
               type="button"
               onClick={() => onSelect(insight.phase)}
               className={`rounded-2xl border px-3 py-2 text-left text-sm shadow-sm ${
-                activePhase === insight.phase ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-white"
+                activePhase === insight.phase ? "border-indigo-500 bg-indigo-50" : "border-neutral-200 bg-white"
               }`}
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">{insight.label}</p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">{(insight.roi * 100).toFixed(0)}% ROI</p>
-              <p className="text-xs text-slate-500">TCC ${(insight.tcc ?? 0).toFixed(1)}M</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-500">{insight.label}</p>
+              <p className="mt-1 text-lg font-semibold text-neutral-900">{(insight.roi * 100).toFixed(0)}% ROI</p>
+              <p className="text-xs text-neutral-500">TCC ${(insight.tcc ?? 0).toFixed(1)}M</p>
               <p className={`text-xs font-semibold ${state.className}`}>{state.label} risk</p>
             </button>
           );

@@ -21,13 +21,25 @@ function riskToState(value?: number) {
   return { label: "Low", className: "text-emerald-600" };
 }
 
+type IntegrationSummary = {
+  flow_id: string;
+  system_from: string;
+  system_to: string;
+  status?: string;
+  env?: string;
+  latency_ms?: number;
+  error_rate?: number;
+  direction?: "source" | "target";
+};
+
 export type NodeInspectorProps = {
   nodeName?: string | null;
   domain?: string | null;
   tags?: string[] | null;
+  integrations?: IntegrationSummary[] | null;
 };
 
-export function NodeInspector({ nodeName, domain, tags }: NodeInspectorProps) {
+export function NodeInspector({ nodeName, domain, tags, integrations }: NodeInspectorProps) {
   const primaryName = nodeName ?? "No node selected";
   const tagEntries = (tags ?? []).map((tag) => ({ tag, corpus: corpusMap.get(tag) }));
   const highestRisk = tagEntries
@@ -41,13 +53,13 @@ export function NodeInspector({ nodeName, domain, tags }: NodeInspectorProps) {
     .slice(0, 2);
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm">
-      <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-slate-500">Node Inspector</p>
-      <p className="mt-1 text-lg font-semibold text-slate-900">{primaryName}</p>
-      {domain ? <p className="text-xs text-slate-500">Domain · {domain}</p> : null}
+    <section className="rounded-3xl border border-neutral-200 bg-neutral-50/95 p-4 shadow-sm">
+      <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-neutral-500">Node Inspector</p>
+      <p className="mt-1 text-lg font-semibold text-neutral-900">{primaryName}</p>
+      {domain ? <p className="text-xs text-neutral-500">Domain · {domain}</p> : null}
 
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">ALE Reasoning Context</p>
+      <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-500">ALE Reasoning Context</p>
         {tagEntries.length ? (
           <ul className="mt-2 space-y-1 text-sm text-slate-700">
             {tagEntries.map((entry) => (
@@ -65,8 +77,8 @@ export function NodeInspector({ nodeName, domain, tags }: NodeInspectorProps) {
         <p className={clsx("mt-3 text-sm font-semibold", state.className)}>Risk: {state.label}</p>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Recent Insights</p>
+      <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-500">Recent Insights</p>
         {recentInsights.length ? (
           <ul className="mt-2 space-y-1 text-sm text-slate-700">
             {recentInsights.map((entry) => (
@@ -80,6 +92,25 @@ export function NodeInspector({ nodeName, domain, tags }: NodeInspectorProps) {
           <p className="mt-2 text-sm text-slate-500">No learning events yet.</p>
         )}
       </div>
+
+      {integrations?.length ? (
+        <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-500">Integration telemetry</p>
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
+            {integrations.slice(0, 3).map((flow) => (
+              <li key={`${flow.flow_id}-${flow.direction ?? "both"}`}>
+                <p className="font-semibold">
+                  {flow.direction === "source" ? "→" : flow.direction === "target" ? "←" : "↔"} {flow.direction === "source" ? flow.system_to : flow.system_from}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {flow.env ?? "prod"} · {flow.status ?? "unknown"} · Lat {Math.round(flow.latency_ms ?? 0)}ms · Errors{" "}
+                  {typeof flow.error_rate === "number" ? `${(flow.error_rate * 100).toFixed(1)}%` : "—"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -16,12 +16,14 @@
   --fx-radius-sm: 8px;
   --fx-radius-md: 12px;
   --fx-shadow: 0 8px 24px rgba(0,0,0,.06);
+  --font-shadcn: "Inter", "SF Pro Display", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 * { box-sizing: border-box; }
 html, body {
-  margin: 0; padding: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-shadcn), ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
 /* UI primitives */
@@ -140,4 +142,20 @@ h2.text-base:hover {
 /* Fuxi: hide all native file inputs; we use custom pill uploaders instead */
 input[type="file"] {
   display: none;
+}
+
+@keyframes roiPulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+.animate-roiPulse {
+  animation: roiPulse 1.5s ease-in-out infinite;
 }
