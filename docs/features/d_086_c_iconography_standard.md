@@ -1,63 +1,80 @@
-## Directive D086 Sprint Roadmap – Core UX and Graph Stabilization
+## Directive D086C – Iconography Standard (Final)
 
-### 🧭 Objective
-Unify the Digital Twin → Sequencer experience, stabilize OMS graph data, and complete the Shadcn transition in a clean, linear sequence. No creative deviations or feature expansion — this sprint focuses purely on structure, clarity, and performance.
+### 🎨 Purpose
+Establish a consistent, professional, and engineering-grade iconography system across all Fuxi scenes, rails, and templates. This directive replaces all legacy icons and ensures uniform tone, geometry, and technical clarity.
 
----
-
-### 🧩 Execution Order
-
-#### **1️⃣ D086A – Digital Twin / OMS Scene Stabilization**
-- **Objective:** Lock the core experience (graph + OMS data + Twin → Sequencer bridge).
-- **Tasks:**
-  - Clean up harmonized data (no ghosts, consistent domains).
-  - Normalize node grammar and system state logic.
-  - Verify snapshot → refresh flow consistency.
-- **Done when:** Graph looks correct, scene transitions smoothly, and the harmonized data pipeline works end-to-end.
+**No creative substitutions. No gradients. No cartoon elements.**
 
 ---
 
-#### **2️⃣ D086B – Graph UX Simplification + Template Wiring**
-- **Objective:** Move prototype to Shadcn-based layout template.
-- **Tasks:**
-  - Implement minimal Shadcn skeleton (Scene + Rails + Graph container).
-  - Remove all legacy prototype CSS, pills, and gradients.
-  - Add placeholder for “Build a Sequence” dialog (no logic yet).
-- **Done when:** Graph renders cleanly in new shell using standard components only.
+### 🔧 Technical Source
+- **Primary Library:** `lucide-react` (via Shadcn/UI)
+- **Secondary (optional):** custom engineering icons in `/src/components/ui/icons/`
+- **Style Rules:**
+  - Stroke weight: **1.5px** (consistent across all)
+  - Default size: **16px** inline, **20px** for navigation
+  - Color: `--foreground` for default, `--accent-foreground` for hover/active
+  - Alignment: vertical center; 4px margin spacing left/right
+  - **No gradients, no drop shadows, no color fills**
 
 ---
 
-#### **3️⃣ D086C – Sidebar + Iconography Standard**
-- **Objective:** Unify navigation (left + top) under Shadcn components.
-- **Tasks:**
-  - Apply 240 px sidebar normalization globally.
-  - Run breakpoint verification checklist (1920 → 768 px).
-  - Validate chevrons, theme toggle, and icon pack consistency.
-- **Done when:** All scenes share the same sidebar + header, with no overlap or layout shift.
+### 🗂️ Approved Icon Set (Lucide IDs)
+| Concept | Icon Name | Lucide ID | Notes |
+|----------|------------|------------|--------|
+| **Navigation / Home** | Home | `Home` | Primary entry point icon |
+| **Digital Twin** | Network | `Network` | Represents ecosystem view |
+| **Sequencer** | Workflow | `Workflow` | Process and phase modeling |
+| **ROI / TCC** | Trending Up | `TrendingUp` | Performance and outcomes |
+| **Insights** | Lightbulb | `Lightbulb` | Discovery, intelligence cue |
+| **Intelligence** | Brain | `Brain` | Cognitive / organizational lens |
+| **ALE Engine** | CPU | `Cpu` | Learning / reasoning engine |
+| **Settings** | Cog | `Settings` | Universal control icon |
+| **Theme Toggle** | Half Moon | `SunMoon` | Light/dark mode toggle |
+| **Collapse / Expand** | Chevrons | `ChevronLeft` / `ChevronRight` | Rail controls |
 
 ---
 
-#### **4️⃣ D086B (Deferred) – Shadcn Refresh + Visual Polish**
-- **Objective:** Re-enable theme and variant exploration once the core flow is stable.
-- **Status:** Deferred until D086A–C complete.
+### 🔄 Implementation Example
+```tsx
+import { Home, Network, Workflow, TrendingUp } from "lucide-react";
+
+function NavItem({ icon: Icon, label }: { icon: any; label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+      <Icon size={16} strokeWidth={1.5} />
+      <span>{label}</span>
+    </div>
+  );
+}
+```
 
 ---
 
-### 🧱 Branches & Owners
-| Branch | Owner | Status |
-|---------|--------|---------|
-| `feature/d086a_oms_scene_stabilization` | dx | In progress |
-| `feature/d086b_graph_ux_template` | dx | Pending wiring |
-| `feature/d086c_sidebar_standardization` | dx | Testing width normalization |
+### 🔍 Visual Reference (QA)
+A monochrome grid of the approved Lucide icons is stored at:
+```
+/public/assets/style/iconography_reference.png
+```
+Use this for verification and onboarding documentation only. No UI embedding required.
 
 ---
 
-### ✅ Completion Criteria
-- OMS graph, Digital Twin, and Sequencer share consistent layout + behavior.
-- Shadcn-based template verified and responsive.
-- Sidebar and iconography standardized at 240 px width.
-- No duplicate CSS, no ghost components, no prototype overlap.
+### 🔹 Integration Guidance
+- All nav and rail components must use this registry.
+- Replace legacy `SidebarIcon`, `UXShellIcon`, and SVG assets.
+- Maintain consistent hover/active visual tone with Shadcn theme tokens.
+- Reference icons through `src/components/ui/icons.tsx` registry.
 
-**Approvers:** Bill (Agent Z), dx  
-**Tracking Folder:** `docs/features/086/`
+---
 
+### 🔍 Completion Criteria
+- Lucide icons installed and standardized.
+- Legacy icons removed from `/public/icons/` and `src/components/uxshell/icons/`.
+- All scenes (Twin, Sequencer, Intelligence, ALE) use approved icon mapping.
+- Visual grid exported and linked in documentation.
+- Validation script added to ensure only approved Lucide IDs are imported.
+
+**Branch:** `feature/086c_iconography_standard`  
+**Dependencies:** `D086B_Shadecn_Refresh`, `D087C_Theme_Test_Harness`  
+**Approvers:** Agent Z (Bill), dx

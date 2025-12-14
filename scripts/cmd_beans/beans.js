@@ -81,6 +81,14 @@ const beans = [
     cmd: "npm run dev:scene-template",
     desc: "Run the standalone SceneLayout sandbox at /dev/scene-template (D087F).",
   },
+  {
+    cmd: "npm run dev:theme -- --base [theme]",
+    desc: "Apply a ShadCN/Tailwind base palette (zinc, slate, stone, indigo, sky, neutral).",
+  },
+  {
+    cmd: "npm run dev:theme:ui",
+    desc: "Launch the /dev/theme-switcher harness to preview themes interactively.",
+  },
 ];
 
 console.log("🍛 Command beans (common dev commands):\n");

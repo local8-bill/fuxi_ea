@@ -60,6 +60,11 @@ export async function POST(req: NextRequest) {
     } else {
       session = { context: 'onboarding', projectId, answers: {}, completed: false, behavioralInsights: { questionCount: 0, motivationIndicators: [] } };
     }
+    if (!session.behavioralInsights) {
+      session.behavioralInsights = { questionCount: 0, motivationIndicators: [] };
+    } else if (!session.behavioralInsights.motivationIndicators) {
+      session.behavioralInsights.motivationIndicators = [];
+    }
 
     // Load intents
     const intents = JSON.parse(fs.readFileSync(onboardingIntentsPath, 'utf8'));

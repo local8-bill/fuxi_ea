@@ -30,6 +30,7 @@ export type GraphNodeData = {
   viewMode: GraphViewMode;
   phaseLabel?: string | null;
   stageLabel?: string | null;
+  icon?: string;
 };
 
 function formatMetric(viewMode: GraphViewMode, data?: GraphNodeData["metrics"], domain?: string) {
@@ -59,31 +60,37 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
     const accent = getDomainAccent(data.domain);
     const overlayActive = Boolean(data.overlay);
     return (
-      <div
-        data-graph-node="domain"
-        className={clsx(
-          "h-full w-full rounded-2xl border border-slate-200 bg-white/95 p-4 text-left shadow-sm transition",
-          data.dimmed && "opacity-50",
-        )}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-base font-semibold text-slate-900">{data.label}</p>
-            <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Domain</p>
+      <div data-graph-node="domain" data-font-version="v2" className={clsx("h-full w-full overflow-hidden rounded-3xl border bg-white shadow-sm transition", data.dimmed && "opacity-50")}>
+        <div className="h-1.5 w-full" style={{ backgroundColor: accent }} />
+        <div className="p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xl font-semibold text-neutral-900">{data.label}</p>
+              <p className="text-xs uppercase tracking-[0.25em] text-neutral-500">Domain</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {typeof data.hiddenCount === "number" && data.hiddenCount > 0 ? (
+                <span className="rounded-full border border-neutral-200 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-neutral-500">
+                  +{data.hiddenCount}
+                </span>
+              ) : null}
+              <span className="rounded-full border border-neutral-200 px-3 py-0.5 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-neutral-500">
+                Domain
+              </span>
+            </div>
           </div>
-          {typeof data.hiddenCount === "number" && data.hiddenCount > 0 ? (
-            <span className="rounded-full border border-slate-200 px-3 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-500">
-              +{data.hiddenCount}
-            </span>
+          {overlayActive ? (
+            <p className="mt-4 text-sm text-emerald-800">
+              Monitoring {data.integrationTotal ?? 0} {data.integrationTotal === 1 ? "flow" : "flows"} across this domain.
+            </p>
           ) : null}
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
-          <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">
+        <div className="px-5 pb-5 text-xs text-neutral-600">
+          <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-neutral-500">
             {overlayActive ? "Monitoring" : "Flows"} · {data.integrationTotal ?? 0}
           </span>
-          {overlayActive ? <span className="text-emerald-600">Overlay active</span> : <span>Shell focus</span>}
         </div>
-        <div className="mt-4 h-1 rounded-full" style={{ backgroundColor: accent }} />
+        <div className="h-1 w-full" style={{ backgroundColor: accent }} />
       </div>
     );
   }
@@ -97,43 +104,44 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
   if (data.stageLabel) subtitleParts.push(data.stageLabel);
   const subtitle = subtitleParts.length ? subtitleParts.join(" · ") : data.domain;
   const accentStyle: CSSProperties = { borderColor: accent };
-  const selectionShadow =
-    data.highlight || selected ? { boxShadow: `0 0 0 2px ${accent}` } : undefined;
+  const selectionShadow = data.highlight || selected ? { boxShadow: `0 0 0 2px ${accent}` } : undefined;
   return (
     <div
       data-graph-node="system"
+      data-font-version="v2"
       className={clsx(
-        "pointer-events-auto rounded-2xl border border-slate-200 bg-white/95 px-3 py-3 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        "pointer-events-auto overflow-hidden rounded-lg border bg-white text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
         overlayActive && (data.metrics?.integrations ?? 0) > 0 && "ring-1 ring-emerald-200/80",
         data.dimmed && "opacity-40",
       )}
-      style={{ ...selectionShadow, ...accentStyle }}
+      style={{ ...accentStyle, ...selectionShadow }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-900">{data.label}</p>
-          {subtitle ? <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-500">{subtitle}</p> : null}
+      <div className="h-1.5 w-full" style={{ backgroundColor: accent }} />
+      <div className="px-4 py-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[15px] font-semibold leading-tight text-neutral-950">{data.label}</p>
+            {subtitle ? <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">{subtitle}</p> : null}
+          </div>
+          {metric ? <p className="text-sm font-semibold text-neutral-600">{metric}</p> : null}
         </div>
-        {metric ? <span className="text-[0.7rem] font-semibold text-slate-600">{metric}</span> : null}
+        {overlayActive && typeof data.metrics?.integrations === "number" ? (
+          <p className="mt-2 text-xs uppercase tracking-[0.25em] text-emerald-600">Integrations · {data.metrics.integrations}</p>
+        ) : null}
+        {data.badges?.length ? (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {data.badges.map((badge, idx) => (
+              <span
+                key={`${data.label}-badge-${idx}`}
+                className={clsx("rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em]", badgeTone(badge.tone))}
+              >
+                {badge.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
-      {overlayActive && typeof data.metrics?.integrations === "number" ? (
-        <p className="mt-2 text-[0.6rem] uppercase tracking-[0.3em] text-emerald-600">
-          Integrations · {data.metrics.integrations}
-        </p>
-      ) : null}
-      {data.badges?.length ? (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {data.badges.map((badge, idx) => (
-            <span
-              key={`${data.label}-badge-${idx}`}
-              className={clsx("rounded-full border border-slate-200 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.25em]", badgeTone(badge.tone))}
-            >
-              {badge.label}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      <div className="mt-3 h-1 rounded-full" style={{ backgroundColor: roiColor }} aria-hidden />
+      <div className={clsx("h-1 w-full", shouldPulseRoi(data.metrics?.roi) && "animate-roiPulse")} style={{ backgroundColor: roiColor }} aria-hidden />
     </div>
   );
 }

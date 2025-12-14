@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { Suspense, type ReactElement } from "react";
 import { ExperienceShell } from "@/components/experience/ExperienceShell";
 
 interface PageProps {
@@ -9,5 +9,9 @@ export default async function ExperiencePage({ params }: PageProps): Promise<Rea
   const resolved = await params;
   const rawId = resolved?.id ?? "demo";
   const projectId = typeof rawId === "string" && rawId !== "undefined" ? rawId : "demo";
-  return <ExperienceShell projectId={projectId} />;
+  return (
+    <Suspense fallback={null}>
+      <ExperienceShell projectId={projectId} />
+    </Suspense>
+  );
 }

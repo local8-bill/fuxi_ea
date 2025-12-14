@@ -22,7 +22,17 @@ function getSessionId(): string {
   return next;
 }
 
+const TELEMETRY_ENABLED =
+  process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_ENABLE_DEV_TELEMETRY === "true";
+
 async function postTelemetry(payload: TelemetryPayload, debug: boolean) {
+  if (!TELEMETRY_ENABLED) {
+    if (debug) {
+      // eslint-disable-next-line no-console
+      console.info("[telemetry] skipped (disabled in dev)", payload.event_type);
+    }
+    return;
+  }
   if (debug) {
     // eslint-disable-next-line no-console
     console.info("[telemetry] sending", payload);

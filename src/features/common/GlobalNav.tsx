@@ -14,17 +14,26 @@ export function GlobalNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  if (searchParams?.get("embed") === "1") {
+  if (searchParams?.get("embed") === "1" || pathname?.startsWith("/dev/")) {
     return null;
   }
 
   // Try to extract /project/[id]/... from the current path
   let projectId: string | null = null;
   if (pathname) {
-    const match = pathname.match(/^\/project\/([^\/]+)/);
+    const match = pathname.match(/^\/project\/([^/]+)/);
     if (match && match[1]) {
       projectId = decodeURIComponent(match[1]);
     }
+  }
+  if (!projectId) {
+    const queryProject = searchParams?.get("project") ?? searchParams?.get("projectId");
+    if (queryProject) {
+      projectId = queryProject;
+    }
+  }
+  if (!projectId && pathname?.startsWith("/dev/graph-prototype")) {
+    projectId = "700am";
   }
 
   // Icons aligned with left-rail semantics

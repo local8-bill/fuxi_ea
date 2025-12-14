@@ -1,7 +1,7 @@
 "use client";
 
-import { XMarkIcon } from "@heroicons/react/24/outline";
 import type { ReactNode } from "react";
+import { Icons } from "@/components/ui/icons";
 
 interface AgentPreviewCardProps {
   title: string;
@@ -29,7 +29,7 @@ export function AgentPreviewCard({ title, summary, ctaLabel, icon, onAccept, onD
           onClick={onDismiss}
           className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
         >
-          <XMarkIcon className="h-4 w-4" aria-hidden />
+          <Icons.close className="h-4 w-4" strokeWidth={1.5} aria-hidden />
         </button>
       </div>
       <p className="mt-2 text-sm text-slate-600">{summary}</p>

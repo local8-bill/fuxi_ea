@@ -1,140 +1,130 @@
-import fs from "node:fs/promises";
+import { NextResponse } from "next/server";
 import path from "node:path";
-import { NextRequest, NextResponse } from "next/server";
+import { appendFile, mkdir } from "node:fs/promises";
 import type { IntentEventOMS } from "@/lib/sequencer/types";
 
-export const runtime = "nodejs";
+const REGION_ALIASES: Array<{ match: RegExp; value: string }> = [
+  { match: /\bcanada\b/i, value: "Canada" },
+  { match: /\bna\b|\bnorth america\b/i, value: "NA" },
+  { match: /\bemea\b|\beurope\b/i, value: "EMEA" },
+  { match: /\bapac\b|\basia\b/i, value: "APAC" },
+  { match: /\bglobal\b/i, value: "Global" },
+];
 
-const REGION_TOKENS: Record<string, string> = {
-  canada: "Canada",
-  na: "North America",
-  emea: "EMEA",
-  apac: "APAC",
-  global: "Global",
+const CHANNEL_ALIAS_MAP: Record<string, string> = {
+  b2b: "b2b",
+  "b2c": "b2c",
+  retail: "retail",
+  stores: "retail",
+  commerce: "b2c",
 };
 
-const CHANNEL_TOKENS: Record<string, string[]> = {
-  b2b: ["b2b", "business to business"],
-  b2c: ["b2c", "business to consumer"],
-  retail: ["retail", "store", "stores"],
+const PHASE_TIMELINE_MAP: Record<string, string> = {
+  "1": "fy26",
+  "2": "fy27",
+  "3": "fy28",
 };
 
-const ACTION_TOKENS: Record<string, IntentEventOMS["payload"]["action"]> = {
-  decouple: "decouple",
-  remove: "decouple",
-  drop: "decouple",
-  prioritize: "prioritize",
-  focus: "focus",
-};
+const LOG_PATH = path.join(process.cwd(), ".fuxi", "logs", "intent_oms_pilot.ndjson");
 
-const BACKUP_LOG = "/tmp/intent_oms_pilot.log";
+export async function POST(request: Request) {
+  const payload = await request.json().catch(() => ({}));
+  const command = typeof payload?.command === "string" ? payload.command.trim() : "";
+  if (!command) {
+    return NextResponse.json({ error: "Command is required" }, { status: 400 });
+  }
 
-export async function POST(req: NextRequest) {
   try {
-    const { command } = await req.json();
-    if (!command || typeof command !== "string") {
-      return NextResponse.json({ error: "command is required" }, { status: 400 });
-    }
-
-    const normalized = command.replace(/^\/intent/i, "").trim().toLowerCase();
-    if (!normalized) {
-      return NextResponse.json({ error: "command is required" }, { status: 400 });
-    }
-
-    const region = detectRegion(normalized);
-    const { phase, timeline } = detectPhase(normalized);
-    const channels = detectChannels(normalized);
-    const { action, target } = detectAction(normalized);
-
-    const event: IntentEventOMS = {
-      type: "intent:oms-sequence",
-      payload: {
-        region,
-        phase,
-        channels,
-        action,
-        target,
-        timeline,
-      },
-    };
-
-    await appendLog(command, event);
-
+    const event = parseIntentCommand(command);
+    await logIntent(command, event);
     return NextResponse.json({ event });
   } catch (error: any) {
-    console.error("[/api/intent/parse] error", error);
-    return NextResponse.json({ error: error?.message ?? "Unexpected error" }, { status: 500 });
+    return NextResponse.json({ error: error?.message ?? "Unable to parse intent" }, { status: 422 });
   }
 }
 
-function detectRegion(text: string) {
-  for (const [token, label] of Object.entries(REGION_TOKENS)) {
-    if (text.includes(token)) return label;
-  }
-  return "Global";
+function parseIntentCommand(command: string): IntentEventOMS {
+  const withoutPrefix = command.replace(/^\/?intent\s*/i, "").trim();
+  const normalized = withoutPrefix.toLowerCase();
+
+  const region = detectRegion(normalized);
+  const channels = detectChannels(normalized);
+  const { timeline, phase } = detectPhaseAndTimeline(normalized);
+  const actionInfo = detectAction(command, normalized);
+
+  if (!withoutPrefix) throw new Error("No intent instructions provided");
+
+  return {
+    type: "intent:oms-sequence",
+    payload: {
+      region,
+      phase,
+      channels,
+      timeline,
+      action: actionInfo?.action,
+      target: actionInfo?.target,
+    },
+  };
 }
 
-function detectPhase(text: string) {
-  const phaseMatch = text.match(/phase\s*(\d)/);
-  if (phaseMatch) {
-    const phase = `Phase ${phaseMatch[1]}`;
-    return { phase, timeline: phase.toLowerCase() };
+function detectRegion(text: string): string {
+  for (const entry of REGION_ALIASES) {
+    if (entry.match.test(text)) return entry.value;
   }
-
-  const fyMatch = text.match(/fy(\d{2})/);
-  if (fyMatch) {
-    const year = `FY${fyMatch[1]}`;
-    return { phase: year.toLowerCase(), timeline: year };
-  }
-
-  return { phase: "phase 1", timeline: "phase 1" };
+  return "Canada";
 }
 
-function detectChannels(text: string) {
-  const detected = new Set<string>();
-  for (const [channel, tokens] of Object.entries(CHANNEL_TOKENS)) {
-    if (tokens.some((token) => text.includes(token))) detected.add(channel);
+function detectChannels(text: string): string[] {
+  const set = new Set<string>();
+  for (const [alias, canonical] of Object.entries(CHANNEL_ALIAS_MAP)) {
+    if (text.includes(alias)) set.add(canonical);
   }
+  if (!set.size) {
+    set.add("b2b");
+    set.add("b2c");
+  }
+  return Array.from(set);
+}
 
-  if (!detected.size) {
-    const withMatch = text.match(/with\s+([a-z0-9+\s]+)/);
-    if (withMatch) {
-      withMatch[1]
-        .split(/[+,&]/)
-        .map((part) => part.trim())
-        .filter(Boolean)
-        .forEach((part) => {
-          if (part === "b2b" || part === "b2c") detected.add(part);
-        });
+function detectPhaseAndTimeline(text: string): { phase: string; timeline: string } {
+  const timelineMatch = text.match(/fy\s?(\d{2})/i);
+  const phaseMatch = text.match(/phase\s*(\d+)/i);
+  const timeline = timelineMatch ? `fy${timelineMatch[1]}`.toLowerCase() : phaseMatch ? PHASE_TIMELINE_MAP[phaseMatch[1]] : undefined;
+  const resolvedTimeline = timeline ?? "fy26";
+  return {
+    phase: resolvedTimeline,
+    timeline: resolvedTimeline,
+  };
+}
+
+function detectAction(rawCommand: string, normalized: string):
+  | { action: IntentEventOMS["payload"]["action"]; target?: string }
+  | undefined {
+  const match = rawCommand.match(/(decouple|remove|drop)\s+([A-Za-z0-9/&\-\s]+)/i);
+  if (match) {
+    const target = match[2].split(/[,.;]/)[0]?.trim();
+    if (target) {
+      return {
+        action: "decouple",
+        target,
+      };
     }
   }
-
-  return detected.size ? Array.from(detected) : ["b2b"];
-}
-
-function detectAction(text: string) {
-  for (const [token, action] of Object.entries(ACTION_TOKENS)) {
-    const index = text.indexOf(token);
-    if (index === -1) continue;
-    const remainder = text.slice(index + token.length).trim();
-    const target = remainder.split(/[\s,]/).filter(Boolean)[0];
-    return { action, target: target ? target.toUpperCase() : undefined };
+  if (normalized.includes("prioritize")) {
+    return { action: "prioritize" };
   }
-  return { action: undefined, target: undefined };
+  if (normalized.includes("focus")) {
+    return { action: "focus" };
+  }
+  return undefined;
 }
 
-async function appendLog(command: string, event: IntentEventOMS) {
+async function logIntent(command: string, event: IntentEventOMS) {
   try {
-    const line = JSON.stringify({ command, event, timestamp: new Date().toISOString() });
-    await fs.appendFile(BACKUP_LOG, `${line}\n`);
+    await mkdir(path.dirname(LOG_PATH), { recursive: true });
+    const entry = { ts: new Date().toISOString(), command, event };
+    await appendFile(LOG_PATH, `${JSON.stringify(entry)}\n`);
   } catch (error) {
-    // fallback: try writing to project tmp folder if /tmp unavailable
-    try {
-      const fallback = path.resolve(process.cwd(), ".tmp", "intent_oms_pilot.log");
-      await fs.mkdir(path.dirname(fallback), { recursive: true });
-      await fs.appendFile(fallback, `${new Date().toISOString()} ${command}\n`);
-    } catch {
-      // silently ignore logging failures
-    }
+    console.warn("Unable to persist intent log", error);
   }
 }

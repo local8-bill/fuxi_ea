@@ -7,7 +7,6 @@ import { Sidebar, type Mode } from "../uxshell/Sidebar";
 import { PromptBar } from "../uxshell/PromptBar";
 import { emitTelemetry } from "../uxshell/telemetry";
 import ROISummaryEmbed from "../uxshell/embeds/ROISummaryEmbed";
-import SequencerEmbed from "../uxshell/embeds/SequencerEmbed";
 import ReviewEmbed from "../uxshell/embeds/ReviewEmbed";
 import { AgentPreviewCard } from "../agent/AgentPreviewCard";
 import { ConversationalAgent } from "../ConversationalAgent";
@@ -27,6 +26,9 @@ import { getCurrentMode, switchMode } from "@/lib/context/modeSwitcher";
 import { AdaptiveSignalsPanel } from "@/components/learning/AdaptiveSignalsPanel";
 import { useLearningSnapshot, type LearningSnapshot } from "@/hooks/useLearningSnapshot";
 import { TipsOverlay } from "../agent/TipsOverlay";
+import { SceneManagerProvider, TransitionOrchestrator, useSceneManager, useSceneTelemetry, type SceneType } from "@/lib/scene";
+import { aleContextStore } from "@/lib/ale/contextStore";
+import { SequencerScene } from "@/app/project/[id]/sequencer/SequencerScene";
 
 const sceneMeta: Record<ExperienceScene, { title: string; summary: string }> = {
   command: { title: "Command Deck", summary: "Resume where you left off or ask the agent what's next." },
@@ -38,10 +40,19 @@ const sceneMeta: Record<ExperienceScene, { title: string; summary: string }> = {
   insights: { title: "Insights", summary: "Summaries, impact, and friction hot spots." },
 };
 
+const experienceSceneBridge: Partial<Record<ExperienceScene, SceneType>> = {
+  digital: "digitalTwin",
+  sequencer: "sequence",
+  roi: "roi",
+  insights: "intelligence",
+};
+
 export function ExperienceShell({ projectId }: { projectId: string }) {
   return (
     <AgentMemoryProvider projectId={projectId}>
-      <ExperienceBody projectId={projectId} />
+      <SceneManagerProvider>
+        <ExperienceBody projectId={projectId} />
+      </SceneManagerProvider>
     </AgentMemoryProvider>
   );
 }
@@ -52,7 +63,6 @@ function ExperienceBody({ projectId }: { projectId: string }) {
   const { scene, setScene } = useExperienceFlow(projectId);
   const telemetry = useTelemetry("experience_shell", { projectId });
   const [mode, setMode] = useState<Mode>("Architect");
-  const sidebarRef = useRef<HTMLDivElement | null>(null);
   const [agentMode, setAgentMode] = useAgentModePreference("deck");
   const [pendingAgentPrompt, setPendingAgentPrompt] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -60,11 +70,15 @@ function ExperienceBody({ projectId }: { projectId: string }) {
   const { snapshot: learningSnapshot } = useLearningSnapshot(projectId);
   const [initialSceneTs] = useState(() => Date.now());
   const sceneTimingRef = useRef<{ scene: ExperienceScene; ts: number }>({ scene, ts: initialSceneTs });
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
   const genome = useUserGenome();
   const updateGenome = useUserGenome((state) => state.updateGenome);
   useAgentMemory();
   const [showTips, setShowTips] = useState(false);
   const tipsSourceRef = useRef<"auto" | "manual" | "command" | "debug" | null>(null);
+  const setSceneManagerState = useSceneManager((state) => state.setScene);
+  const orchestratedScene = experienceSceneBridge[scene] ?? null;
+  useSceneTelemetry(orchestratedScene ?? null, { projectId });
 
   const intelligenceFocus = searchParams?.get("focus");
 
@@ -85,6 +99,11 @@ function ExperienceBody({ projectId }: { projectId: string }) {
       window.localStorage.setItem("fuxi_tips_seen", "1");
     }
   }, [showTips, telemetry]);
+
+  useEffect(() => {
+    if (!orchestratedScene) return;
+    setSceneManagerState(orchestratedScene, "experience_shell_sync");
+  }, [orchestratedScene, setSceneManagerState]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -108,6 +127,24 @@ function ExperienceBody({ projectId }: { projectId: string }) {
       openTips("auto");
     }
   }, [openTips, telemetry]);
+
+  const renderOrchestratedScene = useCallback(
+    (sceneKey: SceneType) => {
+      switch (sceneKey) {
+        case "digitalTwin":
+          return <DigitalEnterpriseClient projectId={projectId} learningSnapshot={learningSnapshot} />;
+        case "sequence":
+          return <SequencerScene projectId={projectId} />;
+        case "roi":
+          return <ROIScene projectId={projectId} />;
+        case "intelligence":
+          return <InsightsScene projectId={projectId} />;
+        default:
+          return null;
+      }
+    },
+    [learningSnapshot, projectId],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +182,30 @@ function ExperienceBody({ projectId }: { projectId: string }) {
       cancelled = true;
     };
   }, [updateGenome]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    aleContextStore.loadFromCache();
+    let cancelled = false;
+    const fetchContext = async () => {
+      try {
+        const res = await fetch(`/api/ale/context?workspace=digital_enterprise&project=${encodeURIComponent(projectId)}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled) {
+          aleContextStore.initialize(json);
+        }
+      } catch {
+        // silent fail; shell will retry on next interval
+      }
+    };
+    fetchContext();
+    const refreshId = window.setInterval(fetchContext, 1000 * 60 * 60 * 12);
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshId);
+    };
+  }, [projectId]);
 
   useEffect(() => {
     const queryScene = searchParams?.get("scene") as ExperienceScene | null;
@@ -356,11 +417,8 @@ function ExperienceBody({ projectId }: { projectId: string }) {
             <CommandDeckScene projectId={projectId} onNavigate={handleSceneChange} role={genome.role} motivation={genome.motivation} learningSnapshot={learningSnapshot} />
           )}
           {scene === "onboarding" && <AgentOnboardingScene projectId={projectId} onComplete={() => handleSceneChange("digital")} />}
-          {scene === "digital" && <DigitalEnterpriseClient projectId={projectId} learningSnapshot={learningSnapshot} />}
-          {scene === "roi" && <ROIScene projectId={projectId} />}
-          {scene === "sequencer" && <SequencerEmbed projectId={projectId} />}
+          {orchestratedScene ? <TransitionOrchestrator renderScene={renderOrchestratedScene} /> : null}
           {scene === "review" && <ReviewEmbed projectId={projectId} />}
-          {scene === "insights" && <InsightsScene projectId={projectId} />}
         </div>
         {scene !== "digital" ? (
           <div className="space-y-4">

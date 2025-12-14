@@ -1,12 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { NavSection, NavItem } from "./NavSection";
 import { useChevronNav } from "@/hooks/useChevronNav";
 import { emitTelemetry } from "./telemetry";
 import { pushWithContext } from "@/lib/navigation/pushWithContext";
 import { setExperienceScene, type ExperienceScene } from "@/hooks/useExperienceFlow";
-import { useEffect, useState } from "react";
+import { Icons, type IconType } from "@/components/ui/icons";
 
 export type Mode = "Architect" | "Analyst" | "CFO" | "FP&A" | "CIO";
 
@@ -34,19 +35,19 @@ const roiViews = [
   { key: "roi-new", label: "+ New ROI", roiId: "new" },
 ];
 
-type ViewShortcut = { key: string; icon: string; label: string; scene: ExperienceScene };
+type ViewShortcut = { key: string; Icon: IconType; label: string; scene: ExperienceScene };
 
 const viewShortcuts: ViewShortcut[] = [
-  { key: "view-digital", icon: "∞", label: "Digital Twin", scene: "digital" },
-  { key: "view-sequencer", icon: "⇄", label: "Sequencer", scene: "sequencer" },
-  { key: "view-review", icon: "✓", label: "Review", scene: "review" },
+  { key: "view-digital", Icon: Icons.graph, label: "Digital Twin", scene: "digital" },
+  { key: "view-sequencer", Icon: Icons.sequencer, label: "Sequencer", scene: "sequencer" },
+  { key: "view-review", Icon: Icons.intelligence, label: "Review", scene: "review" },
 ];
 
 const intelligenceShortcuts = [
-  { key: "intel-activity", label: "User Activity", icon: "◎", focus: "activity" },
-  { key: "intel-engagement", label: "User Engagement", icon: "◎", focus: "engagement" },
-  { key: "intel-actions", label: "User Actions", icon: "◎", focus: "actions" },
-  { key: "intel-reports", label: "Org Intelligence Reports", icon: "◎", focus: "reports" },
+  { key: "intel-activity", label: "User Activity", Icon: Icons.insights, focus: "activity" },
+  { key: "intel-engagement", label: "User Engagement", Icon: Icons.insights, focus: "engagement" },
+  { key: "intel-actions", label: "User Actions", Icon: Icons.insights, focus: "actions" },
+  { key: "intel-reports", label: "Org Intelligence Reports", Icon: Icons.intelligence, focus: "reports" },
 ] as const;
 
 const modes: Mode[] = ["Architect", "Analyst", "CFO", "FP&A", "CIO"];
@@ -68,6 +69,7 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
   const targetProject = currentProjectId || projectId;
   const { expandedMain, roiExpanded, activeItem, toggleMain, toggleRoi, selectItem } = useChevronNav(projectId);
   const [projectOptions, setProjectOptions] = useState<ProjectOption[]>(FALLBACK_PROJECTS);
+  const derivedViewKey = viewShortcuts.find((view) => view.scene === currentView)?.key ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +87,7 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
           setProjectOptions(list);
         }
       } catch {
-        // ignore
+        // ignore failures, fall back to defaults
       }
     };
     void loadProjects();
@@ -110,8 +112,10 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
     router.push("/home");
   };
 
-  const handleViewRoute = (key: string, scene: string) => {
-    if (activeItem === key) {
+  const handleViewRoute = (key: string, scene: string, options?: { shortcut?: boolean }) => {
+    const isShortcut = Boolean(options?.shortcut);
+    const isActive = isShortcut ? derivedViewKey === key : activeItem === key;
+    if (isActive) {
       scrollToTop();
       void emitTelemetry("uxshell_click", { projectId, section: "Views", item: key, action: "scroll_top" });
       return;
@@ -176,7 +180,7 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
       <NavSection title="VIEWS" isExpanded={expandedMain === "Views"} onToggle={() => toggleMain("Views")} disableIndent>
         <button
           type="button"
-          aria-label="Σ ROI"
+          aria-label="ROI"
           onClick={toggleRoi}
           className="flex w-full items-center gap-2 rounded-lg px-2 py-[6px] text-[12px] font-semibold text-slate-800 transition hover:bg-neutral-100"
         >
@@ -184,7 +188,7 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
             {roiExpanded ? "▾" : "▸"}
           </span>
           <span className="flex items-center gap-1 text-[11px]">
-            <span className="text-base">Σ</span>
+            <Icons.roi size={16} strokeWidth={1.5} aria-hidden />
             <span>ROI</span>
           </span>
         </button>
@@ -193,7 +197,7 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
             <NavItem
               key={view.key}
               label={view.label}
-              icon="Σ"
+              icon={<Icons.roi size={14} strokeWidth={1.5} />}
               isActive={activeItem === view.key}
               inset
               testId={`view-${view.key}`}
@@ -201,16 +205,19 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
             />
           ))}
 
-        {viewShortcuts.map((view) => (
-          <NavItem
-            key={view.key}
-            label={view.label}
-            icon={view.icon}
-            isActive={activeItem === view.key}
-            testId={`view-${view.key}`}
-            onClick={() => handleViewRoute(view.key, view.scene)}
-          />
-        ))}
+        {viewShortcuts.map((view) => {
+          const ShortcutIcon = view.Icon;
+          return (
+            <NavItem
+              key={view.key}
+              label={view.label}
+              icon={<ShortcutIcon size={14} strokeWidth={1.5} />}
+              isActive={currentView === view.scene}
+              testId={`view-${view.key}`}
+              onClick={() => handleViewRoute(view.key, view.scene, { shortcut: true })}
+            />
+          );
+        })}
       </NavSection>
 
       <NavSection
@@ -230,9 +237,8 @@ export function Sidebar({ projectId, currentProjectId, currentView, currentFocus
         onToggle={() => toggleMain("Intelligence")}
         items={intelligenceShortcuts.map((item) => ({
           label: item.label,
-          icon: item.icon,
-          isActive:
-            (activeItem === item.key && currentView === "insights") || currentFocus === item.focus,
+          icon: <item.Icon size={14} strokeWidth={1.5} />,
+          isActive: (activeItem === item.key && currentView === "insights") || currentFocus === item.focus,
           onClick: () => handleIntelligenceRoute(item.key, item.focus),
           testId: item.key,
         }))}

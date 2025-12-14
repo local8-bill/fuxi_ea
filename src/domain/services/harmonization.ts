@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { recordTelemetry } from "@/lib/telemetry/server";
+import { recordTelemetry } from "../../lib/telemetry/server";
 
 type Source = "Lucid" | "Inventory" | "Future";
 
