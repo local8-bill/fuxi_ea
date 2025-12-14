@@ -43,6 +43,14 @@ const beans = [
     cmd: "node scripts/dev/compute_learning_metrics.js",
     desc: "Read the current demo learning metrics snapshot (confidence/velocity/maturity).",
   },
+  {
+    cmd: "npm run dev:theme -- --base [theme]",
+    desc: "Apply a ShadCN/Tailwind base palette (zinc, slate, stone, indigo, sky, neutral).",
+  },
+  {
+    cmd: "npm run dev:theme:ui",
+    desc: "Launch the /dev/theme-switcher harness to preview themes interactively.",
+  },
 ];
 
 console.log("🍛 Command beans (common dev commands):\n");

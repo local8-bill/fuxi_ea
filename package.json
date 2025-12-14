@@ -7,6 +7,8 @@
     "dev:nuke": "rimraf .next .turbo && next dev",
     "dev:first": "node scripts/reset_home_session.js && npm run dev:nuke",
     "dev:lan": "bash scripts/dev_lan.sh",
+    "dev:theme": "node scripts/dev/apply_theme.js",
+    "dev:theme:ui": "next dev -p 3100",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
@@ -23,7 +25,6 @@
     "verify:telemetry": "node scripts/verify_telemetry_events.js"
   },
   "dependencies": {
-    "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-avatar": "^1.1.11",
@@ -57,6 +58,7 @@
     "cytoscape-edgehandles": "^4.0.1",
     "cytoscape-sbgn-stylesheet": "^4.0.2",
     "dagre": "^0.8.5",
+    "framer-motion": "^12.23.26",
     "lucide-react": "^0.552.0",
     "next": "16.0.1",
     "openai": "^6.9.1",
@@ -71,7 +73,8 @@
     "uuid": "^13.0.0",
     "vercel": "^48.9.0",
     "xlsx": "^0.18.5",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

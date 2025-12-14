@@ -55,6 +55,7 @@ interface GraphCanvasProps {
   systemDepthLimit?: number;
   expandedDomains?: Set<string> | string[] | null;
   domainIconMap?: Record<string, string>;
+  fitViewKey?: string | number;
 }
 
 const DEFAULT_DOMAIN_WIDTH = 600;
@@ -307,6 +308,7 @@ export function GraphCanvas({
   systemDepthLimit,
   expandedDomains,
   domainIconMap,
+  fitViewKey,
 }: GraphCanvasProps) {
   const highlightSet = useMemo(() => convertHighlight(highlightNodeIds), [highlightNodeIds]);
   const expandedDomainSet = useMemo(() => convertDomainSet(expandedDomains), [expandedDomains]);
@@ -372,7 +374,7 @@ export function GraphCanvas({
   useEffect(() => {
     if (!flowInstance) return;
     flowInstance.fitView({ padding: fitViewPadding, duration: 600 });
-  }, [flowInstance, fitViewPadding]);
+  }, [flowInstance, fitViewPadding, fitViewKey]);
 
   return (
     <div className="relative rounded-[32px] border border-neutral-200 bg-neutral-50 shadow-lg shadow-slate-900/5" style={{ height }}>

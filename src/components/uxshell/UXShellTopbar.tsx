@@ -2,15 +2,8 @@
 
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Bars3Icon,
-  GlobeAltIcon,
-  HomeIcon,
-  MagnifyingGlassIcon,
-  RectangleGroupIcon,
-  RectangleStackIcon,
-  Squares2X2Icon,
-} from "@heroicons/react/24/outline";
+import type { IconType } from "@/components/ui/icons";
+import { Icons } from "@/components/ui/icons";
 import { useAgentMemory } from "@/hooks/useAgentMemory";
 import { pushWithContext } from "@/lib/navigation/pushWithContext";
 import { emitTelemetry } from "./telemetry";
@@ -20,48 +13,48 @@ type NavIconConfig = {
   label: string;
   targetView?: "graph" | "roi" | "sequencer" | "review";
   buildHref: (projectId: string) => string;
-  Icon: typeof GlobeAltIcon;
+  Icon: IconType;
 };
 
 const navIcons: NavIconConfig[] = [
   {
     key: "graph",
     label: "Digital Enterprise",
-    Icon: GlobeAltIcon,
+    Icon: Icons.graph,
     targetView: "graph",
     buildHref: (projectId) => `/project/${projectId}/experience?scene=digital`,
   },
   {
     key: "roi",
     label: "ROI Dashboard",
-    Icon: RectangleGroupIcon,
+    Icon: Icons.roi,
     targetView: "roi",
     buildHref: (projectId) => `/project/${projectId}/experience?scene=roi`,
   },
   {
     key: "sequencer",
     label: "Sequencer",
-    Icon: Squares2X2Icon,
+    Icon: Icons.sequencer,
     targetView: "sequencer",
     buildHref: (projectId) => `/project/${projectId}/experience?scene=sequencer`,
   },
   {
     key: "review",
     label: "Review",
-    Icon: RectangleStackIcon,
+    Icon: Icons.intelligence,
     targetView: "review",
     buildHref: (projectId) => `/project/${projectId}/experience?scene=review`,
   },
   {
     key: "search",
     label: "Insights",
-    Icon: MagnifyingGlassIcon,
+    Icon: Icons.search,
     buildHref: (projectId) => `/project/${projectId}/insights`,
   },
   {
     key: "home",
     label: "Home",
-    Icon: HomeIcon,
+    Icon: Icons.home,
     buildHref: (projectId) => `/project/${projectId}/experience?scene=command`,
   },
 ];
@@ -92,7 +85,7 @@ export function UXShellTopbar({ showShortcuts = true, onTips }: { showShortcuts?
     <header className="uxshell-topbar">
       <div className="uxshell-topbar-inner text-white">
         <div className="flex items-center gap-3">
-          <Bars3Icon className="h-5 w-5" aria-hidden />
+          <Icons.menu className="h-5 w-5" strokeWidth={1.5} aria-hidden />
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-slate-300">Fuxi · Enterprise Engine</p>
             <p className="text-sm font-semibold">Unified Experience Shell</p>
@@ -114,7 +107,7 @@ export function UXShellTopbar({ showShortcuts = true, onTips }: { showShortcuts?
                   aria-label={`${config.label} shortcut`}
                   title={config.label}
                 >
-                  <Icon className="h-4 w-4" aria-hidden />
+                  <Icon size={16} strokeWidth={1.5} aria-hidden />
                 </button>
               );
             })}
@@ -122,11 +115,12 @@ export function UXShellTopbar({ showShortcuts = true, onTips }: { showShortcuts?
               <button
                 type="button"
                 onClick={() => onTips()}
-                className="rounded-xl px-3 py-1 text-xs font-semibold tracking-wide text-slate-100 transition hover:bg-white/10"
+                className="flex items-center gap-1 rounded-xl px-3 py-1 text-xs font-semibold tracking-wide text-slate-100 transition hover:bg-white/10"
                 aria-label="Tips overlay"
                 title="Tips overlay"
               >
-                💡 Tips
+                <Icons.insights size={16} strokeWidth={1.5} aria-hidden />
+                Tips
               </button>
             ) : null}
           </div>

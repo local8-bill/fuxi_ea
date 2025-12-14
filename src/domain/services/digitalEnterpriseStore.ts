@@ -5,7 +5,7 @@ import type {
   LucidEdge,
   LucidParseResult,
 } from "./lucidIngestion";
-import { loadValidated } from "@/lib/schema/loaders";
+import { loadValidated } from "../../lib/schema/loaders";
 
 interface StoredDigitalEnterpriseView extends LucidParseResult {
   uploadedAt: string;

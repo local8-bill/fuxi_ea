@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import clsx from "clsx";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
 import { NodeInspector } from "@/components/graph/NodeInspector";
 import { GraphSimulationControls, PhaseInsightStrip, type GraphTimelineBand, type PhaseInsight } from "@/components/graph/GraphSimulationControls";
@@ -9,6 +10,8 @@ import { GraphSequencerPanel, GraphEventConsole, type GraphSequencerItem } from 
 import { GraphPredictivePanel } from "@/components/graph/GraphPredictivePanel";
 import { GraphFinancialSummary, type PhaseFinancialSummary } from "@/components/graph/GraphFinancialSummary";
 import { GraphTransitionCompare, type TransitionPath } from "@/components/graph/GraphTransitionCompare";
+import { GraphControlPanel } from "@/components/graph/GraphLayoutSection";
+import { Icons } from "@/components/ui/icons";
 import sequencerDataset from "@/data/sequencer.json";
 import roiSummaryData from "@/data/roi_tcc_summary.json";
 import type { LivingMapData, LivingNode } from "@/types/livingMap";
@@ -23,6 +26,11 @@ import type { LearningSnapshot } from "@/hooks/useLearningSnapshot";
 import type { GraphFocus, GraphRevealStage, GraphViewMode } from "@/hooks/useGraphTelemetry";
 import { useGraphTelemetry } from "@/hooks/useGraphTelemetry";
 import { usePredictiveScenarios } from "@/hooks/usePredictiveScenarios";
+import { Rail } from "@/components/layout/Rail";
+import { Stage } from "@/components/layout/Stage";
+import { OptionMenu } from "@/components/layout/OptionMenu";
+import { useALEContext } from "@/lib/ale/contextStore";
+import { useExperienceFlow, type ExperienceScene } from "@/hooks/useExperienceFlow";
 
 interface DigitalEnterpriseStats {
   systemsFuture: number;
@@ -78,6 +86,8 @@ const FOCUS_LENSES: Array<{ type: FocusType; label: string }> = [
   { type: "goal", label: "By Goal" },
 ];
 
+const DIGITAL_TWIN_DENOISE_MODE = true;
+
 const PLATFORM_OPTIONS = ["ERP", "Commerce", "CRM", "Data", "Supply Chain"];
 const GOAL_OPTIONS = ["Modernization", "Cost", "ROI"];
 
@@ -86,6 +96,24 @@ const GOAL_HEURISTICS: Record<string, (node: LivingNode) => number> = {
   cost: (node) => node.integrationCount ?? 0,
   roi: (node) => node.roiScore ?? 0,
 };
+
+const LEFT_RAIL_STORAGE_KEY = "digital_twin_left_rail";
+const RIGHT_RAIL_STORAGE_KEY = "digital_twin_right_rail";
+
+const VIEW_MODE_OPTIONS: Array<{ id: GraphViewMode; label: string }> = [
+  { id: "systems", label: "Systems" },
+  { id: "domain", label: "Domain" },
+  { id: "roi", label: "ROI" },
+  { id: "sequencer", label: "Sequencer" },
+  { id: "capabilities", label: "Capabilities" },
+];
+
+const STAGE_OPTIONS: Array<{ id: GraphRevealStage; label: string; helper: string }> = [
+  { id: "orientation", label: "Orientation", helper: "Calm" },
+  { id: "exploration", label: "Exploration", helper: "Curious" },
+  { id: "connectivity", label: "Connectivity", helper: "Energized" },
+  { id: "insight", label: "Insight", helper: "Analytical" },
+];
 
 const DOMAIN_ALE_TAGS: Record<string, string[]> = {
   commerce: ["inventory_visibility_dependency", "temporary_integration_path"],
@@ -153,7 +181,7 @@ function buildLivingMapData(view: { nodes?: any[]; edges?: any[] }): LivingMapDa
 function buildInsight(role: string, motivation: string, systemName: string, peerName: string, tone: string) {
   const base = role.toLowerCase().includes("cfo")
     ? `From a finance lens, ${systemName} and ${peerName} create duplicate run costs.`
-    : `The ${systemName} → ${peerName} path is carrying redundant flows.`;
+    : `The ${systemName} -> ${peerName} path is carrying redundant flows.`;
   const toneSuffix = tone === "empathetic" ? " I can soften the rollout if you need." : tone === "analytical" ? " Let's quantify the delta next." : " Ready to act when you are.";
   return `${base} Aligning this connection accelerates ${motivation.toLowerCase()}.${toneSuffix}`;
 }
@@ -161,8 +189,11 @@ function buildInsight(role: string, motivation: string, systemName: string, peer
 export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnapshot }: Props) {
   const { log: logTelemetry } = useTelemetry("digital_twin", { projectId });
   const searchParams = useSearchParams();
+  const router = useRouter();
   const isEmbed = searchParams.get("embed") === "1";
   const { role, motivation, interactionStyle, preferredTone } = useUserGenome();
+  const aleContext = useALEContext();
+  const { setScene: setExperienceScene } = useExperienceFlow(projectId);
 
   const [stats, setStats] = useState<DigitalEnterpriseStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -175,6 +206,15 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   const [graphRevealed, setGraphRevealed] = useState(false);
   const [graphViewMode, setGraphViewMode] = useState<GraphViewMode>("systems");
   const [revealStage, setRevealStage] = useState<GraphRevealStage>("orientation");
+  const [leftRailCollapsed, setLeftRailCollapsed] = useState(false);
+  const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
+  const [graphSource, setGraphSource] = useState<"live" | "snapshot" | null>(null);
+  const [graphSnapshotLabel, setGraphSnapshotLabel] = useState<string | null>(null);
+  const snapshotInputRef = useRef<HTMLInputElement | null>(null);
+  const [sequencePromptOpen, setSequencePromptOpen] = useState(false);
+  const [sequencePromptValue, setSequencePromptValue] = useState("Replace OMS globally by 2029.");
+  const [sequenceSubmitting, setSequenceSubmitting] = useState(false);
+  const [sequenceError, setSequenceError] = useState<string | null>(null);
   const [activePhase, setActivePhase] = useState(DIGITAL_TWIN_TIMELINE[0]?.id ?? "fy26");
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(2600);
@@ -266,7 +306,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   const transitionPaths = useMemo<TransitionPath[]>(() => (roiSummaryData.paths ?? []) as TransitionPath[], []);
   const [activeTransitionPathId, setActiveTransitionPathId] = useState<string | null>(() => transitionPaths[0]?.id ?? null);
   const logLearningEvent = useCallback((code: string, details?: Record<string, unknown>) => {
-    setEventLog((prev) => [`${new Date().toLocaleTimeString()} · ${code}`, ...prev].slice(0, 6));
+    setEventLog((prev) => [`${new Date().toLocaleTimeString()} - ${code}`, ...prev].slice(0, 6));
     void fetch("/api/ale/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -503,6 +543,8 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
       }
       const json = await res.json();
       setGraphData(buildLivingMapData(json));
+      setGraphSource("live");
+      setGraphSnapshotLabel(null);
     } catch (err: any) {
       setGraphError(err?.message ?? "Failed to load graph data.");
       setGraphData(null);
@@ -511,10 +553,44 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     }
   }, [projectId]);
 
+  const handleSnapshotFile = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      setGraphLoading(true);
+      setGraphError(null);
+      try {
+        const text = await file.text();
+        const json = JSON.parse(text);
+        const built = buildLivingMapData(json);
+        setGraphData(built);
+        setGraphSource("snapshot");
+        setGraphSnapshotLabel(file.name);
+        logTelemetry("digital_twin.snapshot_loaded", { file: file.name, nodes: built.nodes.length, edges: built.edges.length });
+      } catch (err: any) {
+        setGraphError(err?.message ?? "Unable to read snapshot file.");
+      } finally {
+        setGraphLoading(false);
+        event.target.value = "";
+      }
+    },
+    [logTelemetry],
+  );
+
   useEffect(() => {
     loadStats();
     loadGraph();
   }, [loadStats, loadGraph]);
+
+  const handleLoadLiveData = useCallback(() => {
+    logTelemetry("digital_twin.load_live_data", { projectId });
+    void loadGraph();
+  }, [loadGraph, logTelemetry, projectId]);
+
+  const handleLoadSnapshotClick = useCallback(() => {
+    logTelemetry("digital_twin.load_snapshot_click", { projectId });
+    snapshotInputRef.current?.click();
+  }, [projectId]);
 
   useEffect(() => {
     if (focusPromptLogged.current || graphLoading) return;
@@ -555,6 +631,24 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   useEffect(() => {
     graphTelemetry.trackStage(revealStage);
   }, [graphTelemetry, revealStage]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedLeft = window.localStorage.getItem(LEFT_RAIL_STORAGE_KEY);
+    const storedRight = window.localStorage.getItem(RIGHT_RAIL_STORAGE_KEY);
+    if (storedLeft) setLeftRailCollapsed(storedLeft === "1");
+    if (storedRight) setRightRailCollapsed(storedRight === "1");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(LEFT_RAIL_STORAGE_KEY, leftRailCollapsed ? "1" : "0");
+  }, [leftRailCollapsed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(RIGHT_RAIL_STORAGE_KEY, rightRailCollapsed ? "1" : "0");
+  }, [rightRailCollapsed]);
 
   const advanceFlow = useCallback(
     (next: FlowStep) => {
@@ -624,6 +718,88 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     advanceFlow("insight");
   };
 
+  const navigateToScene = useCallback(
+    (targetScene: ExperienceScene, extras?: Record<string, string>) => {
+      setExperienceScene(targetScene);
+      const params = new URLSearchParams();
+      params.set("scene", targetScene);
+      if (extras) {
+        Object.entries(extras).forEach(([key, value]) => {
+          if (value != null) {
+            params.set(key, value);
+          }
+        });
+      }
+      router.push(`/project/${projectId}/experience?${params.toString()}`, { scroll: false });
+    },
+    [projectId, router, setExperienceScene],
+  );
+
+  const handleOptionMenuAction = useCallback(
+    (actionId: string) => {
+      if (actionId === "sequence") {
+        setSequencePromptOpen(true);
+        setSequenceError(null);
+        logTelemetry("digital_twin.sequence_prompt_opened", { projectId });
+        return;
+      }
+      if (actionId === "harmonize") {
+        logTelemetry("digital_twin.option_harmonize", { projectId });
+        navigateToScene("review");
+        return;
+      }
+      if (actionId === "view") {
+        logTelemetry("digital_twin.option_add_view", { projectId });
+        navigateToScene("digital", { lens: "custom" });
+      }
+    },
+    [logTelemetry, navigateToScene, projectId],
+  );
+
+  const closeSequencePrompt = useCallback(() => {
+    setSequencePromptOpen(false);
+    setSequenceError(null);
+  }, []);
+
+  const handleSequenceSubmit = useCallback(async () => {
+    const intent = sequencePromptValue.trim();
+    if (!intent) {
+      setSequenceError("Describe what you want to modernize.");
+      return;
+    }
+    setSequenceSubmitting(true);
+    setSequenceError(null);
+    try {
+      await fetch("/api/intent/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: intent, projectId }),
+      }).catch(() => null);
+      if (typeof window !== "undefined") {
+        const payload = {
+          projectId,
+          prompt: intent,
+          graph: livingMapData,
+          aleContext,
+          source: graphSource ?? "live",
+          snapshotLabel: graphSnapshotLabel,
+          timestamp: Date.now(),
+        };
+        try {
+          window.sessionStorage.setItem("fuxi_sequence_intent", JSON.stringify(payload));
+        } catch {
+          // ignore storage quota constraints
+        }
+        logTelemetry("digital_twin.sequence_intent_generated", { projectId, nodes: livingMapData.nodes.length, edges: livingMapData.edges.length });
+        navigateToScene("sequencer");
+      }
+    } catch (err: any) {
+      setSequenceError(err?.message ?? "Unable to build a sequence right now.");
+    } finally {
+      setSequenceSubmitting(false);
+    }
+  }, [aleContext, graphSnapshotLabel, graphSource, livingMapData, logTelemetry, navigateToScene, projectId, sequencePromptValue]);
+
   const handleGraphViewModeChange = (mode: GraphViewMode) => {
     setGraphViewMode(mode);
     logTelemetry("digital_twin.view_mode_changed", { mode });
@@ -631,6 +807,22 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
 
   const handleRevealStageChange = (stage: GraphRevealStage) => {
     setRevealStage(stage);
+  };
+
+  const handleLeftRailToggle = () => {
+    setLeftRailCollapsed((prev) => {
+      const next = !prev;
+      logTelemetry("digital_twin.rail_toggle", { rail: "left", collapsed: next });
+      return next;
+    });
+  };
+
+  const handleRightRailToggle = () => {
+    setRightRailCollapsed((prev) => {
+      const next = !prev;
+      logTelemetry("digital_twin.rail_toggle", { rail: "right", collapsed: next });
+      return next;
+    });
   };
 
   const focusSummary = useMemo(() => {
@@ -641,7 +833,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
         : `${selectedFocusValue} ${focusType === "platform" ? "platform" : "domain"}`;
     if (!selectedSystem) return `Scanning the ${label}. Pick a system to zoom in.`;
     if (!selectedIntegration) return `Tracing ${selectedSystem.label}. Choose an adjacent integration to inspect.`;
-    return `Highlighting ${selectedSystem.label} ↔ ${selectedIntegration.peerLabel}. Ready for the next move?`;
+    return `Highlighting ${selectedSystem.label} <-> ${selectedIntegration.peerLabel}. Ready for the next move?`;
   }, [selectedFocusValue, focusType, selectedSystem, selectedIntegration]);
 
   const lensPrompt =
@@ -659,7 +851,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
         : "Select the integration that needs clarity.",
     insight:
       interactionStyle === "narrative"
-        ? "Here’s the insight I generated. Want me to route it somewhere?"
+        ? "Here's the insight I generated. Want me to route it somewhere?"
         : "Insight ready. Where should I send you next?",
   };
 
@@ -738,12 +930,277 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     }
   };
 
-  return (
-    <div className={isEmbed ? "px-4 py-6" : "px-6 pt-2 pb-6"}>
-      {statsError && (
-        <div className="mb-4">
-          <ErrorBanner message={statsError} onRetry={loadStats} />
+  const leftRailPanels = (
+    <div className="space-y-4">
+      <GraphControlPanel title="Guided Focus">
+        <p className="text-xs text-slate-500">{promptsByRole[flowStep]}</p>
+        <p className="mt-1 text-sm text-slate-800">{focusSummary}</p>
+        <div className="mt-3 space-y-3">{renderFlowButtons()}</div>
+      </GraphControlPanel>
+      <GraphControlPanel title="View Mode">
+        <div className="flex flex-wrap gap-2">
+          {VIEW_MODE_OPTIONS.map((option) => {
+            const isActive = graphViewMode === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => handleGraphViewModeChange(option.id)}
+                className={clsx(
+                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                  isActive ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-900",
+                )}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
+      </GraphControlPanel>
+      <GraphControlPanel title="Reveal States">
+        <div className="space-y-2">
+          {STAGE_OPTIONS.map((stageOption) => {
+            const isActive = revealStage === stageOption.id;
+            return (
+              <button
+                key={stageOption.id}
+                type="button"
+                onClick={() => handleRevealStageChange(stageOption.id)}
+                className={clsx(
+                  "w-full rounded-2xl border px-3 py-2 text-left transition",
+                  isActive ? "border-emerald-600 bg-emerald-50 text-emerald-900" : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400",
+                )}
+              >
+                <p className="text-sm font-semibold">{stageOption.label}</p>
+                <p className="text-[0.7rem] uppercase tracking-[0.25em] text-neutral-500">{stageOption.helper}</p>
+              </button>
+            );
+          })}
+        </div>
+      </GraphControlPanel>
+      {focusPulse ? (
+        <GraphControlPanel title="Focus Pulse">
+          <dl className="space-y-2 text-sm text-slate-600">
+            <div className="flex items-center justify-between">
+              <dt>Systems in lens</dt>
+              <dd className="font-semibold text-slate-900">{focusPulse.systems}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt>Integrations</dt>
+              <dd className="font-semibold text-slate-900">{focusPulse.integrations}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt>Overlap index</dt>
+              <dd className="font-semibold text-slate-900">{focusPulse.overlap}</dd>
+            </div>
+          </dl>
+        </GraphControlPanel>
+      ) : null}
+    </div>
+  );
+
+  const rightRailPanels = (
+    <div className="space-y-4">
+      <GraphSequencerPanel
+        sequence={sequence}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        activePhase={activePhase}
+        onSimulate={(phase) => handlePhaseChange(phase)}
+        onTogglePlayback={handlePlaybackToggle}
+        isPlaying={isPlaying}
+      />
+      <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={inspectorTags} />
+      <GraphEventConsole events={eventLog} emptyMessage="Interact with the sequencer or graph to log learning." />
+      <GraphPredictivePanel scenarios={predictiveScenarios} selectedScenarioId={selectedScenarioId} onSelect={handleScenarioSelect} onActivate={handleScenarioActivate} />
+      <GraphFinancialSummary phases={financialPhases} activePhase={activePhase} />
+      {transitionPaths.length ? <GraphTransitionCompare paths={transitionPaths} activePathId={activeTransitionPathId} onSelect={handleTransitionPathSelect} /> : null}
+      <AdaptiveSignalsPanel snapshot={learningSnapshot} title="Adaptive Signals" subtitle="Digital twin" />
+    </div>
+  );
+
+  const railStateKey = `${leftRailCollapsed ? "1" : "0"}-${rightRailCollapsed ? "1" : "0"}`;
+
+  const sequencePromptOverlay = sequencePromptOpen ? (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4 py-8">
+      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Build a Sequence</p>
+            <h3 className="text-xl font-semibold text-slate-900">Describe the modernization goal</h3>
+          </div>
+          <button type="button" className="text-sm text-slate-500 hover:text-slate-900" onClick={closeSequencePrompt}>
+            Close
+          </button>
+        </div>
+        <p className="mt-2 text-sm text-slate-600">We'll analyze the harmonized graph + ALE context and open the Sequencer with a generated plan.</p>
+        <textarea
+          className="mt-4 h-32 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+          value={sequencePromptValue}
+          onChange={(event) => setSequencePromptValue(event.target.value)}
+          placeholder="Replace OMS globally by 2029..."
+        />
+        {sequenceError ? <p className="mt-2 text-sm text-rose-600">{sequenceError}</p> : null}
+        <div className="mt-5 flex items-center justify-between text-xs text-slate-500">
+          <span>ALE context: {aleContext ? "Connected" : "Initializing..."}</span>
+          <span>Graph source: {graphSource === "snapshot" ? graphSnapshotLabel ?? "Snapshot" : "Live"}</span>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-full border border-slate-200 px-4 py-1.5 text-sm font-semibold text-slate-700 hover:border-slate-400"
+            onClick={closeSequencePrompt}
+            disabled={sequenceSubmitting}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="rounded-full bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={handleSequenceSubmit}
+            disabled={sequenceSubmitting}
+          >
+            {sequenceSubmitting ? "Generating..." : "Generate Sequence"}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  if (DIGITAL_TWIN_DENOISE_MODE) {
+    const denoiseView = (
+      <Fragment>
+        <div className={isEmbed ? "px-4 py-6" : "px-6 pt-4 pb-8"}>
+          {statsError ? (
+            <div className="mb-4">
+              <ErrorBanner message={statsError} onRetry={loadStats} />
+            </div>
+          ) : null}
+          <div className="mb-6 rounded-3xl border border-slate-200/60 bg-white/70 px-4 py-3 shadow-sm backdrop-blur">
+            <p className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Digital Twin</p>
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-700">
+              <span>Enterprise OMS Transformation Graph - v{DIGITAL_TWIN_VERSION}</span>
+              <span className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">
+                Focus: {selectedFocusValue ? selectedFocusValue : "None selected"}
+              </span>
+            </div>
+          </div>
+          {graphError ? (
+            <Card className="mb-4 border-rose-200 bg-rose-50">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-rose-700">{graphError}</p>
+                <button type="button" className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white" onClick={loadGraph}>
+                  Retry
+                </button>
+              </div>
+            </Card>
+          ) : null}
+          <div className="flex gap-4">
+            <Rail side="left" collapsed={leftRailCollapsed} onToggle={handleLeftRailToggle} title="Data">
+              <input ref={snapshotInputRef} type="file" accept="application/json" className="hidden" onChange={handleSnapshotFile} />
+              <div className="space-y-4 text-sm text-white">
+                <div className="space-y-2">
+                  <button type="button" onClick={handleLoadLiveData} className="w-full rounded-xl border border-white/20 px-3 py-2 text-left font-semibold transition hover:bg-white/10">
+                    Load Live Data
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLoadSnapshotClick}
+                    className="w-full rounded-xl border border-white/20 px-3 py-2 text-left font-semibold transition hover:bg-white/10"
+                  >
+                    Load Snapshot (.json)
+                  </button>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80">
+                  <p className="font-semibold uppercase tracking-[0.3em] text-white/60">Current Source</p>
+                  <p className="mt-1 text-sm text-white">
+                    {graphSource === "snapshot" ? graphSnapshotLabel ?? "Snapshot" : graphSource === "live" ? "Live (API)" : "Not loaded"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80">
+                  <p className="font-semibold uppercase tracking-[0.3em] text-white/60">ALE Context</p>
+                  <p className="mt-1 text-sm text-white">{aleContext ? "Connected" : "Initializing..."}</p>
+                </div>
+              </div>
+            </Rail>
+            <div className="flex-1">
+              <Stage padded={false}>
+                <div className="border-b border-white/10 px-6 py-4 text-white">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-400">Systems - Integrations</p>
+                      <h2 className="text-2xl font-semibold">Harmonized enterprise map</h2>
+                    </div>
+                    <div className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-white/80">{graphViewMode.toUpperCase()}</div>
+                  </div>
+                </div>
+                <div className="flex-1 p-4">
+                  <div className="rounded-2xl border border-white/10 bg-[#10101c] p-3">
+                    {graphLoading && <div className="py-40 text-center text-sm text-white/70">Loading digital twin map...</div>}
+                    {!graphLoading && hasGraph ? (
+                      <GraphCanvas
+                        nodes={livingMapData.nodes}
+                        edges={livingMapData.edges}
+                        focus={graphFocus}
+                        focusLabel={selectedFocusValue}
+                        focusSummary={focusSummary}
+                        viewMode={graphViewMode}
+                        stage={revealStage}
+                        highlightNodeIds={highlightNodeIds ?? undefined}
+                        selectedNodeId={selectedSystemId}
+                        onNodeSelect={(nodeId) => {
+                          if (!nodeId) {
+                            setSelectedSystemId(null);
+                            setSelectedIntegration(null);
+                            return;
+                          }
+                          handleSystemSelect(nodeId);
+                        }}
+                        onViewModeChange={handleGraphViewModeChange}
+                        onStageChange={handleRevealStageChange}
+                        height={isEmbed ? 520 : 760}
+                        projectId={projectId}
+                        scenarioPhase={activeScenario?.phase ?? null}
+                        sequence={sequence}
+                        showCanvasControls={false}
+                        domainColumns={3}
+                        systemColumns={2}
+                        domainWidth={420}
+                        domainHorizontalGap={48}
+                        domainVerticalGap={120}
+                        domainPaddingX={24}
+                        domainPaddingY={48}
+                        systemCellHeight={190}
+                        domainMinHeight={520}
+                        systemColumnGap={12}
+                        fitViewPadding={0.08}
+                        fitViewKey={railStateKey}
+                      />
+                    ) : (
+                      !graphLoading && <div className="py-36 text-center text-sm text-white/70">No harmonized systems yet. Import data to populate the graph.</div>
+                    )}
+                  </div>
+                </div>
+              </Stage>
+            </div>
+            <Rail side="right" collapsed={rightRailCollapsed} onToggle={handleRightRailToggle} title="Option Menu">
+              <OptionMenu onAction={handleOptionMenuAction} />
+            </Rail>
+          </div>
+        </div>
+        {sequencePromptOverlay}
+      </Fragment>
+    );
+    return denoiseView;
+  }
+  return (
+    <Fragment>
+      <div className={isEmbed ? "px-4 py-6" : "px-6 pt-2 pb-6"}>
+        {statsError && (
+          <div className="mb-4">
+            <ErrorBanner message={statsError} onRetry={loadStats} />
+          </div>
       )}
       <section className="space-y-4">
         <div className="space-y-4">
@@ -786,7 +1243,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
               extra={
                 activeScenario ? (
                   <p className="text-[0.7rem] text-slate-500">
-                    Scenario: <span className="font-semibold text-slate-900">{activeScenario.title}</span> — ROI {(activeScenario.roiDelta * 100).toFixed(1)}%, timeline{" "}
+                    Scenario: <span className="font-semibold text-slate-900">{activeScenario.title}</span> -- ROI {(activeScenario.roiDelta * 100).toFixed(1)}%, timeline{" "}
                     {activeScenario.timelineDeltaMonths >= 0 ? "+" : ""}
                     {activeScenario.timelineDeltaMonths} mo
                   </p>
@@ -796,63 +1253,88 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
             <PhaseInsightStrip insights={phaseInsights} activePhase={activePhase} onSelect={(phaseId) => handlePhaseChange(phaseId)} />
           </div>
 
-          <div className={`grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] transition-opacity duration-700 ${graphRevealed ? "opacity-100" : "opacity-0"}`}>
-            <div className="rounded-3xl border border-slate-200 bg-white p-2 shadow-lg min-h-[820px]">
-              {graphLoading && <div className="py-36 text-center text-sm text-slate-500">Loading digital twin map…</div>}
-              {!graphLoading && hasGraph && (
-                <GraphCanvas
-                  nodes={livingMapData.nodes}
-                  edges={livingMapData.edges}
-                  focus={graphFocus}
-                  focusLabel={selectedFocusValue}
-                  focusSummary={focusSummary}
-                  viewMode={graphViewMode}
-                  stage={revealStage}
-                  highlightNodeIds={highlightNodeIds ?? undefined}
-                  selectedNodeId={selectedSystemId}
-                  onNodeSelect={(nodeId) => {
-                    if (!nodeId) {
-                      setSelectedSystemId(null);
-                      setSelectedIntegration(null);
-                      return;
-                    }
-                    handleSystemSelect(nodeId);
-                  }}
-                  onViewModeChange={handleGraphViewModeChange}
-                  onStageChange={handleRevealStageChange}
-                  height={isEmbed ? 560 : 820}
-                  projectId={projectId}
-                  scenarioPhase={activeScenario?.phase ?? null}
-                  sequence={sequence}
-                />
-              )}
-              {!graphLoading && !hasGraph && (
-                <div className="py-20 text-center text-sm text-slate-500">No harmonized systems yet. Import data or run onboarding to populate the graph.</div>
-              )}
-            </div>
-            <div className="space-y-4">
-              <GraphSequencerPanel
-                sequence={sequence}
-                onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
-                onDragEnd={handleDragEnd}
-                activePhase={activePhase}
-                onSimulate={(phase) => handlePhaseChange(phase)}
-                onTogglePlayback={handlePlaybackToggle}
-                isPlaying={isPlaying}
-              />
-              <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={inspectorTags} />
-              <GraphEventConsole events={eventLog} emptyMessage="Interact with the sequencer or graph to log learning." />
-              <GraphPredictivePanel
-                scenarios={predictiveScenarios}
-                selectedScenarioId={selectedScenarioId}
-                onSelect={handleScenarioSelect}
-                onActivate={handleScenarioActivate}
-              />
-              <GraphFinancialSummary phases={financialPhases} activePhase={activePhase} />
-              {transitionPaths.length ? (
-                <GraphTransitionCompare paths={transitionPaths} activePathId={activeTransitionPathId} onSelect={handleTransitionPathSelect} />
-              ) : null}
+          <div className={clsx("transition-opacity duration-700", graphRevealed ? "opacity-100" : "opacity-0")}>
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+              <div className={clsx("relative w-full transition-all duration-300 xl:flex-shrink-0", leftRailCollapsed ? "xl:w-6" : "xl:w-[300px]")}>
+                {!leftRailCollapsed ? leftRailPanels : null}
+                {(() => {
+                  const LeftChevronIcon = leftRailCollapsed ? Icons.chevronRight : Icons.chevronLeft;
+                  return (
+                <button
+                  type="button"
+                  onClick={handleLeftRailToggle}
+                  className="absolute -right-3 top-4 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-600 shadow"
+                  aria-label={leftRailCollapsed ? "Show focus rail" : "Hide focus rail"}
+                >
+                  <LeftChevronIcon className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
+                </button>
+                  );
+                })()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="rounded-3xl border border-slate-200 bg-white p-2 shadow-lg min-h-[720px]">
+                  {graphLoading && <div className="py-36 text-center text-sm text-slate-500">Loading digital twin map...</div>}
+                  {!graphLoading && hasGraph && (
+                    <GraphCanvas
+                      nodes={livingMapData.nodes}
+                      edges={livingMapData.edges}
+                      focus={graphFocus}
+                      focusLabel={selectedFocusValue}
+                      focusSummary={focusSummary}
+                      viewMode={graphViewMode}
+                      stage={revealStage}
+                      highlightNodeIds={highlightNodeIds ?? undefined}
+                      selectedNodeId={selectedSystemId}
+                      onNodeSelect={(nodeId) => {
+                        if (!nodeId) {
+                          setSelectedSystemId(null);
+                          setSelectedIntegration(null);
+                          return;
+                        }
+                        handleSystemSelect(nodeId);
+                      }}
+                      onViewModeChange={handleGraphViewModeChange}
+                      onStageChange={handleRevealStageChange}
+                      height={isEmbed ? 560 : 820}
+                      projectId={projectId}
+                      scenarioPhase={activeScenario?.phase ?? null}
+                      sequence={sequence}
+                      showCanvasControls={false}
+                      domainColumns={3}
+                      systemColumns={2}
+                      domainWidth={420}
+                      domainHorizontalGap={48}
+                      domainVerticalGap={120}
+                      domainPaddingX={24}
+                      domainPaddingY={48}
+                      systemCellHeight={190}
+                      domainMinHeight={520}
+                      systemColumnGap={12}
+                      fitViewPadding={0.08}
+                      fitViewKey={railStateKey}
+                    />
+                  )}
+                  {!graphLoading && !hasGraph && (
+                    <div className="py-20 text-center text-sm text-slate-500">No harmonized systems yet. Import data or run onboarding to populate the graph.</div>
+                  )}
+                </div>
+              </div>
+              <div className={clsx("relative w-full transition-all duration-300 xl:flex-shrink-0", rightRailCollapsed ? "xl:w-6" : "xl:w-[320px]")}>
+                {!rightRailCollapsed ? rightRailPanels : null}
+                {(() => {
+                  const RightChevronIcon = rightRailCollapsed ? Icons.chevronLeft : Icons.chevronRight;
+                  return (
+                <button
+                  type="button"
+                  onClick={handleRightRailToggle}
+                  className="absolute -left-3 top-4 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-600 shadow"
+                  aria-label={rightRailCollapsed ? "Show insights rail" : "Hide insights rail"}
+                >
+                  <RightChevronIcon className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
+                </button>
+                  );
+                })()}
+              </div>
             </div>
           </div>
 
@@ -887,7 +1369,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
           <Card className="space-y-3 border-slate-200 bg-white shadow-sm">
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">Recognition</p>
             <p className="text-sm text-slate-800">
-              “Here’s the full picture — every system and integration you’ve shared, harmonized across your enterprise.”
+              " Here's the full picture -- every system and integration you've shared, harmonized across your enterprise."
             </p>
             {hasStats && (
               <div className="grid grid-cols-2 gap-2 text-[0.7rem] text-slate-600">
@@ -936,28 +1418,11 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
             <p className="text-xs text-emerald-800">{focusSummary}</p>
             {renderFlowButtons()}
           </Card>
-
-          <AdaptiveSignalsPanel snapshot={learningSnapshot} title="Adaptive Signals" subtitle="Digital twin" />
         </div>
-
-        {focusPulse && (
-          <Card className="space-y-3 border-emerald-200 bg-white shadow-sm">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-600">Focus Pulse</p>
-            <div className="space-y-2 text-sm text-slate-700">
-              <p>
-                Systems highlighted: <span className="font-semibold">{focusPulse.systems}</span>
-              </p>
-              <p>
-                Integrations in lens: <span className="font-semibold">{focusPulse.integrations}</span>
-              </p>
-              <p>
-                Overlap index: <span className="font-semibold">{focusPulse.overlap}</span>
-              </p>
-            </div>
-          </Card>
-        )}
       </section>
-    </div>
+      </div>
+      {sequencePromptOverlay}
+    </Fragment>
   );
 }
 

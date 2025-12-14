@@ -14,7 +14,7 @@ interface NavSectionProps {
 
 interface NavItemProps {
   label: string;
-  icon?: string;
+  icon?: ReactNode;
   rightLabel?: string;
   isActive?: boolean;
   onClick?: () => void;
@@ -70,11 +70,7 @@ export function NavItem({ label, icon, rightLabel, isActive, onClick, inset = fa
         }`}
       />
       <span className={`flex items-center gap-2 ${inset ? "pl-6" : "pl-2"}`}>
-        {icon ? (
-          <span className="text-[11px]" aria-hidden>
-            {icon}
-          </span>
-        ) : null}
+        {icon ? <span className="text-[11px]" aria-hidden>{icon}</span> : null}
         <span className="truncate">{label}</span>
       </span>
       {rightLabel ? <span className={`text-[11px] uppercase tracking-[0.12em] ${rightClasses}`}>{rightLabel}</span> : null}

@@ -360,6 +360,11 @@ export function InsightsScene({ projectId }: { projectId: string }) {
 
       {activePanel === "reports" && (
         <OrgIntelligenceReportPanel
+          reportType={reportType}
+          onTypeChange={(type) => {
+            setReportType(type);
+            telemetry.log("intelligence_report_type_changed", { projectId, type });
+          }}
           data={activeReportData}
           loading={reportLoading}
           error={reportError}
@@ -686,119 +691,256 @@ export function InsightsScene({ projectId }: { projectId: string }) {
 }
 
 function OrgIntelligenceReportPanel({
+  reportType,
+  onTypeChange,
   data,
   loading,
   error,
   onRefresh,
   onDownload,
 }: {
+  reportType: ReportApiType;
+  onTypeChange: (type: ReportApiType) => void;
   data: OrgReportPayload | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
   onDownload: () => void;
 }) {
+  const isReadiness = reportType === "org_readiness";
+  const metrics = data?.metrics ?? {};
+  const stakeholders = data?.stakeholders ?? [];
+  const decisions = data?.decisions ?? [];
+  const recommendations = data?.recommendations ?? [];
+  const categories = data?.categories ?? [];
+  const deltaHistory = data?.deltaHistory ?? [];
+
   return (
     <Card className="space-y-4 border border-slate-200">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Org Alignment Report</p>
+          <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">{isReadiness ? "Org Readiness Report" : "Org Alignment Report"}</p>
           <p className="text-sm font-semibold text-slate-900">{data?.metadata.title ?? "Synthesizing report…"}</p>
           {data ? <p className="text-xs text-slate-500">Generated {new Date(data.metadata.generated).toLocaleString()}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-900 disabled:opacity-60"
-            disabled={loading}
-          >
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
-          <button
-            type="button"
-            onClick={onDownload}
-            disabled={!data}
-            className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
-          >
-            Download Markdown
-          </button>
+          {REPORT_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onTypeChange(option.id)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                reportType === option.id ? "bg-slate-900 text-white shadow" : "border border-slate-200 text-slate-700 hover:border-slate-900"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-900 disabled:opacity-60"
+          disabled={loading}
+        >
+          {loading ? "Refreshing…" : "Refresh"}
+        </button>
+        <button
+          type="button"
+          onClick={onDownload}
+          disabled={!data}
+          className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+        >
+          Download Markdown
+        </button>
+      </div>
+
       {loading && <p className="text-xs text-slate-500">Generating report with ALE + EAgent signals…</p>}
       {error && <p className="text-xs text-rose-600">{error}</p>}
+
       {data && !loading ? (
         <>
-          <div className="grid gap-3 md:grid-cols-3">
-            <div>
-              <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Consensus</p>
-              <p className="text-3xl font-semibold text-slate-900">{(data.metrics.consensus_score * 100).toFixed(0)}%</p>
-              <p className="text-xs text-slate-500">Strategy: {data.metrics.dominant_strategy}</p>
-            </div>
-            <div>
-              <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Polarization</p>
-              <p className="text-3xl font-semibold text-slate-900">{(data.metrics.polarization_index * 100).toFixed(0)}%</p>
-              <p className="text-xs text-slate-500">Lower is better</p>
-            </div>
-            <div>
-              <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Summary</p>
-              <p className="text-xs text-slate-600">{data.summary}</p>
-            </div>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-2">Stakeholders</p>
-              <div className="max-h-48 overflow-auto rounded-2xl border border-slate-100">
-                <table className="w-full text-left text-xs text-slate-600">
-                  <thead>
-                    <tr className="text-[0.6rem] uppercase tracking-widest text-slate-500">
-                      <th className="px-3 py-2">Name</th>
-                      <th className="px-3 py-2">Align</th>
-                      <th className="px-3 py-2">Influence</th>
-                      <th className="px-3 py-2">Bias</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.stakeholders.map((stakeholder) => (
-                      <tr key={stakeholder.name} className="border-t border-slate-100 text-[0.7rem]">
-                        <td className="px-3 py-2 text-slate-800">{stakeholder.name}</td>
-                        <td className="px-3 py-2">{stakeholder.alignment.toFixed(2)}</td>
-                        <td className="px-3 py-2">{stakeholder.influence.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-slate-500">{stakeholder.bias}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {!isReadiness ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Consensus</p>
+                  <p className="text-3xl font-semibold text-slate-900">{formatPercent(metrics.consensus_score ?? 0)}</p>
+                  <p className="text-xs text-slate-500">Strategy: {metrics.dominant_strategy ?? "Unknown"}</p>
+                </div>
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Polarization</p>
+                  <p className="text-3xl font-semibold text-slate-900">{formatPercent(metrics.polarization_index ?? 0)}</p>
+                  <p className="text-xs text-slate-500">Lower is better</p>
+                </div>
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Summary</p>
+                  <p className="text-xs text-slate-600">{data.summary}</p>
+                </div>
               </div>
-            </div>
-            <div>
-              <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-2">Key Decisions</p>
-              <ul className="space-y-2 text-xs text-slate-700">
-                {data.decisions.map((decision) => (
-                  <li key={decision.id} className="rounded-2xl border border-slate-200 p-3">
-                    <p className="text-[0.75rem] font-semibold text-slate-900">{decision.title}</p>
-                    <p className="text-[0.65rem] text-slate-500">
-                      Alignment {decision.alignment.toFixed(2)} · ROI {formatPercent(decision.roi)} · TCC {formatPercent(decision.tcc)}
-                    </p>
-                    <p className="text-[0.65rem] text-slate-500">{`Support ${decision.supporters.join(", ")}`}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-          <div>
-            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-1">Sentiment + Readiness</p>
-            <p className="text-xs text-slate-600">{data.sentimentSummary}</p>
-            {data.recommendations.length ? (
-              <ul className="mt-2 space-y-1 text-xs text-slate-600">
-                {data.recommendations.map((rec, idx) => (
-                  <li key={rec}>
-                    {idx + 1}. {rec}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-2">Stakeholders</p>
+                  <div className="max-h-48 overflow-auto rounded-2xl border border-slate-100">
+                    <table className="w-full text-left text-xs text-slate-600">
+                      <thead>
+                        <tr className="text-[0.6rem] uppercase tracking-widest text-slate-500">
+                          <th className="px-3 py-2">Name</th>
+                          <th className="px-3 py-2">Align</th>
+                          <th className="px-3 py-2">Influence</th>
+                          <th className="px-3 py-2">Bias</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stakeholders.map((stakeholder) => (
+                          <tr key={stakeholder.name} className="border-t border-slate-100 text-[0.7rem]">
+                            <td className="px-3 py-2 text-slate-800">{stakeholder.name}</td>
+                            <td className="px-3 py-2">{stakeholder.alignment?.toFixed(2)}</td>
+                            <td className="px-3 py-2">{stakeholder.influence?.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-slate-500">{stakeholder.bias}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-2">Key Decisions</p>
+                  <ul className="space-y-2 text-xs text-slate-700">
+                    {decisions.map((decision) => (
+                      <li key={decision.id} className="rounded-2xl border border-slate-200 p-3">
+                        <p className="text-[0.75rem] font-semibold text-slate-900">{decision.title}</p>
+                        <p className="text-[0.65rem] text-slate-500">
+                          Alignment {decision.alignment?.toFixed(2)} · ROI {formatPercent(decision.roi ?? 0)} · TCC {formatPercent(decision.tcc ?? 0)}
+                        </p>
+                        {decision.supporters?.length ? (
+                          <p className="text-[0.65rem] text-slate-500">Support {decision.supporters.join(", ")}</p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div>
+                <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-1">Sentiment + Readiness</p>
+                <p className="text-xs text-slate-600">{data.sentimentSummary}</p>
+                {recommendations.length ? (
+                  <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                    {recommendations.map((rec, idx) => (
+                      <li key={rec}>
+                        {idx + 1}. {rec}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Readiness Score</p>
+                  <p className="text-3xl font-semibold text-slate-900">{formatPercent(data.readinessScore ?? 0)}</p>
+                  <p className="text-xs text-slate-500">Stage: {data.stage ?? "Unknown"}</p>
+                </div>
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Confidence</p>
+                  <p className="text-3xl font-semibold text-slate-900">{formatPercent(data.confidence ?? 0)}</p>
+                  <p className="text-xs text-slate-500">Confidence window</p>
+                </div>
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Summary</p>
+                  <p className="text-xs text-slate-600">{data.summary}</p>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-slate-100 p-3">
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Capability</p>
+                  <p className="text-2xl font-semibold text-slate-900">{formatPercent(metrics.capability ?? 0)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 p-3">
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Organizational</p>
+                  <p className="text-2xl font-semibold text-slate-900">{formatPercent(metrics.organizational ?? 0)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 p-3">
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Behavioral</p>
+                  <p className="text-2xl font-semibold text-slate-900">{formatPercent(metrics.behavioral ?? 0)}</p>
+                </div>
+              </div>
+              {categories.length ? (
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-2">Category Breakdown</p>
+                  <div className="overflow-auto rounded-2xl border border-slate-100">
+                    <table className="w-full text-left text-xs text-slate-600">
+                      <thead>
+                        <tr className="text-[0.6rem] uppercase tracking-widest text-slate-500">
+                          <th className="px-3 py-2">Category</th>
+                          <th className="px-3 py-2">Readiness</th>
+                          <th className="px-3 py-2">Risk</th>
+                          <th className="px-3 py-2">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {categories.map((category) => (
+                          <tr key={category.name} className="border-t border-slate-100 text-[0.7rem]">
+                            <td className="px-3 py-2 text-slate-800">{category.name}</td>
+                            <td className="px-3 py-2">{formatPercent(category.readiness ?? 0)}</td>
+                            <td className="px-3 py-2 text-slate-500">{category.risk}</td>
+                            <td className="px-3 py-2 text-slate-600">{category.notes}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+              {deltaHistory.length ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-2">Readiness Delta</p>
+                    <ul className="space-y-1 text-xs text-slate-600">
+                      {deltaHistory.map((entry) => (
+                        <li key={`${entry.date}-${entry.score}`} className="flex items-center justify-between rounded-2xl border border-slate-100 px-3 py-2">
+                          <span>{entry.date}</span>
+                          <span className="font-semibold text-slate-900">{formatPercent(entry.score ?? 0)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-2">Recommendations</p>
+                    {recommendations.length ? (
+                      <ul className="space-y-1 text-xs text-slate-600">
+                        {recommendations.map((rec, idx) => (
+                          <li key={rec}>
+                            {idx + 1}. {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-500">No recommendations recorded.</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                recommendations.length > 0 && (
+                  <div>
+                    <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500 mb-2">Recommendations</p>
+                    <ul className="space-y-1 text-xs text-slate-600">
+                      {recommendations.map((rec, idx) => (
+                        <li key={rec}>
+                          {idx + 1}. {rec}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              )}
+            </>
+          )}
         </>
       ) : null}
     </Card>

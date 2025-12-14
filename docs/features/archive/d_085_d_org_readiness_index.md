@@ -84,7 +84,7 @@ Readiness Score: 0.64 | Confidence: 0.89 | Stage: Early Integration
 
 ### 🔄 Roadmap
 
-**Iteration 1:** Implement static JSON → Markdown pipeline for ORI generation.  
+**Iteration 1:** Implement static JSON → Markdown pipeline for ORI generation (`npm run generate:readiness`).  
 **Iteration 2:** Connect telemetry and ALE learning updates.  
 **Iteration 3:** Add scenario-based readiness simulations (e.g., tech cutover impact).  
 **Iteration 4:** Integrate ORI deltas with ROI/TCC dashboards.
@@ -112,4 +112,3 @@ The ORI directly feeds the **ROI (Return on Investment)** and **TCC (Total Cost 
 **Branch:** `feature/d085d_org_readiness_index`  
 **Approvers:** Fuxi Core, Agent Z (Bill), Codex  
 **Purpose:** Extend the Fuxi Intelligence layer with an actionable measure of transformation readiness — quantifying not just how aligned an organization is, but how *prepared* it truly is to change, and linking that readiness to measurable financial and operational outcomes.
-

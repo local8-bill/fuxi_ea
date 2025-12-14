@@ -9,7 +9,13 @@ module.exports = {
     "./src/controllers/**/*.{js,ts,jsx,tsx}",
     "./src/domain/**/*.{js,ts,jsx,tsx}",
   ],
-  theme: { extend: {} },
+  theme: {
+    extend: {
+      colors: {
+        primary: require("tailwindcss/colors").zinc,
+      },
+    },
+  },
   plugins: [],
   safelist: [
     'bg-green-50','border-green-300',

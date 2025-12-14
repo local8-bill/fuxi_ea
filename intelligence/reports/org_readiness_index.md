@@ -1,10 +1,10 @@
 # Organizational Readiness Index – OMS Transformation
-Generated: 2025-12-09  
-Organization: Deckers  
+Generated: 2025-12-11T07:42:14.648Z
+Organization: Deckers
 Readiness Score: 64% | Confidence: 89% | Stage: Early Integration
 
 ## Readiness Summary
-Deckers shows strong technical posture (integration infra 0.75) but behavioral readiness lags due to limited change enablement. Throwaway workstreams are saturating teams and governance clarity is required before OMS cutover.
+Stakeholder alignment trend 81% with capability focus on inventory clarity. Activate change champion network prior to OMS cutover.
 
 ### Category Breakdown
 | Category | Readiness | Risk | Notes |
@@ -20,10 +20,10 @@ Deckers shows strong technical posture (integration infra 0.75) but behavioral r
 3. Limit concurrent throwaway work to reduce fatigue.
 
 ### Readiness Delta
-Date | Score  
------|------  
-2025-12-01 | 58%  
-2025-12-05 | 61%  
+Date | Score
+-----|------
+2025-12-01 | 58%
+2025-12-05 | 61%
 2025-12-09 | 64%
 
 ---

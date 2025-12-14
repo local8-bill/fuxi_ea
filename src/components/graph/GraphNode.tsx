@@ -58,17 +58,17 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
     const accent = getDomainAccent(data.domain);
     const overlayActive = Boolean(data.overlay);
     return (
-      <div data-graph-node="domain" className={clsx("h-full w-full overflow-hidden rounded-3xl border bg-white shadow-sm transition", data.dimmed && "opacity-50")}>
+      <div data-graph-node="domain" data-font-version="v2" className={clsx("h-full w-full overflow-hidden rounded-3xl border bg-white shadow-sm transition", data.dimmed && "opacity-50")}>
         <div className="h-1.5 w-full" style={{ backgroundColor: accent }} />
-        <div className="p-4">
+        <div className="p-5">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-lg font-semibold text-neutral-900">{data.label}</p>
-            <span className="rounded-full border border-neutral-200 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-neutral-500">
+            <p className="text-xl font-semibold text-neutral-900">{data.label}</p>
+            <span className="rounded-full border border-neutral-200 px-3 py-0.5 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-neutral-500">
               Domain
             </span>
           </div>
           {overlayActive ? (
-            <p className="mt-3 text-xs text-emerald-800">
+            <p className="mt-4 text-sm text-emerald-800">
               Monitoring {data.integrationTotal ?? 0} {data.integrationTotal === 1 ? "flow" : "flows"} across this domain.
             </p>
           ) : null}
@@ -91,6 +91,7 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
   return (
     <div
       data-graph-node="system"
+      data-font-version="v2"
       className={clsx(
         "pointer-events-auto overflow-hidden rounded-lg border bg-white text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
         overlayActive && (data.metrics?.integrations ?? 0) > 0 && "ring-1 ring-emerald-200/80",
@@ -99,16 +100,16 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
       style={{ ...accentStyle, ...selectionShadow }}
     >
       <div className="h-1.5 w-full" style={{ backgroundColor: accent }} />
-      <div className="px-3 py-2">
+      <div className="px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-[13px] font-semibold leading-tight text-neutral-950">{data.label}</p>
-            {subtitle ? <p className="text-[11px] uppercase tracking-wide text-neutral-500">{subtitle}</p> : null}
+            <p className="text-[15px] font-semibold leading-tight text-neutral-950">{data.label}</p>
+            {subtitle ? <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">{subtitle}</p> : null}
           </div>
-          {metric ? <p className="text-[11px] font-semibold text-neutral-600">{metric}</p> : null}
+          {metric ? <p className="text-sm font-semibold text-neutral-600">{metric}</p> : null}
         </div>
         {overlayActive && typeof data.metrics?.integrations === "number" ? (
-          <p className="mt-2 text-[10px] uppercase tracking-[0.3em] text-emerald-600">
+          <p className="mt-2 text-xs uppercase tracking-[0.25em] text-emerald-600">
             Integrations · {data.metrics.integrations}
           </p>
         ) : null}
@@ -117,7 +118,7 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
             {data.badges.map((badge, idx) => (
               <span
                 key={`${data.label}-badge-${idx}`}
-                className={clsx("rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.25em]", badgeTone(badge.tone))}
+                className={clsx("rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em]", badgeTone(badge.tone))}
               >
                 {badge.label}
               </span>

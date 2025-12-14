@@ -1,0 +1,57 @@
+{
+  "organization": "Deckers",
+  "readinessScore": 0.64,
+  "confidence": 0.89,
+  "stage": "Early Integration",
+  "delta_history": [
+    {
+      "date": "2025-12-01",
+      "score": 0.58
+    },
+    {
+      "date": "2025-12-05",
+      "score": 0.61
+    },
+    {
+      "date": "2025-12-09",
+      "score": 0.64
+    }
+  ],
+  "decision_velocity": 0.67,
+  "sequencer_progress": {
+    "fy26": 0.62,
+    "fy27": 0.48,
+    "fy28": 0.21
+  },
+  "metrics": {
+    "capability": 0.65,
+    "organizational": 0.62,
+    "behavioral": 0.48
+  },
+  "categories": [
+    {
+      "name": "Integration Infrastructure",
+      "readiness": 0.75,
+      "risk": "Low",
+      "notes": "MFCS pilot environment validated"
+    },
+    {
+      "name": "Data Governance",
+      "readiness": 0.55,
+      "risk": "Medium",
+      "notes": "Ownership shared between finance and ops"
+    },
+    {
+      "name": "Team Agility",
+      "readiness": 0.62,
+      "risk": "Medium",
+      "notes": "Parallel workstreams raising fatigue"
+    },
+    {
+      "name": "Change Enablement",
+      "readiness": 0.48,
+      "risk": "High",
+      "notes": "No formal change mgmt plan"
+    }
+  ]
+}
