@@ -46,11 +46,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Invalid reasoning payload" }, { status: 400 });
     }
 
+    const nodeId = (payload.node_id ?? "").trim();
+    const userAction = (payload.user_action ?? "").trim();
+
     const entry = {
       id: uuidv4(),
-      node_id: payload.node_id.trim(),
+      node_id: nodeId,
       context_tags: Array.isArray(payload.context_tags) ? payload.context_tags.filter((tag) => typeof tag === "string" && tag.length > 0) : [],
-      user_action: payload.user_action.trim(),
+      user_action: userAction,
       user_mode: typeof payload.user_mode === "string" ? payload.user_mode : "unknown",
       risk_score: typeof payload.risk_score === "number" ? payload.risk_score : null,
       timestamp: payload.timestamp ?? new Date().toISOString(),

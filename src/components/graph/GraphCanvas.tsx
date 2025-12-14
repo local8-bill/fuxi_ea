@@ -187,7 +187,7 @@ function buildElements(
         overlay: overlayActive,
         integrationTotal: domainIntegrationCount,
         hiddenCount: hiddenCount > 0 ? hiddenCount : undefined,
-        icon,
+        icon: icon ?? undefined,
       },
       style: { width: domainWidth, height: boxHeight, zIndex: 0 },
     });

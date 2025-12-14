@@ -70,7 +70,14 @@ type OrgReportPayload = {
   decisions?: Array<{ id: string; title: string; alignment: number; roi: number; tcc: number; supporters: string[]; resisters?: string[]; timeline?: string }>;
   sentimentSummary?: string;
   recommendations: string[];
-  metrics?: { consensus_score?: number; polarization_index?: number; dominant_strategy?: string };
+  metrics?: {
+    consensus_score?: number;
+    polarization_index?: number;
+    dominant_strategy?: string;
+    capability?: number;
+    organizational?: number;
+    behavioral?: number;
+  };
   categories?: Array<{ name: string; readiness: number; risk: string; notes: string }>;
   readinessScore?: number;
   confidence?: number;

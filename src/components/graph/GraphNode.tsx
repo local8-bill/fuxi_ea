@@ -29,6 +29,8 @@ export type GraphNodeData = {
   viewMode: GraphViewMode;
   phaseLabel?: string | null;
   stageLabel?: string | null;
+  hiddenCount?: number;
+  icon?: string;
 };
 
 function formatMetric(viewMode: GraphViewMode, data?: GraphNodeData["metrics"], domain?: string) {

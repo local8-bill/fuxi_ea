@@ -1,5 +1,6 @@
 export type AdaptiveEventMap = {
   "ux_mode:set": { mode: string; step?: string };
+  "scene:enter": { scene: string };
 };
 
 type Handler<T> = (payload: T) => void;

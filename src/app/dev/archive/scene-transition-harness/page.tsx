@@ -1,20 +1,21 @@
 "use client";
 
+import { type ReactElement } from "react";
 import { Button } from "@/components/ui/Button";
-import { TransitionOrchestrator, useSceneManager, type SceneType } from "@/lib/scene";
+import { SceneManagerProvider, TransitionOrchestrator, useSceneManager, type SceneType } from "@/lib/scene";
 import { DigitalTwinScene } from "@/scenes/DigitalTwinScene";
 import { SequenceScene } from "@/scenes/SequenceScene";
 import { RoiScene } from "@/scenes/RoiScene";
 import { IntelligenceScene } from "@/scenes/IntelligenceScene";
 
-const sceneConfig: Record<SceneType, { label: string; element: JSX.Element }> = {
+const sceneConfig: Record<SceneType, { label: string; element: ReactElement }> = {
   digitalTwin: { label: "Digital Twin", element: <DigitalTwinScene /> },
   sequence: { label: "Sequence", element: <SequenceScene /> },
   roi: { label: "ROI / TCC", element: <RoiScene /> },
   intelligence: { label: "Org Intelligence", element: <IntelligenceScene /> },
 };
 
-export default function SceneTransitionTestPage() {
+function SceneHarnessContent() {
   const activeScene = useSceneManager((state) => state.activeScene);
   const setScene = useSceneManager((state) => state.setScene);
   const reset = useSceneManager((state) => state.reset);
@@ -62,5 +63,13 @@ export default function SceneTransitionTestPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function SceneTransitionTestPage() {
+  return (
+    <SceneManagerProvider>
+      <SceneHarnessContent />
+    </SceneManagerProvider>
   );
 }

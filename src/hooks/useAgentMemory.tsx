@@ -174,17 +174,18 @@ export function AgentMemoryProvider({ projectId, children }: { projectId: string
         const suggestions = prev.suggestions.filter((s) => s.id !== id);
         return { ...prev, suggestions };
       });
-      const timeToAction = dismissed?.createdAt ? Date.now() - dismissed.createdAt : undefined;
+      const dismissedSuggestion = dismissed as AgentSuggestion | null;
+      const timeToAction = dismissedSuggestion?.createdAt ? Date.now() - dismissedSuggestion.createdAt : undefined;
       void emitTelemetry("preview_dismissed", {
         projectId,
         anticipation_id: id,
         suggestionId: id,
-        targetView: dismissed?.targetView,
-        context_route: dismissed?.route,
+        targetView: dismissedSuggestion?.targetView,
+        context_route: dismissedSuggestion?.route,
         time_to_action: timeToAction,
         reason,
         data: {
-          target_view: dismissed?.targetView,
+          target_view: dismissedSuggestion?.targetView,
           reason,
         },
       });
@@ -201,22 +202,23 @@ export function AgentMemoryProvider({ projectId, children }: { projectId: string
         const suggestions = prev.suggestions.filter((s) => s.id !== id);
         return { ...prev, suggestions, lastAccepted: id };
       });
-      if (accepted) {
-        const timeToAction = accepted.createdAt ? Date.now() - accepted.createdAt : undefined;
+      const acceptedSuggestion = accepted as AgentSuggestion | null;
+      if (acceptedSuggestion) {
+        const timeToAction = acceptedSuggestion.createdAt ? Date.now() - acceptedSuggestion.createdAt : undefined;
         void emitTelemetry("next_step_accepted", {
           projectId,
           anticipation_id: id,
           suggestionId: id,
-          route: accepted.route,
-          targetView: accepted.targetView,
-          context_route: accepted.route,
+          route: acceptedSuggestion.route,
+          targetView: acceptedSuggestion.targetView,
+          context_route: acceptedSuggestion.route,
           time_to_action: timeToAction,
           data: {
-            target_view: accepted.targetView,
+            target_view: acceptedSuggestion.targetView,
           },
         });
       }
-      return accepted;
+      return acceptedSuggestion;
     },
     [projectId],
   );

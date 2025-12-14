@@ -58,15 +58,15 @@ export type ModeKey = keyof typeof modes;
 
 let currentMode: ModeKey = "user";
 
-function updatePermissions(permissions: string[]) {
+function updatePermissions(permissions: readonly string[]) {
   console.debug("[mode] permissions", permissions);
 }
 
-function loadSkills(skills: string[]) {
+function loadSkills(skills: readonly string[]) {
   console.debug("[mode] skills", skills);
 }
 
-function toggleUIComponents(visibleUI: string[]) {
+function toggleUIComponents(visibleUI: readonly string[]) {
   if (typeof document === "undefined") return;
   document.querySelectorAll<HTMLElement>("[data-ui]").forEach((el) => {
     const id = el.getAttribute("data-ui") ?? "";

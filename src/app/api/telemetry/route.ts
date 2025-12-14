@@ -90,10 +90,13 @@ export async function POST(req: Request) {
     }
 
     const workspaceId = typeof json.workspace_id === "string" ? json.workspace_id : "digital_enterprise";
+    const allowedWorkspace = workspaceEnum.options.includes(workspaceId as (typeof workspaceEnum.options)[number])
+      ? (workspaceId as (typeof workspaceEnum.options)[number])
+      : "digital_enterprise";
     const parsed = normalizeTelemetryPayload({
       session_id: json.session_id,
       project_id: json.project_id,
-      workspace_id: workspaceId as TelemetryPayload["workspace_id"],
+      workspace_id: allowedWorkspace,
       event_type: json.event_type,
       timestamp: json.timestamp,
       data: json.data,

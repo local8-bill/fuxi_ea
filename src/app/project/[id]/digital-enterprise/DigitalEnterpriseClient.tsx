@@ -25,7 +25,7 @@ import { AdaptiveSignalsPanel } from "@/components/learning/AdaptiveSignalsPanel
 import type { LearningSnapshot } from "@/hooks/useLearningSnapshot";
 import type { GraphFocus, GraphRevealStage, GraphViewMode } from "@/hooks/useGraphTelemetry";
 import { useGraphTelemetry } from "@/hooks/useGraphTelemetry";
-import { usePredictiveScenarios } from "@/hooks/usePredictiveScenarios";
+import { usePredictiveScenarios, type PredictiveScenario } from "@/hooks/usePredictiveScenarios";
 import { Rail } from "@/components/layout/Rail";
 import { Stage } from "@/components/layout/Stage";
 import { OptionMenu } from "@/components/layout/OptionMenu";
@@ -330,7 +330,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     (phase: string) => {
       setActivePhase(phase);
       logTelemetry("digital_twin.phase_changed", { phase });
-      emitAdaptiveEvent("ux_mode:set", { mode: "digital-phase", phase });
+      emitAdaptiveEvent("ux_mode:set", { mode: "digital-phase", step: phase });
       logLearningEvent("LE-001", { phase });
     },
     [logTelemetry, logLearningEvent],
@@ -364,17 +364,12 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
       return next;
     });
   };
-  const handleScenarioSelect = (scenarioId: string) => {
-    setSelectedScenarioId(scenarioId);
-    const scenario = predictiveScenarios.find((item) => item.id === scenarioId);
-    if (scenario) {
-      logTelemetry("digital_twin.scenario_selected", { scenario: scenario.id, phase: scenario.phase });
-      logLearningEvent("LE-008", { scenario: scenario.id });
-    }
+  const handleScenarioSelect = (scenario: PredictiveScenario) => {
+    setSelectedScenarioId(scenario.id);
+    logTelemetry("digital_twin.scenario_selected", { scenario: scenario.id, phase: scenario.phase });
+    logLearningEvent("LE-008", { scenario: scenario.id });
   };
-  const handleScenarioActivate = (scenarioId: string) => {
-    const scenario = predictiveScenarios.find((item) => item.id === scenarioId);
-    if (!scenario) return;
+  const handleScenarioActivate = (scenario: PredictiveScenario) => {
     handlePhaseChange(scenario.phase);
     logTelemetry("digital_twin.scenario_applied", {
       scenario: scenario.id,
@@ -382,7 +377,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
       tccDelta: scenario.tccDelta,
       timelineDelta: scenario.timelineDeltaMonths,
     });
-    logLearningEvent("LE-009", { scenario: scenario.id });
+    logLearningEvent("LE-009", { scenario: scenario.id, applied: true });
   };
 
   const livingMapData = useMemo<LivingMapData>(() => {

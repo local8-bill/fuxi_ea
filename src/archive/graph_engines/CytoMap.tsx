@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { ElementDefinition, StylesheetJson } from "cytoscape";
 import type { LivingMapData } from "@/types/livingMap";
 import domainColors from "@/config/domainColors.json";
 
@@ -33,6 +34,8 @@ export function CytoMap({
   onSelectNode,
   searchTerm = "",
   showUnchanged = false,
+  visibleNodeIds,
+  visibleEdgeIds,
 }: CytoMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any>(null);
@@ -86,7 +89,7 @@ export function CytoMap({
   // Build elements once per data change; we diff against the existing cy instance.
   const effectiveShowUnchanged = true;
 
-  const elements = useMemo(() => {
+  const elements = useMemo<ElementDefinition[]>(() => {
     const nodes = (normalized.nodes ?? [])
       .sort((a, b) => (degreeMap.get(b.id) ?? 0) - (degreeMap.get(a.id) ?? 0))
       .map((n, idx) => {
@@ -132,7 +135,7 @@ export function CytoMap({
         confidence: (e as any).confidence ?? 0.6,
       },
     }));
-    return [...domainNodes, ...nodes, ...edges];
+    return [...domainNodes, ...nodes, ...edges] as ElementDefinition[];
   }, [normalized.nodes, normalized.edges, domainOrder, degreeMap]);
 
   // Build style once.
@@ -228,7 +231,7 @@ export function CytoMap({
       { selector: `.${cls.unchanged}`, style: { "border-color": "#cbd5e1" } },
     ],
     [],
-  );
+  ) as StylesheetJson;
 
   // Initialize once
   useEffect(() => {
@@ -248,7 +251,7 @@ export function CytoMap({
         container: containerRef.current,
         elements,
         style: baseStyle,
-        layout: { name: "cose-bilkent", padding: 30 },
+        layout: { name: "cose-bilkent", padding: 30 } as any,
       });
 
       cy.nodes()

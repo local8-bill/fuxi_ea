@@ -41,7 +41,7 @@ function createSceneManagerStore() {
 }
 
 export function SceneManagerProvider({ children }: { children: ReactNode }) {
-  const storeRef = useRef<SceneManagerStore>();
+  const storeRef = useRef<SceneManagerStore | null>(null);
   if (!storeRef.current) {
     storeRef.current = createSceneManagerStore();
   }

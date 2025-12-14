@@ -1,6 +1,6 @@
 // src/app/layout.tsx
 import "./globals.css";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { GlobalNav } from "@/features/common/GlobalNav";
 import { ModeBridge } from "@/components/system/ModeBridge";
 
@@ -13,7 +13,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="min-h-screen bg-slate-50 text-slate-900">
-        <GlobalNav />
+        <Suspense fallback={null}>
+          <GlobalNav />
+        </Suspense>
         <ModeBridge />
         <div className="pt-6">{children}</div>
       </body>
