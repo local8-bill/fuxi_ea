@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { usePerformanceTracker } from "@/hooks/usePerformanceTracker";
 import { useSceneManager, useSceneTelemetry } from "@/lib/scene";
 

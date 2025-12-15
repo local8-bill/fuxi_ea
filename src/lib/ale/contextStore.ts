@@ -63,5 +63,11 @@ class ALEContextStore {
 export const aleContextStore = new ALEContextStore();
 
 export function useALEContext() {
-  return useSyncExternalStore(aleContextStore.subscribe, () => aleContextStore.get(), () => aleContextStore.get());
+  const ctx = useSyncExternalStore(aleContextStore.subscribe, () => aleContextStore.get(), () => aleContextStore.get());
+  return {
+    context: ctx,
+    roiSignals: (ctx?.roi_signals as Record<string, unknown>) ?? {},
+    tccSignals: (ctx?.tcc_signals as Record<string, unknown>) ?? {},
+    readiness: (ctx?.readiness as Record<string, unknown>) ?? {},
+  };
 }

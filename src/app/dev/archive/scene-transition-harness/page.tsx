@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactElement } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { SceneManagerProvider, TransitionOrchestrator, useSceneManager, type SceneType } from "@/lib/scene";
 import { DigitalTwinScene } from "@/scenes/DigitalTwinScene";
 import { SequenceScene } from "@/scenes/SequenceScene";

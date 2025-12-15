@@ -22,7 +22,7 @@ export function similarity(a: string, b: string): number {
   let inter = 0;
   for (const t of A) if (B.has(t)) inter++;
   const union = A.size + B.size - inter;
-  let jaccard = union > 0 ? inter / union : 0;
+  const jaccard = union > 0 ? inter / union : 0;
 
   const na = normalizeName(a);
   const nb = normalizeName(b);

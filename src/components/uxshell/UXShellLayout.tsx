@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { UXShellTopbar } from "./UXShellTopbar";
 import { SidebarNav, type SidebarMode } from "@/components/ui/sidebar";
+import type { ExperienceScene } from "@/hooks/useExperienceFlow";
 
 interface UXShellLayoutProps {
   sidebar?: ReactNode;
@@ -11,7 +12,7 @@ interface UXShellLayoutProps {
   showShortcuts?: boolean;
   onTips?: () => void;
   projectId?: string;
-  activeScene?: string;
+  activeScene?: ExperienceScene | "review";
   activeMode?: SidebarMode;
   onModeChange?: (mode: SidebarMode) => void;
 }

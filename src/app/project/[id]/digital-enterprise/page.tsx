@@ -4,7 +4,7 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function RedirectDigitalEnterprise({ params }: PageProps) {
+export default async function DigitalEnterprisePage({ params }: PageProps): Promise<never> {
   const resolved = await params;
   const rawId = resolved?.id ?? "demo";
   const projectId = typeof rawId === "string" && rawId !== "undefined" ? rawId : "demo";

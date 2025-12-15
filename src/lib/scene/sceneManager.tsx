@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { createStore, type StoreApi } from "zustand";
 import { useStore } from "zustand";
 
@@ -41,14 +41,8 @@ function createSceneManagerStore() {
 }
 
 export function SceneManagerProvider({ children }: { children: ReactNode }) {
-  const storeRef = useRef<SceneManagerStore | null>(null);
-  if (!storeRef.current) {
-    storeRef.current = createSceneManagerStore();
-  }
-
-  const contextValue = useMemo(() => storeRef.current as SceneManagerStore, []);
-
-  return <SceneManagerContext.Provider value={contextValue}>{children}</SceneManagerContext.Provider>;
+  const store = useMemo(() => createSceneManagerStore(), []);
+  return <SceneManagerContext.Provider value={store}>{children}</SceneManagerContext.Provider>;
 }
 
 export function useSceneManager<T>(selector: (state: SceneManagerState) => T): T {

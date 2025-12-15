@@ -1,15 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import ReactFlow, {
-  Background,
-  Controls,
-  Node,
-  Edge,
-  useNodesState,
-  useEdgesState,
-  Position,
-} from "reactflow";
+import ReactFlow, { Background, Controls, Node, Edge, useNodesState, useEdgesState, Position } from "reactflow";
 import "reactflow/dist/style.css";
 import "./ImpactGraph.css";
 
@@ -50,22 +42,7 @@ function hashString(s: string) {
   return h;
 }
 
-export function ImpactGraph({
-  graph,
-  height = 720,
-  colorMode = "domain",
-  showEdgeLabels = false,
-  weightEdges = true,
-  layout = "flow",
-}: ImpactGraphProps) {
-  if (!graph.nodes.length) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-        No dependency data available.
-      </div>
-    );
-  }
-
+export function ImpactGraph({ graph, height = 720, colorMode = "domain", showEdgeLabels = false, weightEdges = true, layout = "flow" }: ImpactGraphProps) {
   const baseNodes: Node[] = graph.nodes.map((n, idx) => ({
     id: n.id,
     data: {
@@ -89,7 +66,7 @@ export function ImpactGraph({
     },
   }));
 
-  const baseEdges: Edge[] = graph.edges.map((e, idx) => ({
+  const baseEdges: Edge[] = graph.edges.map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,
@@ -102,54 +79,63 @@ export function ImpactGraph({
     type: "default",
   }));
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(baseNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(baseEdges);
+  const [nodes, , onNodesChange] = useNodesState(baseNodes);
+  const [edges, , onEdgesChange] = useEdgesState(baseEdges);
 
-  const laidOutNodes = useMemo(() => {
-    if (layout === "dagre") {
-      const result = applyDagreLayout(nodes, edges);
-      return result.nodes;
-    }
-    return nodes;
+  const graphNodeMap = useMemo(() => new Map(graph.nodes.map((node) => [node.id, node])), [graph.nodes]);
+  const edgeWeightMap = useMemo(() => new Map(graph.edges.map((edge) => [edge.id, edge.weight ?? 0])), [graph.edges]);
+
+  const laidOutNodes = useMemo<Node[]>(() => {
+    if (layout !== "dagre") return nodes;
+    return applyDagreLayout(nodes, edges).nodes as Node[];
   }, [layout, nodes, edges]);
 
-  const coloredNodes = nodes.map((n) => {
-    const base = graph.nodes.find((gn) => gn.id === n.id);
-    const color =
-      colorMode === "domain"
-        ? domainColor(base?.domain)
-        : impactColor(base?.impactScore);
-    return {
-      ...n,
-      style: {
-        ...n.style,
-        border: `1px solid ${color}`,
-        boxShadow: `0 6px 14px ${color}1a`,
-      },
-    };
-  });
+  const coloredNodes = useMemo(() => {
+    return laidOutNodes.map((node) => {
+      const base = graphNodeMap.get(node.id);
+      const color = colorMode === "domain" ? domainColor(base?.domain) : impactColor(base?.impactScore);
+      return {
+        ...node,
+        style: {
+          ...node.style,
+          border: `1px solid ${color}`,
+          boxShadow: `0 6px 14px ${color}1a`,
+        },
+      };
+    });
+  }, [laidOutNodes, graphNodeMap, colorMode]);
+
+  const styledEdges = useMemo(() => {
+    return edges.map((edge) => {
+      const weight = edgeWeightMap.get(edge.id) ?? 0;
+      return {
+        ...edge,
+        label: showEdgeLabels && weight ? `${weight.toFixed(1)} links` : undefined,
+        style: {
+          ...edge.style,
+          strokeWidth: weightEdges ? Math.min(6, Math.max(2, weight || 2)) : 2,
+          stroke: "#94a3b8",
+        },
+      };
+    });
+  }, [edges, edgeWeightMap, showEdgeLabels, weightEdges]);
 
   return (
     <div className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ height }}>
-      <ReactFlow
-        nodes={
-          layout === "dagre"
-            ? coloredNodes.map((n, i) => ({
-                ...n,
-                position: laidOutNodes[i]?.position ?? n.position,
-                sourcePosition: (laidOutNodes[i]?.sourcePosition as any) ?? n.sourcePosition,
-                targetPosition: (laidOutNodes[i]?.targetPosition as any) ?? n.targetPosition,
-              }))
-            : coloredNodes
-        }
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        fitView
-      >
-        <Controls />
-        <Background gap={16} color="#e2e8f0" />
-      </ReactFlow>
+      {graph.nodes.length === 0 ? (
+        <div className="p-4 text-sm text-slate-600">No dependency data available.</div>
+      ) : (
+        <ReactFlow
+          nodes={coloredNodes}
+          edges={styledEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          fitView
+        >
+          <Controls />
+          <Background gap={16} color="#e2e8f0" />
+        </ReactFlow>
+      )}
     </div>
   );
 }

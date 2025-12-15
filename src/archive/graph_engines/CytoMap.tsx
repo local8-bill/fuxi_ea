@@ -152,7 +152,7 @@ export function CytoMap({
           },
           "border-color": (ele: any) => {
             const d = ele.data("domain") || "Other";
-            // @ts-ignore
+            // @ts-expect-error: domain color map is keyed by domain strings
             return domainColors[d] ?? domainColors["Other"] ?? "#cbd5e1";
           },
           "border-width": 1.5,
@@ -174,7 +174,7 @@ export function CytoMap({
           "background-color": (ele: any) => {
             const name = ele.data("label");
             const key = name in domainColors ? name : "Other";
-            // @ts-ignore
+            // @ts-expect-error: domain color map is keyed by domain strings
             return domainColors[key] ?? "#e2e8f0";
           },
           "border-color": "#cbd5e1",

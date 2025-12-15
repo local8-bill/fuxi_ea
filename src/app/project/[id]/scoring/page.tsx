@@ -499,9 +499,16 @@ function DraggableCard({
     item: { id, index, type: "L1" },
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
-  drag(drop(ref));
+  const attachRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      ref.current = node;
+      if (!node) return;
+      drag(drop(node));
+    },
+    [drag, drop],
+  );
   return (
-    <div ref={ref} style={{ opacity: isDragging ? 0.6 : 1 }}>
+    <div ref={attachRef} style={{ opacity: isDragging ? 0.6 : 1 }}>
       {children}
     </div>
   );

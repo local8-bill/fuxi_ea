@@ -64,20 +64,12 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
         <div className="h-1.5 w-full" style={{ backgroundColor: accent }} />
         <div className="p-5">
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xl font-semibold text-neutral-900">{data.label}</p>
-              <p className="text-xs uppercase tracking-[0.25em] text-neutral-500">Domain</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {typeof data.hiddenCount === "number" && data.hiddenCount > 0 ? (
-                <span className="rounded-full border border-neutral-200 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-neutral-500">
-                  +{data.hiddenCount}
-                </span>
-              ) : null}
-              <span className="rounded-full border border-neutral-200 px-3 py-0.5 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-neutral-500">
-                Domain
+            <p className="text-xl font-semibold text-neutral-900">{data.label}</p>
+            {typeof data.hiddenCount === "number" && data.hiddenCount > 0 ? (
+              <span className="rounded-full border border-neutral-200 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-neutral-500">
+                +{data.hiddenCount}
               </span>
-            </div>
+            ) : null}
           </div>
           {overlayActive ? (
             <p className="mt-4 text-sm text-emerald-800">

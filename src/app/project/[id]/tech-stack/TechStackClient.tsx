@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader";
 import { FileUploadPanel } from "@/components/panels/FileUploadPanel";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -80,6 +80,13 @@ interface OverlapCluster {
 }
 
 type ViewStage = "upload" | "table" | "graph";
+
+type RawDiagramSystem = {
+  id?: string | number | null;
+  name?: string | null;
+  normalizedName?: string | null;
+  integrationCount?: number | null;
+};
 
 function formatNumber(n: number | undefined | null): string {
   if (n == null || Number.isNaN(n)) return "0";
@@ -195,6 +202,22 @@ function categorizeSystem(name: string): string {
   return "Other / uncategorized";
 }
 
+const mapDiagramSystems = (payload: unknown): DiagramSystem[] => {
+  if (!Array.isArray(payload)) return [];
+  return (payload as RawDiagramSystem[]).map((raw, index) => {
+    const fallbackName = typeof raw?.name === "string" && raw.name.trim().length > 0 ? raw.name.trim() : `System ${index + 1}`;
+    const normalized = normalizeSystemName(raw?.normalizedName ?? fallbackName) ?? fallbackName;
+    return {
+      id: String(raw?.id ?? fallbackName ?? `system-${index}`),
+      name: fallbackName,
+      normalizedName: normalized,
+      integrationCount: Number(raw?.integrationCount ?? 0),
+    };
+  });
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
+
 function loadProjectIntake(projectId: string): ProjectIntake | null {
   if (typeof window === "undefined") return null;
   try {
@@ -254,7 +277,6 @@ export function TechStackClient({ projectId }: Props) {
   const [inventoryRows, setInventoryRows] = useState<number>(0);
   const [normalizedApps, setNormalizedApps] = useState<number>(0);
   const [viewStage, setViewStage] = useState<ViewStage>("upload");
-  const [invStats, setInvStats] = useState<InventoryStatsLocal | null>(null);
   const [uploadingInv, setUploadingInv] = useState<boolean>(false);
   const [invError, setInvError] = useState<string | null>(null);
 
@@ -285,6 +307,7 @@ export function TechStackClient({ projectId }: Props) {
   const [diagramSystems, setDiagramSystems] = useState<DiagramSystem[]>([]);
   const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
+  const simplificationScoreRef = useRef(0);
 
   // Intake context (from /project/[id]/intake)
   const [intakeContext, setIntakeContext] = useState<ProjectIntake | null>(null);
@@ -295,7 +318,7 @@ export function TechStackClient({ projectId }: Props) {
   const [truthError, setTruthError] = useState<string | null>(null);
 
   const loadDEAndSystems = useCallback(async () => {
-    telemetryLog("tech_stack_view", { projectId }, simplificationScore);
+    telemetryLog("tech_stack_view", { projectId }, simplificationScoreRef.current);
     setLoadingDE(true);
     setDeError(null);
     setDiffError(null);
@@ -312,16 +335,16 @@ export function TechStackClient({ projectId }: Props) {
           domains: stats?.domainsDetected,
           duration_ms: Math.round(performance.now() - started),
         },
-        simplificationScore,
+        simplificationScoreRef.current,
       );
-    } catch (err: any) {
+    } catch (err) {
       console.error("[TECH-STACK] Error loading digital enterprise stats", err);
-      setDeError("Failed to load digital enterprise preview.");
+      setDeError(getErrorMessage(err, "Failed to load digital enterprise preview."));
       setDeStats(null);
       telemetryLog(
         "tech_stack_stats_error",
-        { message: (err as Error)?.message },
-        simplificationScore,
+        { message: getErrorMessage(err, "Unknown error") },
+        simplificationScoreRef.current,
       );
     } finally {
       setLoadingDE(false);
@@ -346,28 +369,17 @@ export function TechStackClient({ projectId }: Props) {
         telemetryLog(
           "tech_stack_diff_error",
           { status: res.status, body: text },
-          simplificationScore,
+          simplificationScoreRef.current,
         );
       } else {
         const json = await res.json();
-        if (json && Array.isArray(json.systems)) {
-          const systems: DiagramSystem[] = json.systems.map((s: any) => ({
-            id: String(s.id ?? s.name ?? s.normalizedName ?? "unknown"),
-            name: String(s.name ?? "Unknown"),
-            normalizedName: String(
-              s.normalizedName ?? normalizeSystemName(s.name),
-            ),
-            integrationCount: Number(s.integrationCount ?? 0),
-          }));
-          setDiagramSystems(systems);
-        } else {
-          setDiagramSystems([]);
-        }
+        const systems = mapDiagramSystems((json as { systems?: unknown })?.systems);
+        setDiagramSystems(systems);
         setDiffError(null);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("[TECH-STACK] Error fetching diagram systems for diff", err);
-      setDiffError("Failed to load diagram systems for diff view.");
+      setDiffError(getErrorMessage(err, "Failed to load diagram systems for diff view."));
       setDiagramSystems([]);
     }
   }, [projectId, telemetryLog]);
@@ -388,7 +400,7 @@ export function TechStackClient({ projectId }: Props) {
       setAssistMessage(
         "Upload an inventory CSV and a Lucid CSV to unlock the table and graph views.",
       );
-      telemetryLog("tech_stack_idle", { idle_ms: 45000 }, simplificationScore);
+      telemetryLog("tech_stack_idle", { idle_ms: 45000 }, simplificationScoreRef.current);
     }, 45000);
     return () => window.clearTimeout(timer);
   }, [
@@ -437,6 +449,7 @@ export function TechStackClient({ projectId }: Props) {
     setCtaEnabled,
     setCtaLabel,
     setProgress,
+    markComplete,
     viewStage,
   ]);
 
@@ -493,7 +506,7 @@ export function TechStackClient({ projectId }: Props) {
     setDiffStats(diff);
   }, [inventorySystemsNorm, diagramSystems]);
 
-  function buildTruthCandidates(): TruthCandidate[] {
+  const buildTruthCandidates = useCallback((): TruthCandidate[] => {
     if (!diffStats) return [];
 
     const candidates: TruthCandidate[] = [];
@@ -538,9 +551,9 @@ export function TechStackClient({ projectId }: Props) {
     }
 
     return candidates.slice(0, 50);
-  }
+  }, [diffStats, inventoryDisplayByNorm]);
 
-  async function runTruthPass(candidates: TruthCandidate[]) {
+  const runTruthPass = useCallback(async (candidates: TruthCandidate[]) => {
     if (!candidates.length) {
       setTruthRows([]);
       return;
@@ -590,7 +603,7 @@ export function TechStackClient({ projectId }: Props) {
     } finally {
       setTruthLoading(false);
     }
-  }
+  }, [projectId, intakeContext]);
 
   // Kick AI when diff changes
   useEffect(() => {
@@ -607,7 +620,7 @@ export function TechStackClient({ projectId }: Props) {
     }
 
     void runTruthPass(candidates);
-  }, [diffStats, inventoryDisplayByNorm, diagramSystems, projectId, intakeContext]);
+  }, [diffStats, diagramSystems.length, inventorySystemsNorm.length, buildTruthCandidates, runTruthPass]);
 
   const normalizeName = (value: unknown): string | null => {
     if (typeof value !== "string") return null;
@@ -623,10 +636,10 @@ export function TechStackClient({ projectId }: Props) {
 
     for (const row of truthRows) {
       const names: string[] = [];
-      const inv = normalizeName((row as any).inventoryName);
-      const diagram = normalizeName((row as any).diagramName);
-      const rec = normalizeName((row as any).recommended);
-      const norm = normalizeName((row as any).norm);
+      const inv = normalizeName(row.inventoryName);
+      const diagram = normalizeName(row.diagramName);
+      const rec = normalizeName(row.recommended);
+      const norm = normalizeName(row.norm);
 
       if (inv) names.push(inv);
       if (diagram) names.push(diagram);
@@ -650,6 +663,9 @@ export function TechStackClient({ projectId }: Props) {
   })();
 
   const simplificationScore = computeSimplificationScore(diffStats);
+  useEffect(() => {
+    simplificationScoreRef.current = simplificationScore;
+  }, [simplificationScore]);
   const simplificationLabel =
     simplificationScore >= 0.8
       ? "Clean ecosystem"
@@ -693,7 +709,6 @@ export function TechStackClient({ projectId }: Props) {
         uniqueSystems: parsed.uniqueSystems,
       };
 
-      setInvStats(stats);
       setInventoryRows(stats.rowCount);
       setNormalizedApps(stats.uniqueSystems);
 
@@ -727,10 +742,10 @@ export function TechStackClient({ projectId }: Props) {
         uniqueSystems: stats.uniqueSystems,
       });
       setViewStage("table");
-      telemetryLog("upload_complete", { kind: "inventory" }, simplificationScore);
-    } catch (err: any) {
+      telemetryLog("upload_complete", { kind: "inventory" }, simplificationScoreRef.current);
+    } catch (err) {
       console.error("[TECH-STACK] Inventory upload failed (client parse)", err);
-      setInvError(err?.message ?? "Inventory upload failed.");
+      setInvError(getErrorMessage(err, "Inventory upload failed."));
       setInventorySystemsNorm([]);
       setInventoryDisplayByNorm({});
     } finally {
@@ -749,7 +764,7 @@ export function TechStackClient({ projectId }: Props) {
       const resp = await uploadLucidCsv(projectId, file);
       console.log("[TECH-STACK] Lucid upload success", resp);
       setViewStage("graph");
-      telemetryLog("upload_complete", { kind: "lucid" }, simplificationScore);
+      telemetryLog("upload_complete", { kind: "lucid" }, simplificationScoreRef.current);
 
       const stats = await fetchDigitalEnterpriseStats(projectId);
       if (stats) {
@@ -765,19 +780,8 @@ export function TechStackClient({ projectId }: Props) {
         );
         if (res.ok) {
           const json = await res.json();
-          if (json && Array.isArray(json.systems)) {
-            const systems: DiagramSystem[] = json.systems.map((s: any) => ({
-              id: String(s.id ?? s.name ?? s.normalizedName ?? "unknown"),
-              name: String(s.name ?? "Unknown"),
-              normalizedName: String(
-                s.normalizedName ?? normalizeSystemName(s.name),
-              ),
-              integrationCount: Number(s.integrationCount ?? 0),
-            }));
-            setDiagramSystems(systems);
-          } else {
-            setDiagramSystems([]);
-          }
+          const systems = mapDiagramSystems((json as { systems?: unknown })?.systems);
+          setDiagramSystems(systems);
         } else {
           const text = await res.text().catch(() => "");
           console.error(
@@ -786,15 +790,15 @@ export function TechStackClient({ projectId }: Props) {
             text,
           );
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error(
           "[TECH-STACK] Error refreshing diagram systems after Lucid upload",
           err,
         );
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("[TECH-STACK] Lucid upload failed", err);
-      setDeError(err?.message ?? "Lucid upload failed.");
+      setDeError(getErrorMessage(err, "Lucid upload failed."));
     } finally {
       setUploadingLucid(false);
     }
@@ -849,7 +853,7 @@ export function TechStackClient({ projectId }: Props) {
                     viewStage,
                     target: "digital_enterprise",
                   },
-                  simplificationScore,
+                  simplificationScoreRef.current,
                 );
                 if (typeof window !== "undefined") {
                   window.location.href = `/project/${projectId}/digital-enterprise`;
@@ -875,7 +879,7 @@ export function TechStackClient({ projectId }: Props) {
                     viewStage,
                     target: "harmonization_review",
                   },
-                  simplificationScore,
+                  simplificationScoreRef.current,
                 );
                 if (typeof window !== "undefined") {
                   window.location.href = `/project/${projectId}/harmonization-review`;

@@ -1,12 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import ReactFlow, {
-  Background,
-  Controls,
-  Edge,
-  Node,
-} from "reactflow";
+import ReactFlow, { Background, Controls, Edge, Node } from "reactflow";
 import "reactflow/dist/style.css";
 import { useSimulationEngine } from "@/hooks/useSimulationEngine";
 import type { LivingMapData } from "@/types/livingMap";
@@ -67,37 +62,36 @@ export function LivingMap({
   const { data: simData } = useSimulationEngine(data);
   const highlightSet = useMemo(() => {
     if (!highlightNodeIds) return null;
-    if (highlightNodeIds instanceof Set) return highlightNodeIds;
-    return new Set(highlightNodeIds);
+    if (highlightNodeIds instanceof Set) {
+      return new Set(Array.from(highlightNodeIds).map((value) => String(value)));
+    }
+    return new Set(highlightNodeIds.map((value) => String(value)));
   }, [highlightNodeIds]);
   const shouldDim = Boolean(highlightSet && highlightSet.size > 0);
 
   const domainColors = useMemo(() => {
-    const palette = COLORS.domains;
+    const palette = COLORS.domains as Record<string, string>;
     const seen = new Map<string, string>();
-    simData.nodes.forEach((n) => {
-      const domain = normalizeDomainValue((n as any).domain);
-      const key = domain || "Other";
-      if (!seen.has(key)) {
-        const color =
-          (palette as any)[key.toLowerCase()] ??
-          (palette as any)["other"] ??
-          COLORS.neutral;
-        seen.set(key, color);
+    simData.nodes.forEach((node) => {
+      const domain = normalizeDomainValue(node.domain);
+      if (!seen.has(domain)) {
+        const color = palette[domain.toLowerCase()] ?? palette.other ?? COLORS.neutral;
+        seen.set(domain, color);
       }
     });
     if (!seen.size) {
-      seen.set("Other", (palette as any)["other"] ?? COLORS.neutral);
+      seen.set("Other", palette.other ?? COLORS.neutral);
     }
     return seen;
   }, [simData.nodes]);
 
   const nodesToRender = useMemo(() => {
-    const byDomain = new Map<string, any[]>();
-    simData.nodes.forEach((n) => {
-      const domain = normalizeDomainValue((n as any).domain);
-      if (!byDomain.has(domain)) byDomain.set(domain, []);
-      byDomain.get(domain)!.push(n);
+    const byDomain = new Map<string, LivingMapData["nodes"]>();
+    simData.nodes.forEach((node) => {
+      const domain = normalizeDomainValue(node.domain);
+      const bucket = byDomain.get(domain) ?? [];
+      bucket.push(node);
+      byDomain.set(domain, bucket);
     });
 
     // NOTE: Layout tuning knobs for domain/child placement.
@@ -149,9 +143,9 @@ export function LivingMap({
         const localRow = Math.floor(i / maxPerRow);
         const columnsThisRow = Math.min(maxPerRow, bucket.length - localRow * maxPerRow);
         const rowOffset = ((maxPerRow - columnsThisRow) * cellSpacingX) / 2;
-        const label = (node as any).label ?? (node as any).name ?? node.id;
+        const label = node.label ?? node.id;
         const isSelected = selectedNodeId === node.id;
-        const isFocused = highlightSet?.has(String(node.id));
+        const isFocused = highlightSet?.has(node.id);
         childNodes.push({
           id: String(node.id),
           parentId: `group-${domain}`,
@@ -173,7 +167,7 @@ export function LivingMap({
             wordBreak: "break-word",
             opacity: shouldDim ? (isFocused ? 1 : dimOpacity) : 1,
           },
-        } as Node);
+        });
       });
     });
 
@@ -182,16 +176,15 @@ export function LivingMap({
 
   const visibleNodeIds = useMemo(() => new Set(nodesToRender.filter((n) => n.type !== "group").map((n) => n.id)), [nodesToRender]);
 
-  const edges = useMemo(() => {
+  const edges = useMemo<Edge[]>(() => {
     return (simData.edges ?? [])
-      .filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
-      .map((e) => {
-        const focused =
-          highlightSet?.has(String(e.source)) && highlightSet?.has(String(e.target));
+      .filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+      .map((edge) => {
+        const focused = highlightSet?.has(edge.source) && highlightSet?.has(edge.target);
         return {
-          id: e.id,
-          source: e.source,
-          target: e.target,
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
           type: "bezier",
           style: {
             strokeWidth: 1.2,
@@ -199,7 +192,7 @@ export function LivingMap({
             opacity: shouldDim ? (focused ? 0.65 : dimOpacity) : 0.55,
           },
         };
-      }) as Edge[];
+      });
   }, [simData.edges, visibleNodeIds, highlightSet, shouldDim, dimOpacity]);
 
   return (

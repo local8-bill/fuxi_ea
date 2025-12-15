@@ -113,7 +113,7 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
             },
             "border-color": (ele: any) => {
               const d = ele.data("domain") || "Other";
-              // @ts-ignore
+              // @ts-expect-error: domain color map is keyed by domain strings
               return domainColors[d] ?? domainColors["Other"] ?? "#cbd5e1";
             },
             "border-width": 1.5,
@@ -134,21 +134,18 @@ export function CytoGraph({ graph, height = 720 }: CytoGraphProps) {
             "label": "data(label)",
             "background-color": (ele: any) => {
               const name = ele.data("label");
-              const key = name in domainColors ? name : "Other";
-              // @ts-ignore
+              const key = (name in domainColors ? name : "Other") as keyof typeof domainColors;
               return domainColors[key] ?? "#e2e8f0";
             },
             "border-color": "#cbd5e1",
             "background-opacity": 0.12,
             "shape": "round-rectangle",
-            // @ts-ignore
-            "padding": "12px",
+            "padding": "12px" as any,
             "min-width": 420,
             "min-height": 280,
             "text-valign": "top",
             "text-halign": "center",
-            // @ts-ignore
-            "text-margin-y": -10,
+            "text-margin-y": -10 as any,
             "font-size": "14px",
           },
         },

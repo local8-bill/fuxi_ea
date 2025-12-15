@@ -57,7 +57,7 @@ export function ScoringDrawer({ onClose }: { onClose: () => void }) {
             <span className="font-medium">Use override scores for this capability</span>
           </label>
           <p className="text-sm text-slate-600">
-            When enabled, the sliders below will write to an "override" set and take precedence over the base scores.
+            When enabled, the sliders below will write to an &quot;override&quot; set and take precedence over the base scores.
           </p>
         </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/Card";
 
 const THEMES = ["zinc", "slate", "stone", "indigo", "sky", "neutral"];

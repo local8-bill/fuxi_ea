@@ -14,7 +14,12 @@ export function GlobalNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  if (searchParams?.get("embed") === "1" || pathname?.startsWith("/dev/")) {
+  const hideNav =
+    searchParams?.get("embed") === "1" ||
+    pathname?.startsWith("/dev/") ||
+    pathname?.startsWith("/project/");
+
+  if (hideNav) {
     return null;
   }
 

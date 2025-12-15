@@ -43,9 +43,22 @@ export function ProjectFlowBar({ projectId }: Props) {
   }));
   const completed = enriched.filter((s) => s.status === "complete").length;
   const progress = Math.round((completed / enriched.length) * 100);
-  const createdAt = state?.createdAt ? new Date(state.createdAt) : null;
-  const elapsed = createdAt ? Math.max(0, Date.now() - createdAt.getTime()) : 0;
-  const elapsedMin = Math.round(elapsed / 60000);
+  const createdAtMs = state?.createdAt ? new Date(state.createdAt).getTime() : null;
+  const [elapsedMinutes, setElapsedMinutes] = React.useState(() => 0);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !createdAtMs) {
+      setElapsedMinutes(0);
+      return;
+    }
+    const updateElapsed = () => {
+      const diff = Math.max(0, Date.now() - createdAtMs);
+      setElapsedMinutes(Math.round(diff / 60000));
+    };
+    updateElapsed();
+    const id = window.setInterval(updateElapsed, 60000);
+    return () => window.clearInterval(id);
+  }, [createdAtMs]);
 
   return (
     <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -66,7 +79,7 @@ export function ProjectFlowBar({ projectId }: Props) {
           ))}
         </div>
         <div className="text-xs text-slate-600">
-          {progress}% · {elapsedMin}m elapsed
+          {progress}% · {elapsedMinutes}m elapsed
         </div>
       </div>
       <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
