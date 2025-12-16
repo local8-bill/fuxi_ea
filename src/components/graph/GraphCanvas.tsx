@@ -6,7 +6,6 @@ import "reactflow/dist/style.css";
 import type { LivingEdge, LivingNode } from "@/types/livingMap";
 import type { GraphFocus, GraphViewMode, GraphRevealStage } from "@/hooks/useGraphTelemetry";
 import { useGraphTelemetry } from "@/hooks/useGraphTelemetry";
-import { useGraphNarration } from "@/hooks/useGraphNarration";
 import { GraphNode, type GraphNodeData } from "./GraphNode";
 import { GraphEdge, type GraphEdgeData } from "./GraphEdge";
 import { GraphControls } from "./GraphControls";
@@ -35,7 +34,7 @@ interface GraphCanvasProps {
   onNodeSelect?: (id: string | null) => void;
   onViewModeChange?: (mode: GraphViewMode) => void;
   onStageChange?: (stage: GraphRevealStage) => void;
-  height?: number;
+  height?: number | string;
   projectId?: string;
   sequence?: GraphSequenceItem[];
   scenarioPhase?: string | null;
@@ -165,7 +164,7 @@ function buildElements(
     const visibleSystems = !isExpanded && systemDepthLimit > 0 ? bucket.slice(0, systemDepthLimit) : bucket;
     const hiddenCount = bucket.length - visibleSystems.length;
     const rowsNeeded = Math.max(1, Math.ceil(visibleSystems.length / Math.max(1, systemColumns)));
-    const headerAllowance = overlayActive ? 56 : 40;
+    const headerAllowance = overlayActive ? 80 : 64;
     const topContentPadding = paddingY + headerAllowance;
     const bottomContentPadding = paddingY;
     const verticalPaddingTotal = topContentPadding + bottomContentPadding;
@@ -311,6 +310,10 @@ export function GraphCanvas({
   fitViewKey,
 }: GraphCanvasProps) {
   const highlightSet = useMemo(() => convertHighlight(highlightNodeIds), [highlightNodeIds]);
+  const mergedHighlightSet = useMemo(() => {
+    if (!highlightSet || highlightSet.size === 0) return null;
+    return new Set(highlightSet);
+  }, [highlightSet]);
   const expandedDomainSet = useMemo(() => convertDomainSet(expandedDomains), [expandedDomains]);
   const elements = useMemo(
     () =>
@@ -319,7 +322,7 @@ export function GraphCanvas({
         livingEdges,
         viewMode,
         stage,
-        highlightSet,
+        mergedHighlightSet,
         selectedNodeId,
         sequence,
         scenarioPhase,
@@ -347,7 +350,7 @@ export function GraphCanvas({
       livingEdges,
       viewMode,
       stage,
-      highlightSet,
+      mergedHighlightSet,
       selectedNodeId,
       sequence,
       scenarioPhase,
@@ -369,15 +372,21 @@ export function GraphCanvas({
   );
   const { trackInteraction } = useGraphTelemetry(projectId);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
-  const narration = useGraphNarration({ focus, focusLabel, viewMode, stage });
 
   useEffect(() => {
     if (!flowInstance) return;
     flowInstance.fitView({ padding: fitViewPadding, duration: 600 });
-  }, [flowInstance, fitViewPadding, fitViewKey]);
+    const currentZoom = flowInstance.getZoom();
+    if (currentZoom < 0.75) {
+      flowInstance.zoomTo(0.75, { duration: 300 });
+    }
+  }, [flowInstance, fitViewPadding, fitViewKey, domainColumns, elements.nodes.length]);
 
   return (
-    <div className="relative rounded-[32px] border border-neutral-200 bg-neutral-50 shadow-lg shadow-slate-900/5" style={{ height }}>
+    <div className="relative h-full rounded-[32px] border border-slate-200 bg-white shadow-lg shadow-slate-900/5" style={{ height }}>
+      {focusLabel ? (
+        <div className="pointer-events-none absolute left-6 top-4 rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">{focusLabel}</div>
+      ) : null}
       {showIntegrationOverlay ? (
         <div className="pointer-events-none absolute right-4 top-4 flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/90 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-emerald-800 shadow-sm">
           <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
@@ -424,11 +433,6 @@ export function GraphCanvas({
       >
         <Background color="#e5e7eb" gap={24} />
       </ReactFlow>
-      <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
-        <div className="rounded-2xl border border-neutral-200 bg-neutral-50/90 px-4 py-2 text-xs text-neutral-600 shadow">
-          EAgent · {narration}
-        </div>
-      </div>
     </div>
   );
 }

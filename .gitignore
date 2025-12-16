@@ -60,6 +60,8 @@ npm-debug.log*
 public/test.css
 .next/tw-test.css
 data/
+!src/app/data/
+!src/app/data/**/*
 
 # local archives
 _archive/

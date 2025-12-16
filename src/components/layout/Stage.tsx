@@ -6,14 +6,16 @@ import clsx from "clsx";
 interface StageProps {
   children: ReactNode;
   padded?: boolean;
+  className?: string;
 }
 
-export function Stage({ children, padded = true }: StageProps) {
+export function Stage({ children, padded = true, className }: StageProps) {
   return (
     <section
       className={clsx(
-        "relative flex min-h-[600px] flex-1 flex-col rounded-3xl border border-white/10 bg-[#181827] text-white",
+        "relative flex flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-sm min-h-0 sm:min-h-[600px]",
         padded ? "p-6" : "",
+        className,
       )}
     >
       {children}

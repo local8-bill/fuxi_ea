@@ -1,70 +1,13 @@
 :root {
-  --uxshell-sidebar-width: 280px;
-  --uxshell-column-gap: 24px;
-  --uxshell-right-rail-width: 320px;
-}
-
-.uxshell-root {
-  min-height: 100vh;
-  background: radial-gradient(circle at 20% 20%, #f8fafc, #eef2ff 45%, #e2e8f0 90%);
+  --uxshell-nav-width: 260px;
+  --uxshell-left-rail-width: 220px;
+  --uxshell-right-rail-width: 260px;
 }
 
 .uxshell-layout {
   min-height: 100vh;
-  position: relative;
-}
-
-.uxshell-shell-grid {
-  display: grid;
-  grid-template-columns: var(--uxshell-sidebar-width) 1fr;
-  min-height: 100vh;
-  margin-top: 8px;
-  padding-top: 0;
-  column-gap: var(--uxshell-column-gap);
-}
-
-.uxshell-shell-grid.sidebar-hidden {
-  grid-template-columns: 1fr;
-}
-
-.uxshell-shell-grid.sidebar-hidden .uxshell-sidebar {
-  display: none;
-}
-
-.uxshell-sidebar {
-  @apply border-r border-black/5 overflow-y-auto p-2;
-  max-width: 280px;
-  flex-shrink: 0;
-  background-color: var(--sidebar-bg, #fafafa);
-  min-height: calc(100vh - 56px);
-}
-
-.uxshell-content {
-  @apply overflow-y-auto px-4 pt-3 pb-8;
-  background-color: var(--content-bg, #ffffff);
-  min-width: 0;
-  flex-grow: 1;
-  min-height: calc(100vh - 56px);
-}
-
-@media (max-width: 1439px) {
-  :root {
-    --uxshell-sidebar-width: 260px;
-    --uxshell-column-gap: 16px;
-  }
-  .uxshell-content {
-    padding: 20px;
-  }
-}
-
-@media (max-width: 1023px) {
-  :root {
-    --uxshell-sidebar-width: 240px;
-    --uxshell-column-gap: 12px;
-  }
-  .uxshell-content {
-    padding: 16px;
-  }
+  background-color: #ffffff;
+  color: #0f172a;
 }
 
 .uxshell-topbar {
@@ -72,47 +15,114 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 56px;
-  background-color: #1c1c1e;
-  z-index: 50;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  z-index: 60;
+}
+
+.uxshell-body {
+  display: flex;
+  min-height: 100vh;
+  padding-top: 48px;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+.uxshell-nav-column {
+  width: var(--uxshell-nav-width);
+  border-right: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  overflow-y: auto;
+}
+
+.uxshell-stage-wrapper {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+.uxshell-rail-stack {
+  display: flex;
+  align-items: stretch;
+  background-color: #ffffff;
+}
+
+.uxshell-rail-stack--left {
+  border-right: 1px solid #e2e8f0;
+}
+
+.uxshell-rail-stack--right {
+  border-left: 1px solid #e2e8f0;
+}
+
+.uxshell-rail-toggle {
+  width: 28px;
+  background-color: #f8fafc;
+  border: 0;
+  border-left: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  color: #0f172a;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.uxshell-topbar-inner {
-  display: flex;
-  width: 100%;
-  justify-content: space-between;
-  align-items: center;
-  padding-left: 16px;
-  padding-right: calc(var(--uxshell-right-rail-width) + var(--uxshell-column-gap));
+.uxshell-rail-stack--left .uxshell-rail-toggle {
+  border-left: 0;
 }
 
-@media (max-width: 1200px) {
-  .uxshell-topbar-inner {
-    padding-left: 20px;
-    padding-right: 32px;
-  }
+.uxshell-rail-stack--right .uxshell-rail-toggle {
+  border-right: 0;
 }
 
-@media (max-width: 768px) {
-  .uxshell-topbar-inner {
-    padding-left: 16px;
-    padding-right: 24px;
-  }
+.uxshell-rail-toggle:hover {
+  background-color: #e2e8f0;
 }
 
-.uxshell-shell {
-  backdrop-filter: blur(6px);
+.uxshell-left-rail {
+  width: var(--uxshell-left-rail-width);
+  background-color: #f8fafc;
+  overflow-y: auto;
+}
+
+.uxshell-right-rail {
+  width: var(--uxshell-right-rail-width);
+  background-color: #ffffff;
+  overflow-y: auto;
 }
 
 .uxshell-stage {
-  min-height: 60vh;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 32px;
 }
 
-.uxshell-card {
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+@media (max-width: 1280px) {
+  :root {
+    --uxshell-nav-width: 220px;
+    --uxshell-left-rail-width: 180px;
+    --uxshell-right-rail-width: 220px;
+  }
+  .uxshell-stage {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .uxshell-right-rail {
+    display: none;
+  }
+  .uxshell-stage {
+    padding: 16px;
+  }
 }

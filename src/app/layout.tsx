@@ -1,7 +1,8 @@
 // src/app/layout.tsx
-import "./globals.css";
-import { Suspense, type ReactNode } from "react";
-import { GlobalNav } from "@/features/common/GlobalNav";
+import "@/app/globals.css";
+import "@/styles/uxshell.css";
+import type { ReactNode } from "react";
+import { UnifiedShell } from "@/components/layout/UnifiedShell";
 import { ModeBridge } from "@/components/system/ModeBridge";
 
 export const metadata = {
@@ -11,13 +12,12 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900">
-        <Suspense fallback={null}>
-          <GlobalNav />
-        </Suspense>
-        <ModeBridge />
-        <div className="pt-6">{children}</div>
+    <html lang="en" className="theme-clean-white">
+      <body className="min-h-screen bg-white text-slate-900">
+        <UnifiedShell>
+          <ModeBridge />
+          {children}
+        </UnifiedShell>
       </body>
     </html>
   );

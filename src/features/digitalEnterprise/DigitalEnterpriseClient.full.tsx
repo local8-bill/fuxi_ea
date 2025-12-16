@@ -4,25 +4,24 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useSearchParams, useRouter } from "next/navigation";
 import clsx from "clsx";
 import { NodeInspector } from "@/components/graph/NodeInspector";
-import { GraphSimulationControls, PhaseInsightStrip, type PhaseInsight } from "@/components/graph/GraphSimulationControls";
-import { GraphSequencerPanel, type GraphSequencerItem } from "@/components/graph/GraphSequencerPanel";
+import type { GraphSequencerItem } from "@/components/graph/GraphSequencerPanel";
 import { GraphControlPanel } from "@/components/graph/GraphLayoutSection";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
-import { Icons } from "@/components/ui/icons";
 import sequencerDataset from "@/data/sequencer.json";
 import type { LivingMapData, LivingNode } from "@/types/livingMap";
 import { Card } from "@/components/ui/Card";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useTelemetry } from "@/hooks/useTelemetry";
 import { useAIInsights } from "@/hooks/useAIInsights";
+import { useResizeObserver } from "@/hooks/useResizeObserver";
 import { useUserGenome } from "@/lib/context/userGenome";
 import { emitAdaptiveEvent } from "@/lib/adaptive/eventBus";
 import type { LearningSnapshot } from "@/hooks/useLearningSnapshot";
 import type { GraphFocus, GraphRevealStage, GraphViewMode } from "@/hooks/useGraphTelemetry";
 import { useGraphTelemetry } from "@/hooks/useGraphTelemetry";
-import { Rail } from "@/components/layout/Rail";
 import { Stage } from "@/components/layout/Stage";
 import { OptionMenu } from "@/components/layout/OptionMenu";
+import { SceneTemplate } from "@/components/layout/SceneTemplate";
 import { useALEContext, aleContextStore } from "@/lib/ale/contextStore";
 import { useExperienceFlow, type ExperienceScene } from "@/hooks/useExperienceFlow";
 import {
@@ -34,9 +33,7 @@ import {
   FOCUS_LENSES,
   GOAL_HEURISTICS,
   GOAL_OPTIONS,
-  LEFT_RAIL_STORAGE_KEY,
   PLATFORM_OPTIONS,
-  RIGHT_RAIL_STORAGE_KEY,
   STAGE_OPTIONS,
   VIEW_MODE_OPTIONS,
   type DigitalEnterpriseStats,
@@ -80,23 +77,16 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   const [graphLoading, setGraphLoading] = useState<boolean>(true);
   const [graphError, setGraphError] = useState<string | null>(null);
 
-  const [graphRevealed, setGraphRevealed] = useState(false);
   const [graphViewMode, setGraphViewMode] = useState<GraphViewMode>("systems");
   const [revealStage, setRevealStage] = useState<GraphRevealStage>("orientation");
-  const [leftRailCollapsed, setLeftRailCollapsed] = useState(false);
-  const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
   const [graphSource, setGraphSource] = useState<GraphDataSource>(null);
   const [graphSnapshotLabel, setGraphSnapshotLabel] = useState<string | null>(null);
   const [sequencePromptOpen, setSequencePromptOpen] = useState(false);
   const [sequencePromptValue, setSequencePromptValue] = useState("Replace OMS globally by 2029.");
   const [sequenceSubmitting, setSequenceSubmitting] = useState(false);
   const [sequenceError, setSequenceError] = useState<string | null>(null);
-  const [activePhase, setActivePhase] = useState(DIGITAL_TWIN_TIMELINE[0]?.id ?? "fy26");
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(2600);
-  const playbackTimer = useRef<NodeJS.Timeout | null>(null);
-  const [sequence, setSequence] = useState<SequencerItem[]>(sequencerData);
-  const [dragId, setDragId] = useState<string | null>(null);
+  const [activePhase] = useState(DIGITAL_TWIN_TIMELINE[0]?.id ?? "fy26");
+  const sequence = useMemo(() => sequencerData, []);
   const [flowStep, setFlowStep] = useState<FlowStep>("domain");
   const flowStepRef = useRef<FlowStep>("domain");
   const [focusType, setFocusType] = useState<FocusType>("domain");
@@ -145,90 +135,16 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     [role],
   );
   const graphTelemetry = useGraphTelemetry(projectId);
-  const phaseInsights: PhaseInsight[] = useMemo(
-    () =>
-      DIGITAL_TWIN_TIMELINE.map((band) => {
-        const items = sequence.filter((step) => step.phase === band.id);
-        if (!items.length) {
-          return { phase: band.id, label: band.label, roi: 0, tcc: 0, risk: 0.5 };
-        }
-        const totals = items.reduce(
-          (acc, step) => {
-            acc.roi += step.impact;
-            acc.tcc += step.cost;
-            acc.risk += 1 - step.impact;
-            return acc;
-          },
-          { roi: 0, tcc: 0, risk: 0 },
-        );
-        return {
-          phase: band.id,
-          label: band.label,
-          roi: totals.roi / items.length,
-          tcc: totals.tcc,
-          risk: totals.risk / items.length,
-        };
-      }),
-    [sequence],
-  );
-  const logLearningEvent = useCallback((code: string, details?: Record<string, unknown>) => {
-    void fetch("/api/ale/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, details, source: "digital_twin" }),
-    }).catch(() => null);
-  }, []);
-  const handleDragStart = (id: string) => setDragId(id);
-  const handleDragOver = (id: string) => {
-    if (!dragId || dragId === id) return;
-    const currentIndex = sequence.findIndex((item) => item.id === dragId);
-    const targetIndex = sequence.findIndex((item) => item.id === id);
-    if (currentIndex === -1 || targetIndex === -1) return;
-    const updated = [...sequence];
-    const [moved] = updated.splice(currentIndex, 1);
-    updated.splice(targetIndex, 0, moved);
-    setSequence(updated);
-    logLearningEvent("LE-002", { from: currentIndex, to: targetIndex, item: moved.id });
-  };
-  const handleDragEnd = () => setDragId(null);
-  const handlePhaseChange = useCallback(
-    (phase: string) => {
-      setActivePhase(phase);
-      logTelemetry("digital_twin.phase_changed", { phase });
-      emitAdaptiveEvent("ux_mode:set", { mode: "digital-phase", step: phase });
-      logLearningEvent("LE-001", { phase });
-    },
-    [logTelemetry, logLearningEvent],
-  );
-  const phaseOrder = useMemo(() => DIGITAL_TWIN_TIMELINE.map((band) => band.id), []);
-  const stepPhaseForward = useCallback(() => {
-    setActivePhase((current) => {
-      const currentIndex = phaseOrder.indexOf(current);
-      const nextPhase = phaseOrder[(currentIndex + 1) % phaseOrder.length];
-      logLearningEvent("LE-004", { nextPhase });
-      return nextPhase;
-    });
-  }, [phaseOrder, logLearningEvent]);
-  useEffect(() => {
-    if (!isPlaying) {
-      if (playbackTimer.current) clearInterval(playbackTimer.current);
-      playbackTimer.current = null;
-      return;
-    }
-    playbackTimer.current = setInterval(() => {
-      stepPhaseForward();
-    }, playbackSpeed);
-    return () => {
-      if (playbackTimer.current) clearInterval(playbackTimer.current);
-    };
-  }, [isPlaying, playbackSpeed, stepPhaseForward]);
-  const handlePlaybackToggle = () => {
-    setIsPlaying((prev) => {
-      const next = !prev;
-      logLearningEvent(next ? "LE-006" : "LE-007", { playing: next });
-      return next;
-    });
-  };
+  const { ref: stageContainerRef, size: stageSize } = useResizeObserver<HTMLDivElement>();
+  const responsiveDomainColumns = useMemo(() => {
+    const width = stageSize.width;
+    if (!width) return 3;
+    if (width > 1800) return 5;
+    if (width > 1400) return 4;
+    if (width < 700) return 1;
+    if (width < 1000) return 2;
+    return 3;
+  }, [stageSize.width]);
   const livingMapData = useMemo<LivingMapData>(() => {
     const fallback = graphData ?? { nodes: [], edges: [] };
     const safeNodes = ((fallback.nodes ?? []) as LivingNode[]).filter(Boolean);
@@ -461,8 +377,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   useEffect(() => {
     if (!hasGraph || graphLoading) return;
     const timer = window.setTimeout(() => {
-      setGraphRevealed(true);
-       setRevealStage((prev) => (prev === "orientation" ? "exploration" : prev));
+      setRevealStage((prev) => (prev === "orientation" ? "exploration" : prev));
       logTelemetry("digital_twin.graph_revealed", {
         nodes: livingMapData.nodes.length,
         edges: livingMapData.edges.length,
@@ -491,24 +406,6 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   useEffect(() => {
     graphTelemetry.trackStage(revealStage);
   }, [graphTelemetry, revealStage]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const storedLeft = window.localStorage.getItem(LEFT_RAIL_STORAGE_KEY);
-    const storedRight = window.localStorage.getItem(RIGHT_RAIL_STORAGE_KEY);
-    if (storedLeft) setLeftRailCollapsed(storedLeft === "1");
-    if (storedRight) setRightRailCollapsed(storedRight === "1");
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(LEFT_RAIL_STORAGE_KEY, leftRailCollapsed ? "1" : "0");
-  }, [leftRailCollapsed]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(RIGHT_RAIL_STORAGE_KEY, rightRailCollapsed ? "1" : "0");
-  }, [rightRailCollapsed]);
 
   const advanceFlow = useCallback(
     (next: FlowStep) => {
@@ -677,22 +574,6 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
 
   const handleRevealStageChange = (stage: GraphRevealStage) => {
     setRevealStage(stage);
-  };
-
-  const handleLeftRailToggle = () => {
-    setLeftRailCollapsed((prev) => {
-      const next = !prev;
-      logTelemetry("digital_twin.rail_toggle", { rail: "left", collapsed: next });
-      return next;
-    });
-  };
-
-  const handleRightRailToggle = () => {
-    setRightRailCollapsed((prev) => {
-      const next = !prev;
-      logTelemetry("digital_twin.rail_toggle", { rail: "right", collapsed: next });
-      return next;
-    });
   };
 
   const focusSummary = useMemo(() => {
@@ -869,23 +750,6 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     </div>
   );
 
-  const rightRailPanels = (
-    <div className="space-y-4">
-      <GraphSequencerPanel
-        sequence={sequence}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        activePhase={activePhase}
-        onSimulate={(phase) => handlePhaseChange(phase)}
-        onTogglePlayback={handlePlaybackToggle}
-        isPlaying={isPlaying}
-      />
-      <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={inspectorTags} />
-    </div>
-  );
-
-  const railStateKey = `${leftRailCollapsed ? "1" : "0"}-${rightRailCollapsed ? "1" : "0"}`;
   const sequencePromptProps = {
     open: sequencePromptOpen,
     value: sequencePromptValue,
@@ -908,15 +772,6 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
               <ErrorBanner message={statsError} onRetry={loadStats} />
             </div>
           ) : null}
-          <div className="mb-6 rounded-3xl border border-slate-200/60 bg-white/70 px-4 py-3 shadow-sm backdrop-blur">
-            <p className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Digital Twin</p>
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-700">
-              <span>Enterprise OMS Transformation Graph - v{DIGITAL_TWIN_VERSION}</span>
-              <span className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">
-                Focus: {selectedFocusValue ? selectedFocusValue : "None selected"}
-              </span>
-            </div>
-          </div>
           {graphError ? (
             <Card className="mb-4 border-rose-200 bg-rose-50">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -927,48 +782,45 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
               </div>
             </Card>
           ) : null}
-          <div className="flex gap-4">
-            <Rail side="left" collapsed={leftRailCollapsed} onToggle={handleLeftRailToggle} title="Data">
-              <div className="space-y-4 text-sm text-white">
-                <div className="space-y-2">
-                  <button type="button" onClick={handleLoadLiveData} className="w-full rounded-xl border border-white/20 px-3 py-2 text-left font-semibold transition hover:bg-white/10">
-                    Load Live Data
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleLoadSnapshotClick}
-                    className="w-full rounded-xl border border-white/20 px-3 py-2 text-left font-semibold transition hover:bg-white/10"
-                  >
-                    Load Snapshot (.json)
-                  </button>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80">
-                  <p className="font-semibold uppercase tracking-[0.3em] text-white/60">Current Source</p>
-                  <p className="mt-1 text-sm text-white">
-                    {graphSource === "snapshot" ? graphSnapshotLabel ?? "Snapshot" : graphSource === "live" ? "Live (API)" : "Not loaded"}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80">
-                  <p className="font-semibold uppercase tracking-[0.3em] text-white/60">ALE Context</p>
-                  <p className="mt-1 text-sm text-white">{aleContext ? "Connected" : "Initializing..."}</p>
-                </div>
+          <SceneTemplate
+            leftRail={
+              <div className="space-y-6">
+                <DigitalDataRail
+                  onLoadLiveData={handleLoadLiveData}
+                  onLoadSnapshot={handleLoadSnapshotClick}
+                  graphSource={graphSource}
+                  graphSnapshotLabel={graphSnapshotLabel}
+                  aleConnected={Boolean(aleContext)}
+                />
+                {leftRailPanels}
               </div>
-            </Rail>
-            <div className="flex-1">
-              <Stage padded={false}>
-                <div className="border-b border-white/10 px-6 py-4 text-white">
+            }
+            rightRail={
+              <DigitalRightRail
+                aleConnected={Boolean(aleContext)}
+                inspectorName={inspectorName}
+                inspectorDomain={inspectorDomain}
+                inspectorTags={inspectorTags}
+                onOptionAction={handleOptionMenuAction}
+              />
+            }
+          >
+            <div ref={stageContainerRef} className="flex h-full flex-1 min-h-0">
+              <Stage padded={false} className="h-full min-h-0">
+                <div className="border-b border-slate-200 px-6 py-4 text-slate-900">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-400">Systems - Integrations</p>
-                      <h2 className="text-2xl font-semibold">Harmonized enterprise map</h2>
+                      <p className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Systems - Integrations</p>
+                      <h2 className="text-2xl font-semibold">Enterprise ecosystem</h2>
                     </div>
-                    <div className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-white/80">{graphViewMode.toUpperCase()}</div>
+                    <div className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600">{graphViewMode.toUpperCase()}</div>
                   </div>
                 </div>
-                <div className="flex-1 p-4">
-                  <div className="rounded-2xl border border-white/10 bg-[#10101c] p-3">
-                    {graphLoading && <div className="py-40 text-center text-sm text-white/70">Loading digital twin map...</div>}
-                    {!graphLoading && hasGraph ? (
+                <div className="flex flex-1 flex-col p-4 min-h-0">
+                  <div className="flex-1 min-h-[560px] h-full">
+                    {graphLoading ? (
+                      <div className="flex h-full items-center justify-center rounded-[32px] border border-slate-200 bg-white text-sm text-slate-500">Loading digital twin map...</div>
+                    ) : hasGraph ? (
                       <GraphCanvas
                         nodes={livingMapData.nodes}
                         edges={livingMapData.edges}
@@ -983,23 +835,24 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
                         onViewModeChange={handleGraphViewModeChange}
                         onStageChange={handleRevealStageChange}
                         projectId={projectId}
-                        height={720}
+                        height="100%"
+                        domainColumns={responsiveDomainColumns}
+                        fitViewKey={responsiveDomainColumns}
                         sequence={sequence}
                         scenarioPhase={activePhase}
                         showCanvasControls={false}
                         showIntegrationOverlay={flowStep === "integration"}
                       />
                     ) : (
-                      !graphLoading && <div className="py-36 text-center text-sm text-white/70">No harmonized systems yet. Import data to populate the graph.</div>
+                      <div className="flex h-full items-center justify-center rounded-[32px] border border-slate-200 bg-white text-sm text-slate-500">
+                        No harmonized systems yet. Import data to populate the graph.
+                      </div>
                     )}
                   </div>
                 </div>
               </Stage>
             </div>
-            <Rail side="right" collapsed={rightRailCollapsed} onToggle={handleRightRailToggle} title="Option Menu">
-              <OptionMenu onAction={handleOptionMenuAction} />
-            </Rail>
-          </div>
+          </SceneTemplate>
         </div>
         <SequencePromptOverlay {...sequencePromptProps} />
       </Fragment>
@@ -1060,6 +913,8 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
                 onStageChange={handleRevealStageChange}
                 projectId={projectId}
                 height={720}
+                domainColumns={responsiveDomainColumns}
+                fitViewKey={responsiveDomainColumns}
                 sequence={sequence}
                 scenarioPhase={activePhase}
                 showCanvasControls={false}
@@ -1184,5 +1039,70 @@ export function DigitalTwinTelemetryCard({ stats }: { stats: DigitalEnterpriseSt
         </div>
       </div>
     </Card>
+  );
+}
+
+function DigitalDataRail({
+  onLoadLiveData,
+  onLoadSnapshot,
+  graphSource,
+  graphSnapshotLabel,
+  aleConnected,
+}: {
+  onLoadLiveData: () => void;
+  onLoadSnapshot: () => void;
+  graphSource: GraphDataSource;
+  graphSnapshotLabel: string | null;
+  aleConnected: boolean;
+}) {
+  const sourceLabel = graphSource === "snapshot" ? graphSnapshotLabel ?? "Snapshot" : graphSource === "live" ? "Live (API)" : "Not loaded";
+  return (
+    <div className="space-y-4 text-sm text-slate-700">
+      <div>
+        <p className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Data</p>
+        <div className="mt-3 space-y-2">
+          <button type="button" onClick={onLoadLiveData} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-left font-semibold hover:border-slate-900">
+            Load Live Data
+          </button>
+          <button type="button" onClick={onLoadSnapshot} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-left font-semibold hover:border-slate-900">
+            Load Snapshot (.json)
+          </button>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs">
+        <p className="font-semibold uppercase tracking-[0.3em] text-slate-500">Current Source</p>
+        <p className="mt-1 text-sm text-slate-900">{sourceLabel}</p>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs">
+        <p className="font-semibold uppercase tracking-[0.3em] text-slate-500">ALE Context</p>
+        <p className="mt-1 text-sm text-slate-900">{aleConnected ? "Connected" : "Initializing..."}</p>
+      </div>
+    </div>
+  );
+}
+
+function DigitalRightRail({
+  aleConnected,
+  inspectorName,
+  inspectorDomain,
+  inspectorTags,
+  onOptionAction,
+}: {
+  aleConnected: boolean;
+  inspectorName: string | null;
+  inspectorDomain: string | null;
+  inspectorTags: string[];
+  onOptionAction: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <OptionMenu onAction={onOptionAction} />
+      <Card className="space-y-2 border-slate-200">
+        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">ALE Context</p>
+        <p className="text-sm font-semibold text-slate-900">{aleConnected ? "Connected" : "Initializing..."}</p>
+        <p className="text-xs text-slate-500">{aleConnected ? "Live reasoning available" : "Awaiting telemetry"}</p>
+      </Card>
+      <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={inspectorTags} />
+    </div>
   );
 }

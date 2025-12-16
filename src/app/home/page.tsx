@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { UXShellLayout } from "@/components/uxshell/UXShellLayout";
 import { PromptBar } from "@/components/uxshell/PromptBar";
 import { emitTelemetry } from "@/components/uxshell/telemetry";
 import type { AgentMessage } from "@/types/agent";
@@ -256,9 +255,8 @@ export default function HomePage() {
   }, [messages, projectId]);
 
   return (
-    <UXShellLayout sidebarHidden sidebar={null}>
-      <div className="min-h-[calc(100vh-48px)] bg-gradient-to-b from-white to-slate-50">
-        <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-10">
+    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-10">
           <div className="space-y-2 text-center">
             <p className="text-[0.55rem] uppercase tracking-[0.5em] text-slate-400">Command Deck</p>
             <h1 className="text-4xl font-semibold text-slate-900">{context?.userType === "first_time" ? "Welcome" : "Welcome back"}</h1>
@@ -371,8 +369,7 @@ export default function HomePage() {
               </div>
             </div>
           </div>
-        </div>
       </div>
-    </UXShellLayout>
+    </div>
   );
 }
