@@ -9,12 +9,18 @@ import { DigitalEnterpriseClient } from "@/app/project/[id]/digital-enterprise/D
 import { ROIScene } from "@/components/experience/scenes/ROIScene";
 import { InsightsScene } from "@/components/experience/scenes/InsightsScene";
 import { SequencerScene } from "@/components/experience/scenes/SequencerScene";
+import { AgentOnboardingScene } from "@/components/experience/scenes/OnboardingScene";
+import { HarmonizeScene } from "@/components/experience/scenes/HarmonizeScene";
+import { TransitionScene } from "@/components/experience/scenes/TransitionScene";
 import { useUnifiedShellSlots, type UnifiedNavModel } from "@/components/layout/UnifiedShell";
 import { SceneTemplate } from "@/components/layout/SceneTemplate";
+import { localRecentProjects } from "@/adapters/projects/localRecent";
 
 const sceneMeta: Record<ExperienceScene, { title: string; summary: string }> = {
   command: { title: "Command Deck", summary: "Resume where you left off or ask the agent what's next." },
   onboarding: { title: "Guided Onboarding", summary: "Capture context and files." },
+  harmonize: { title: "Harmonize", summary: "Normalize artifacts into a single graph." },
+  transition: { title: "Transition Plane", summary: "Compare current vs. future architectures." },
   digital: { title: "Digital Twin", summary: "Explore the harmonized map." },
   roi: { title: "ROI Dashboard", summary: "Forecast ROI/TCC impact." },
   sequencer: { title: "Sequencer", summary: "Stage modernization waves." },
@@ -44,6 +50,18 @@ const roles = [
   { key: "transformation", label: "Transformation Lead" },
 ];
 
+const FRIENDLY_PROJECTS: Record<
+  string,
+  {
+    label: string;
+    description: string;
+  }
+> = {
+  "700am": { label: "700am — Core", description: "LIVE · Harmonizing OMS/Finance" },
+  "951pm": { label: "951pm — Pilot", description: "DRAFT · Pilot workspace" },
+  demo: { label: "Demo Workspace", description: "Demo · Guided sample" },
+};
+
 export function ExperienceClient({ projectId }: { projectId: string }) {
   return (
     <AgentMemoryProvider projectId={projectId}>
@@ -57,6 +75,7 @@ function ExperienceClientBody({ projectId }: { projectId: string }) {
   const searchParams = useSearchParams();
   const { scene, setScene } = useExperienceFlow(projectId);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [recentProjects, setRecentProjects] = useState<string[]>([]);
   const { setNavModel } = useUnifiedShellSlots();
 
   useEffect(() => {
@@ -66,6 +85,34 @@ function ExperienceClientBody({ projectId }: { projectId: string }) {
       setExperienceScene(projectId, queryScene);
     }
   }, [projectId, scene, searchParams, setScene]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const syncRecents = async () => {
+      const list = await localRecentProjects.listRecent();
+      if (!cancelled) {
+        setRecentProjects(list);
+      }
+    };
+    void syncRecents();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pushAndSync = async () => {
+      await localRecentProjects.pushRecent(projectId);
+      if (cancelled) return;
+      const list = await localRecentProjects.listRecent();
+      if (!cancelled) setRecentProjects(list);
+    };
+    void pushAndSync();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const handleSceneChange = useCallback(
     (next: ExperienceScene) => {
@@ -87,6 +134,11 @@ function ExperienceClientBody({ projectId }: { projectId: string }) {
   );
 
   const sceneContent = useMemo(() => {
+    if (scene === "onboarding") {
+      return <AgentOnboardingScene projectId={projectId} onComplete={() => handleSceneChange("digital")} />;
+    }
+    if (scene === "harmonize") return <HarmonizeScene projectId={projectId} />;
+    if (scene === "transition") return <TransitionScene projectId={projectId} />;
     if (scene === "digital") return <DigitalEnterpriseClient projectId={projectId} />;
     if (scene === "sequencer") return <SequencerScene projectId={projectId} />;
     if (scene === "roi") return wrapWithTemplate(<ROIScene projectId={projectId} />);
@@ -100,7 +152,7 @@ function ExperienceClientBody({ projectId }: { projectId: string }) {
         <p className="text-xs text-slate-500">Placeholder scene — real component not reintroduced yet.</p>
       </div>,
     );
-  }, [projectId, scene, wrapWithTemplate]);
+  }, [handleSceneChange, projectId, scene, wrapWithTemplate]);
 
   const searchItems = useMemo<SearchItem[]>(
     () =>
@@ -121,15 +173,29 @@ function ExperienceClientBody({ projectId }: { projectId: string }) {
         {
           key: "Projects",
           title: "Projects",
-          items: [
-            {
-              key: projectId,
-              label: `Workspace ${projectId}`,
-              description: "Active project",
-              active: scene === "command",
-              onClick: () => handleSceneChange("command"),
-            },
-          ],
+          items: Array.from(
+            new Set([projectId, ...recentProjects, ...Object.keys(FRIENDLY_PROJECTS)]),
+          )
+            .slice(0, 5)
+            .map((id, index) => {
+              const friendly = FRIENDLY_PROJECTS[id];
+              return {
+                key: id,
+                label: friendly?.label ?? `Workspace ${id}`,
+                description:
+                  index === 0
+                    ? friendly?.description ?? "Active project"
+                    : friendly?.description ?? "Recent project",
+                active: id === projectId,
+                onClick: () => {
+                  if (id === projectId) {
+                    handleSceneChange("command");
+                  } else {
+                    router.push(`/project/${id}/experience?scene=digital`);
+                  }
+                },
+              };
+            }),
         },
         {
           key: "Modes",
@@ -166,7 +232,7 @@ function ExperienceClientBody({ projectId }: { projectId: string }) {
         },
       ],
     }),
-    [handleSceneChange, projectId, scene],
+    [handleSceneChange, projectId, recentProjects, router, scene],
   );
 
   useEffect(() => {

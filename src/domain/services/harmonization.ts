@@ -13,6 +13,7 @@ export type HarmonizedSystem = {
   source_origin: Source[];
   state: "added" | "removed" | "modified" | "unchanged";
   confidence: number;
+  subcomponents?: string[];
 };
 
 export type HarmonizedGraph = {
@@ -92,6 +93,7 @@ type RawRecord = {
   upstream: string[];
   downstream: string[];
   disposition?: string | null;
+  aliases?: string[];
 };
 
 function parseCsvFile(filePath: string): Record<string, any>[] {
@@ -116,22 +118,65 @@ function parseCsvFile(filePath: string): Record<string, any>[] {
   }
 }
 
+function cleanLabelInput(value: unknown): string {
+  if (value == null) return "";
+  return String(value).replace(/\s+/g, " ").trim();
+}
+
+function splitCompositeName(raw: string): { primary: string; alias?: string } {
+  const input = cleanLabelInput(raw);
+  if (!input) return { primary: "" };
+  const separators = [" — ", " – ", " - ", "—", "–"];
+  for (const separator of separators) {
+    const idx = input.indexOf(separator);
+    if (idx > 0) {
+      const primary = input.slice(0, idx).trim();
+      const alias = input.slice(idx + separator.length).trim();
+      if (primary && alias) return { primary, alias };
+      if (primary) return { primary };
+    }
+  }
+  return { primary: input };
+}
+
+function collectNameAndAliases(values: string[]): { primary: string; aliases: string[] } {
+  let primary = "";
+  const aliases = new Set<string>();
+  for (const value of values) {
+    if (!value) continue;
+    const { primary: candidate, alias } = splitCompositeName(value);
+    if (!primary && candidate) primary = candidate;
+    if (alias) aliases.add(alias);
+  }
+  if (!primary) {
+    const fallback = values.find((v) => v?.trim().length);
+    if (fallback) primary = cleanLabelInput(fallback);
+  }
+  return { primary, aliases: Array.from(aliases).filter(Boolean) };
+}
+
 function normalizeRecord(row: Record<string, any>, source: Source) {
   const label = resolveField(row, ["label", "Raw_Label", "Logical_Name", "Name", "System"]);
   const systemName = resolveField(row, ["system_name", "System", "Logical_Name", "Raw_Label", "Name"]);
-  const name = systemName || label;
+  const { primary: name, aliases } = collectNameAndAliases([systemName, label]);
   const domain = resolveField(row, ["domain", "Domain"]) || null;
   const upstreamRaw = resolveField(row, ["upstream", "Upstream", "Dependencies_Upstream"]);
   const downstreamRaw = resolveField(row, ["downstream", "Downstream", "Dependencies_Downstream"]);
   const disposition = resolveField(row, ["state", "Disposition_Interpretation"]) || null;
   const upstream = upstreamRaw
-    ? upstreamRaw.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
+    ? upstreamRaw
+        .split(/[,;]+/)
+        .map((s) => splitCompositeName(s).primary.trim())
+        .filter(Boolean)
     : [];
   const downstream = downstreamRaw
-    ? downstreamRaw.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
+    ? downstreamRaw
+        .split(/[,;]+/)
+        .map((s) => splitCompositeName(s).primary.trim())
+        .filter(Boolean)
     : [];
 
-  return { name, domain, upstream, downstream, disposition, source };
+  return { name, domain, upstream, downstream, disposition, source, aliases: aliases.length ? aliases : undefined };
 }
 
 function buildRawRecords(
@@ -210,6 +255,7 @@ function buildRawRecords(
         upstream: normalized.upstream.map((u) => normalizeKey(u)).filter(Boolean),
         downstream: normalized.downstream.map((d) => normalizeKey(d)).filter(Boolean),
         disposition: normalized.disposition,
+        aliases: normalized.aliases,
       });
     }
   }
@@ -293,6 +339,7 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
       domain: string | null;
       sources: Source[];
       changed: boolean;
+      aliases: Set<string>;
     }
   >();
 
@@ -307,6 +354,7 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
         domain: rec.domain,
         sources: [rec.source],
         changed: false,
+        aliases: new Set(rec.aliases ?? []),
       });
     } else {
       if (!existing.sources.includes(rec.source)) existing.sources.push(rec.source);
@@ -314,6 +362,11 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
         existing.changed = true;
         existing.domain = existing.domain ?? rec.domain;
       }
+      rec.aliases
+        ?.filter(Boolean)
+        .forEach((alias) => {
+          existing.aliases.add(alias);
+        });
     }
     rec.upstream.forEach((u) => edgeRequests.push({ from: u, to: rec.key, source: rec.source }));
     rec.downstream.forEach((d) => edgeRequests.push({ from: rec.key, to: d, source: rec.source }));
@@ -329,6 +382,7 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
     const evidence = [inInventory, inLucid, inFuture].filter(Boolean).length;
     let confidence = 0.4 + evidence * 0.2;
     if (entry.changed) confidence -= 0.05;
+    const aliases = Array.from(entry.aliases).filter(Boolean);
 
     nodes.push({
       id: entry.key,
@@ -338,6 +392,7 @@ export async function harmonizeSystems(opts?: { mode?: HarmonizeMode }): Promise
       source_origin: entry.sources,
       state,
       confidence: Math.max(0, Math.min(1, Number(confidence.toFixed(2)))),
+      subcomponents: aliases.length ? aliases : undefined,
     });
   }
 

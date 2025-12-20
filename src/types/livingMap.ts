@@ -13,6 +13,7 @@ export type LivingNode = {
   opportunityScore?: number;
   riskScore?: number;
   aiSummary?: string;
+  subcomponents?: string[];
 };
 
 export type LivingEdge = {

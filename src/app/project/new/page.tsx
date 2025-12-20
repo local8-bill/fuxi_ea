@@ -40,7 +40,7 @@ export default function StartPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
-      <h1 className="text-3xl font-bold mb-2">Fuxi • Capability Scoring</h1>
+      <h1 className="text-3xl font-bold mb-2">Fuxi · Enterprise Engine</h1>
       <p className="text-slate-600 mb-8">
         Pick a project workspace or create a new one.
       </p>

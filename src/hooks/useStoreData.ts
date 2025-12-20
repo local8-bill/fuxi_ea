@@ -24,6 +24,6 @@ export function useStoreData() {
       summary[record.region].total += record.stores;
       summary[record.region].brands[record.brand] = (summary[record.region].brands[record.brand] ?? 0) + record.stores;
     });
-    return { summary };
+    return { summary, records };
   }, []);
 }

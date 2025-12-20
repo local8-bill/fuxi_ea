@@ -6,9 +6,9 @@ import clsx from "clsx";
 import { NodeInspector } from "@/components/graph/NodeInspector";
 import type { GraphSequencerItem } from "@/components/graph/GraphSequencerPanel";
 import { GraphControlPanel } from "@/components/graph/GraphLayoutSection";
-import { GraphCanvas } from "@/components/graph/GraphCanvas";
+import { getDomainAccent } from "@/components/graph/graphDomainColors";
 import sequencerDataset from "@/data/sequencer.json";
-import type { LivingMapData, LivingNode } from "@/types/livingMap";
+import type { LivingMapData, LivingNode, LivingEdge } from "@/types/livingMap";
 import { Card } from "@/components/ui/Card";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useTelemetry } from "@/hooks/useTelemetry";
@@ -26,7 +26,6 @@ import { useALEContext, aleContextStore } from "@/lib/ale/contextStore";
 import { useExperienceFlow, type ExperienceScene } from "@/hooks/useExperienceFlow";
 import {
   ACTIONS,
-  DIGITAL_TWIN_DENOISE_MODE,
   DIGITAL_TWIN_TIMELINE,
   DIGITAL_TWIN_VERSION,
   DOMAIN_ALE_TAGS,
@@ -42,6 +41,7 @@ import {
   type GraphDataSource,
 } from "@/features/digitalEnterprise/constants";
 import { buildInsight, buildLivingMapData, formatNumber } from "@/features/digitalEnterprise/helpers";
+import { GraphCanvas } from "@/components/graph/GraphCanvas";
 import { SequencePromptOverlay } from "@/features/digitalEnterprise/SequencePromptOverlay";
 
 const getErrorMessage = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
@@ -54,6 +54,21 @@ interface Props {
 
 type SequencerItem = GraphSequencerItem;
 const sequencerData = sequencerDataset as SequencerItem[];
+
+type NodeMoveDirection = "toFuture" | "toCurrent";
+type IntegrationSummary = { upstream: number; downstream: number; peers: string[] };
+type DomainDiffItem = {
+  node: LivingNode;
+  state: "added" | "removed" | "changed" | "unchanged";
+  pending?: NodeMoveDirection | null;
+  integrationSummary?: IntegrationSummary;
+};
+type DomainDiffEntry = {
+  domain: string;
+  totalChanges: number;
+  current: Array<DomainDiffItem>;
+  future: Array<DomainDiffItem>;
+};
 
 const debugTwinLog = (...args: unknown[]) => {
   if (process.env.NODE_ENV === "production") return;
@@ -74,6 +89,18 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   const [statsError, setStatsError] = useState<string | null>(null);
 
   const [graphData, setGraphData] = useState<LivingMapData | null>(null);
+  const [futureGraphData, setFutureGraphData] = useState<LivingMapData | null>(null);
+  const [graphDiffs, setGraphDiffs] = useState<{ added: Set<string>; removed: Set<string>; changed: Set<string> }>({
+    added: new Set(),
+    removed: new Set(),
+    changed: new Set(),
+  });
+  const [manualMoves, setManualMoves] = useState<{ toFuture: Set<string>; toCurrent: Set<string> }>({
+    toFuture: new Set(),
+    toCurrent: new Set(),
+  });
+  const domainNavigatorRef = useRef<(domain: string) => void>();
+  const [confirmedDomains, setConfirmedDomains] = useState<Set<string>>(new Set());
   const [graphLoading, setGraphLoading] = useState<boolean>(true);
   const [graphError, setGraphError] = useState<string | null>(null);
 
@@ -85,6 +112,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   const [sequencePromptValue, setSequencePromptValue] = useState("Replace OMS globally by 2029.");
   const [sequenceSubmitting, setSequenceSubmitting] = useState(false);
   const [sequenceError, setSequenceError] = useState<string | null>(null);
+  const [graphVersion, setGraphVersion] = useState<"current" | "future">("current");
   const [activePhase] = useState(DIGITAL_TWIN_TIMELINE[0]?.id ?? "fy26");
   const sequence = useMemo(() => sequencerData, []);
   const [flowStep, setFlowStep] = useState<FlowStep>("domain");
@@ -135,6 +163,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     [role],
   );
   const graphTelemetry = useGraphTelemetry(projectId);
+  const futureViewSet = useRef(false);
   const { ref: stageContainerRef, size: stageSize } = useResizeObserver<HTMLDivElement>();
   const responsiveDomainColumns = useMemo(() => {
     const width = stageSize.width;
@@ -145,8 +174,17 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     if (width < 1000) return 2;
     return 3;
   }, [stageSize.width]);
+  const futureGraphReady = useMemo(() => {
+    if (!futureGraphData) return false;
+    return (futureGraphData.nodes?.length ?? 0) > 0;
+  }, [futureGraphData]);
+  const activeGraph = useMemo(() => {
+    if (graphVersion === "future" && futureGraphData) return futureGraphData;
+    return graphData;
+  }, [futureGraphData, graphData, graphVersion]);
+
   const livingMapData = useMemo<LivingMapData>(() => {
-    const fallback = graphData ?? { nodes: [], edges: [] };
+    const fallback = activeGraph ?? { nodes: [], edges: [] };
     const safeNodes = ((fallback.nodes ?? []) as LivingNode[]).filter(Boolean);
     const enriched = safeNodes.map((node) => {
       const insight = aiInsights.insights[node.id];
@@ -159,7 +197,149 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
       };
     });
     return { nodes: enriched, edges: fallback.edges ?? [] };
-  }, [graphData, aiInsights.insights]);
+  }, [activeGraph, aiInsights.insights]);
+  const nodeLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    livingMapData.nodes.forEach((node) => {
+      map.set(node.id, node.label ?? node.id);
+    });
+    return map;
+  }, [livingMapData.nodes]);
+  const integrationMap = useMemo(() => {
+    const map = new Map<string, IntegrationSummary>();
+    livingMapData.nodes.forEach((node) => {
+      map.set(node.id, { upstream: 0, downstream: 0, peers: [] });
+    });
+    livingMapData.edges.forEach((edge) => {
+      const sourceSummary = map.get(edge.source);
+      const targetSummary = map.get(edge.target);
+      if (sourceSummary) {
+        sourceSummary.downstream += 1;
+        const peerLabel = nodeLabelMap.get(edge.target) ?? edge.target;
+        if (!sourceSummary.peers.includes(peerLabel) && sourceSummary.peers.length < 3) {
+          sourceSummary.peers.push(peerLabel);
+        }
+      }
+      if (targetSummary) {
+        targetSummary.upstream += 1;
+        const peerLabel = nodeLabelMap.get(edge.source) ?? edge.source;
+        if (!targetSummary.peers.includes(peerLabel) && targetSummary.peers.length < 3) {
+          targetSummary.peers.push(peerLabel);
+        }
+      }
+    });
+    return map;
+  }, [livingMapData.edges, livingMapData.nodes, nodeLabelMap]);
+
+  const effectiveDiffs = useMemo(() => {
+    const added = new Set(graphDiffs.added);
+    const removed = new Set(graphDiffs.removed);
+    const changed = new Set(graphDiffs.changed);
+    manualMoves.toFuture.forEach((id) => {
+      added.add(id);
+      removed.delete(id);
+    });
+    manualMoves.toCurrent.forEach((id) => {
+      removed.add(id);
+      added.delete(id);
+    });
+    return { added, removed, changed };
+  }, [graphDiffs, manualMoves]);
+
+  useEffect(() => {
+    setManualMoves({ toFuture: new Set(), toCurrent: new Set() });
+  }, [projectId, graphData, futureGraphData]);
+
+  const domainDiffEntries = useMemo(() => {
+    if (!graphData || !futureGraphData) return [];
+    const domainMap = new Map<
+      string,
+      {
+        current: Array<DomainDiffItem>;
+        future: Array<DomainDiffItem>;
+      }
+    >();
+    const currentNodes = (graphData.nodes ?? []) as LivingNode[];
+    const futureNodes = (futureGraphData.nodes ?? []) as LivingNode[];
+    const normalizeDomain = (domain: unknown) => (typeof domain === "string" && domain.trim().length ? domain : "Other");
+    const manualFuture = manualMoves.toFuture;
+    const manualCurrent = manualMoves.toCurrent;
+
+    currentNodes.forEach((node) => {
+      const domain = normalizeDomain(node.domain);
+      if (!domainMap.has(domain)) {
+        domainMap.set(domain, { current: [], future: [] });
+      }
+      const integrationSummary = integrationMap.get(node.id);
+      if (manualFuture.has(node.id)) {
+        domainMap.get(domain)!.future.push({
+          node,
+          state: "added",
+          pending: "toFuture",
+          integrationSummary,
+        });
+        return;
+      }
+      domainMap.get(domain)!.current.push({
+        node,
+        state: effectiveDiffs.removed.has(node.id) ? "removed" : effectiveDiffs.changed.has(node.id) ? "changed" : "unchanged",
+        integrationSummary,
+      });
+    });
+
+    futureNodes.forEach((node) => {
+      const domain = normalizeDomain(node.domain);
+      if (!domainMap.has(domain)) {
+        domainMap.set(domain, { current: [], future: [] });
+      }
+      const integrationSummary = integrationMap.get(node.id);
+      if (manualCurrent.has(node.id)) {
+        domainMap.get(domain)!.current.push({
+          node,
+          state: "removed",
+          pending: "toCurrent",
+          integrationSummary,
+        });
+        return;
+      }
+      domainMap.get(domain)!.future.push({
+        node,
+        state: effectiveDiffs.added.has(node.id) ? "added" : effectiveDiffs.changed.has(node.id) ? "changed" : "unchanged",
+        integrationSummary,
+      });
+    });
+
+    const entries = Array.from(domainMap.entries())
+      .map(([domain, data]) => {
+        const totalChanges =
+          data.current.filter((item) => item.state !== "unchanged").length +
+          data.future.filter((item) => item.state !== "unchanged").length;
+        return { domain, totalChanges, ...data };
+      })
+      .filter((entry) => entry.totalChanges > 0)
+      .sort((a, b) => {
+        if (b.totalChanges === a.totalChanges) return a.domain.localeCompare(b.domain);
+        return b.totalChanges - a.totalChanges;
+      });
+
+    return entries;
+  }, [graphData, futureGraphData, effectiveDiffs, manualMoves, integrationMap]);
+
+  useEffect(() => {
+    setConfirmedDomains((prev) => {
+      const next = new Set<string>();
+      domainDiffEntries.forEach((entry) => {
+        if (prev.has(entry.domain)) {
+          next.add(entry.domain);
+        }
+      });
+      if (next.size !== prev.size) return next;
+      for (const domain of prev) {
+        if (!next.has(domain)) return next;
+      }
+      return prev;
+    });
+  }, [domainDiffEntries]);
 
   const domainCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -181,6 +361,13 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   }, [domainCounts]);
 
   const selectedSystem = useMemo(() => livingMapData.nodes.find((node) => node.id === selectedSystemId) ?? null, [livingMapData.nodes, selectedSystemId]);
+  const remainingDomains = useMemo(
+    () => domainDiffEntries.filter((entry) => !confirmedDomains.has(entry.domain)),
+    [domainDiffEntries, confirmedDomains],
+  );
+  const topChangeDomains = useMemo(() => remainingDomains.slice(0, 4), [remainingDomains]);
+  const nextReviewDomain = remainingDomains[0]?.domain ?? null;
+  const allDomainsReviewed = futureGraphReady && domainDiffEntries.length > 0 && remainingDomains.length === 0;
 
   const systemCandidates = useMemo(() => {
     if (!selectedFocusValue) return [];
@@ -259,7 +446,6 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     if (flowStep === "integration") return "stage";
     return focusType === "goal" ? "goal" : "domain";
   }, [focusType, flowStep]);
-  const focusLabel = selectedSystem?.label ?? (selectedFocusValue ? selectedFocusValue : null);
   const inspectorTags = useMemo(() => {
     const domainKey = (selectedSystem?.domain ?? selectedFocusValue ?? "").toString().toLowerCase();
     if (focusType === "goal") return DOMAIN_ALE_TAGS.goal;
@@ -267,6 +453,7 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   }, [selectedSystem, selectedFocusValue, focusType]);
   const inspectorName = selectedSystem?.label ?? (selectedFocusValue ? `${selectedFocusValue} lens` : null);
   const inspectorDomain = selectedSystem?.domain ?? selectedFocusValue ?? null;
+  const inspectorModules = selectedSystem?.subcomponents ?? [];
 
   useEffect(() => {
     debugTwinLog("render:mount", { projectId });
@@ -307,15 +494,51 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
         throw new Error(`Graph load failed ${res.status}: ${text}`);
       }
       const json = await res.json();
-      const built = buildLivingMapData(json);
-      setGraphData(built);
+      const hasSplit = json?.current || json?.future;
+      let builtCurrent: LivingMapData;
+      let builtFuture: LivingMapData | null = null;
+      let diffSets = { added: new Set<string>(), removed: new Set<string>(), changed: new Set<string>() };
+
+      if (!hasSplit && Array.isArray(json?.nodes)) {
+        const baseNodes = (json.nodes ?? []) as LivingNode[];
+        const baseEdges = (json.edges ?? []) as LivingEdge[];
+        const addedNodes = new Set(baseNodes.filter((node) => (node as any)?.state?.toLowerCase?.() === "added").map((node) => node.id));
+        const removedNodes = new Set(baseNodes.filter((node) => (node as any)?.state?.toLowerCase?.() === "removed").map((node) => node.id));
+        const changedNodes = new Set(baseNodes.filter((node) => (node as any)?.state?.toLowerCase?.() === "changed").map((node) => node.id));
+
+        const currentNodes = baseNodes.filter((node) => !addedNodes.has(node.id));
+        const futureNodes = baseNodes.filter((node) => !removedNodes.has(node.id));
+        const currentIds = new Set(currentNodes.map((node) => node.id));
+        const futureIds = new Set(futureNodes.map((node) => node.id));
+
+        const currentEdges = baseEdges.filter((edge) => currentIds.has(edge.source) && currentIds.has(edge.target));
+        const futureEdges = baseEdges.filter((edge) => futureIds.has(edge.source) && futureIds.has(edge.target));
+
+        builtCurrent = buildLivingMapData({ nodes: currentNodes, edges: currentEdges });
+        builtFuture = buildLivingMapData({ nodes: futureNodes, edges: futureEdges });
+        diffSets = { added: addedNodes, removed: removedNodes, changed: changedNodes };
+      } else {
+        builtCurrent = buildLivingMapData(json?.current ?? json);
+        builtFuture = json?.future ? buildLivingMapData(json.future) : null;
+        const diff = json?.diff ?? {};
+        diffSets = {
+          added: new Set<string>(Array.isArray(diff.added) ? diff.added : []),
+          removed: new Set<string>(Array.isArray(diff.removed) ? diff.removed : []),
+          changed: new Set<string>(Array.isArray(diff.changed) ? diff.changed : []),
+        };
+      }
+
+      setGraphData(builtCurrent);
+      setFutureGraphData(builtFuture);
+      setGraphDiffs(diffSets);
       setGraphSource("live");
       setGraphSnapshotLabel(null);
-      debugTwinLog("graph:loaded", { nodes: built.nodes.length, edges: built.edges.length });
+      debugTwinLog("graph:loaded", { nodes: builtCurrent.nodes.length, edges: builtCurrent.edges.length, hasFuture: Boolean(builtFuture) });
     } catch (err) {
       debugTwinLog("graph:error", err);
       setGraphError(getErrorMessage(err, "Failed to load graph data."));
       setGraphData(null);
+      setFutureGraphData(null);
     } finally {
       debugTwinLog("graph:loading_complete", { projectId });
       setGraphLoading(false);
@@ -394,6 +617,23 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
   useEffect(() => {
     emitAdaptiveEvent("ux_mode:set", { mode: "focus", step: flowStep });
   }, [flowStep]);
+
+  useEffect(() => {
+    if (!futureGraphReady && graphVersion === "future") {
+      setGraphVersion("current");
+    }
+  }, [futureGraphReady, graphVersion]);
+
+  useEffect(() => {
+    if (!allDomainsReviewed) {
+      futureViewSet.current = false;
+      return;
+    }
+    if (futureGraphReady && !futureViewSet.current) {
+      futureViewSet.current = true;
+      setGraphVersion("future");
+    }
+  }, [allDomainsReviewed, futureGraphReady]);
 
   useEffect(() => {
     graphTelemetry.trackFocus(graphFocus, selectedFocusValue ? { value: selectedFocusValue } : undefined);
@@ -683,70 +923,74 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
 
   const leftRailPanels = (
     <div className="space-y-4">
-      <GraphControlPanel title="Guided Focus">
-        <p className="text-xs text-slate-500">{promptsByRole[flowStep]}</p>
-        <p className="mt-1 text-sm text-slate-800">{focusSummary}</p>
-        <div className="mt-3 space-y-3">{renderFlowButtons()}</div>
-      </GraphControlPanel>
-      <GraphControlPanel title="View Mode">
-        <div className="flex flex-wrap gap-2">
-          {VIEW_MODE_OPTIONS.map((option) => {
-            const isActive = graphViewMode === option.id;
-            return (
+      {domainDiffEntries.length ? (
+        <GraphControlPanel title="Change Review">
+          <p className="text-xs text-slate-500">{nextReviewDomain ? `Next: ${nextReviewDomain}` : "All domains reviewed."}</p>
+          <div className="mt-2 space-y-2">
+            {topChangeDomains.map((entry) => (
               <button
-                key={option.id}
+                key={`focus-domain-${entry.domain}`}
                 type="button"
-                onClick={() => handleGraphViewModeChange(option.id)}
-                className={clsx(
-                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-                  isActive ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-900",
-                )}
+                onClick={() => navigateToDomain(entry.domain)}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:border-slate-900"
               >
-                {option.label}
+                {entry.domain}
+                <span className="ml-2 text-[0.6rem] font-normal uppercase tracking-[0.3em] text-slate-400">Δ {entry.totalChanges}</span>
               </button>
-            );
-          })}
-        </div>
-      </GraphControlPanel>
-      <GraphControlPanel title="Reveal States">
-        <div className="space-y-2">
-          {STAGE_OPTIONS.map((stageOption) => {
-            const isActive = revealStage === stageOption.id;
-            return (
-              <button
-                key={stageOption.id}
-                type="button"
-                onClick={() => handleRevealStageChange(stageOption.id)}
-                className={clsx(
-                  "w-full rounded-2xl border px-3 py-2 text-left transition",
-                  isActive ? "border-emerald-600 bg-emerald-50 text-emerald-900" : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400",
-                )}
-              >
-                <p className="text-sm font-semibold">{stageOption.label}</p>
-                <p className="text-[0.7rem] uppercase tracking-[0.25em] text-neutral-500">{stageOption.helper}</p>
-              </button>
-            );
-          })}
-        </div>
-      </GraphControlPanel>
-      {focusPulse ? (
-        <GraphControlPanel title="Focus Pulse">
-          <dl className="space-y-2 text-sm text-slate-600">
-            <div className="flex items-center justify-between">
-              <dt>Systems in lens</dt>
-              <dd className="font-semibold text-slate-900">{focusPulse.systems}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt>Integrations</dt>
-              <dd className="font-semibold text-slate-900">{focusPulse.integrations}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt>Overlap index</dt>
-              <dd className="font-semibold text-slate-900">{focusPulse.overlap}</dd>
-            </div>
-          </dl>
+            ))}
+          </div>
         </GraphControlPanel>
       ) : null}
+      {false && (
+        <>
+          <GraphControlPanel title="Guided Focus">
+            <p className="text-xs text-slate-500">{promptsByRole[flowStep]}</p>
+            <p className="mt-1 text-sm text-slate-800">{focusSummary}</p>
+            <div className="mt-3 space-y-3">{renderFlowButtons()}</div>
+          </GraphControlPanel>
+          <GraphControlPanel title="View Mode">
+            <div className="flex flex-wrap gap-2">
+              {VIEW_MODE_OPTIONS.map((option) => {
+                const isActive = graphViewMode === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => handleGraphViewModeChange(option.id)}
+                    className={clsx(
+                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                      isActive ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-900",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </GraphControlPanel>
+          <GraphControlPanel title="Reveal States">
+            <div className="space-y-2">
+              {STAGE_OPTIONS.map((stageOption) => {
+                const isActive = revealStage === stageOption.id;
+                return (
+                  <button
+                    key={stageOption.id}
+                    type="button"
+                    onClick={() => handleRevealStageChange(stageOption.id)}
+                    className={clsx(
+                      "w-full rounded-2xl border px-3 py-2 text-left transition",
+                      isActive ? "border-emerald-600 bg-emerald-50 text-emerald-900" : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400",
+                    )}
+                  >
+                    <p className="text-sm font-semibold">{stageOption.label}</p>
+                    <p className="text-[0.7rem] uppercase tracking-[0.25em] text-neutral-500">{stageOption.helper}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </GraphControlPanel>
+        </>
+      )}
     </div>
   );
 
@@ -762,70 +1006,222 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
     onClose: closeSequencePrompt,
     onSubmit: handleSequenceSubmit,
   };
+  const handleDiffMove = useCallback((nodeId: string, direction: NodeMoveDirection) => {
+    setManualMoves((prev) => {
+      const nextToFuture = new Set(prev.toFuture);
+      const nextToCurrent = new Set(prev.toCurrent);
+      if (direction === "toFuture") {
+        if (nextToFuture.has(nodeId)) {
+          nextToFuture.delete(nodeId);
+        } else {
+          nextToFuture.add(nodeId);
+          nextToCurrent.delete(nodeId);
+        }
+      } else {
+        if (nextToCurrent.has(nodeId)) {
+          nextToCurrent.delete(nodeId);
+        } else {
+          nextToCurrent.add(nodeId);
+          nextToFuture.delete(nodeId);
+        }
+      }
+      return { toFuture: nextToFuture, toCurrent: nextToCurrent };
+    });
+  }, []);
+  const handleConfirmDomain = useCallback((domain: string) => {
+    setConfirmedDomains((prev) => {
+      const next = new Set(prev);
+      next.add(domain);
+      return next;
+    });
+  }, []);
+  const handleDomainNavigatorReady = useCallback((fn: (domain: string) => void) => {
+    domainNavigatorRef.current = fn;
+  }, []);
+  const navigateToDomain = useCallback((domain: string | null) => {
+    if (!domain) return;
+    domainNavigatorRef.current?.(domain);
+  }, []);
+  const handleSaveReview = useCallback(() => {
+    const payload = {
+      projectId,
+      savedAt: new Date().toISOString(),
+      confirmedDomains: Array.from(confirmedDomains),
+      manualMoves: {
+        toFuture: Array.from(manualMoves.toFuture),
+        toCurrent: Array.from(manualMoves.toCurrent),
+      },
+    };
+    try {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(`fuxi_domain_review_${projectId}`, JSON.stringify(payload));
+      }
+      debugTwinLog("review:saved", payload);
+    } catch (err) {
+      console.warn("[DigitalTwin] Unable to persist review payload", err);
+    }
+  }, [confirmedDomains, manualMoves.toCurrent, manualMoves.toFuture, projectId]);
 
-  if (DIGITAL_TWIN_DENOISE_MODE) {
-    const denoiseView = (
-      <Fragment>
-        <div className={isEmbed ? "px-4 py-6" : "px-6 pt-4 pb-8"}>
-          {statsError ? (
-            <div className="mb-4">
-              <ErrorBanner message={statsError} onRetry={loadStats} />
+  const denoiseView = (
+    <Fragment>
+      <div className={isEmbed ? "px-4 py-6" : "px-6 pt-4 pb-8"}>
+        {statsError ? (
+          <div className="mb-4">
+            <ErrorBanner message={statsError} onRetry={loadStats} />
+          </div>
+        ) : null}
+        {graphError ? (
+          <Card className="mb-4 border-rose-200 bg-rose-50">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-rose-700">{graphError}</p>
+              <button type="button" className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white" onClick={loadGraph}>
+                Retry
+              </button>
             </div>
-          ) : null}
-          {graphError ? (
-            <Card className="mb-4 border-rose-200 bg-rose-50">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-rose-700">{graphError}</p>
-                <button type="button" className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white" onClick={loadGraph}>
-                  Retry
-                </button>
-              </div>
-            </Card>
-          ) : null}
-          <SceneTemplate
-            leftRail={
-              <div className="space-y-6">
-                <DigitalDataRail
-                  onLoadLiveData={handleLoadLiveData}
-                  onLoadSnapshot={handleLoadSnapshotClick}
-                  graphSource={graphSource}
-                  graphSnapshotLabel={graphSnapshotLabel}
-                  aleConnected={Boolean(aleContext)}
-                />
-                {leftRailPanels}
-              </div>
-            }
-            rightRail={
-              <DigitalRightRail
+          </Card>
+        ) : null}
+        <SceneTemplate
+          leftRail={
+            <div className="space-y-6">
+              <DigitalDataRail
+                onLoadLiveData={handleLoadLiveData}
+                onLoadSnapshot={handleLoadSnapshotClick}
+                graphSource={graphSource}
+                graphSnapshotLabel={graphSnapshotLabel}
                 aleConnected={Boolean(aleContext)}
-                inspectorName={inspectorName}
-                inspectorDomain={inspectorDomain}
-                inspectorTags={inspectorTags}
-                onOptionAction={handleOptionMenuAction}
               />
-            }
+              {leftRailPanels}
+            </div>
+          }
+          rightRail={
+            <DigitalRightRail
+              aleConnected={Boolean(aleContext)}
+              inspectorName={inspectorName}
+              inspectorDomain={inspectorDomain}
+              inspectorTags={inspectorTags}
+              inspectorModules={inspectorModules}
+              onOptionAction={handleOptionMenuAction}
+            />
+          }
+        >
+          <div
+            ref={stageContainerRef}
+            className="flex flex-1 overflow-hidden"
+            style={{ height: "calc(100vh - 60px)", minHeight: "calc(100vh - 60px)" }}
           >
-            <div ref={stageContainerRef} className="flex h-full flex-1 min-h-0">
-              <Stage padded={false} className="h-full min-h-0">
-                <div className="border-b border-slate-200 px-6 py-4 text-slate-900">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Systems - Integrations</p>
-                      <h2 className="text-2xl font-semibold">Enterprise ecosystem</h2>
-                    </div>
+            <Stage padded={false} className="min-h-[calc(100vh-140px)]">
+              <div className="border-b border-slate-200 px-6 py-4 text-slate-900">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[0.6rem] uppercase tracking-[0.35em] text-slate-500">Systems - Integrations</p>
+                    <h2 className="text-2xl font-semibold">Enterprise Ecosystem</h2>
+                    <p className="text-xs text-slate-500">
+                      Viewing {graphVersion === "future" ? "Future (deltas highlighted)" : "Current"} · {graphData ? `${graphData.nodes.length} systems` : "—"}
+                    </p>
+                  </div>
+                  <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
                     <div className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600">{graphViewMode.toUpperCase()}</div>
+                    <div className="flex items-center overflow-hidden rounded-full border border-slate-200 text-xs font-semibold text-slate-700">
+                      <button
+                        type="button"
+                        className={`px-3 py-1 ${graphVersion === "current" ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}
+                        onClick={() => setGraphVersion("current")}
+                      >
+                        Current
+                      </button>
+                      <button
+                        type="button"
+                        className={clsx(
+                          "px-3 py-1",
+                          graphVersion === "future" ? "bg-slate-900 text-white" : "bg-white text-slate-700",
+                          !futureGraphReady && "cursor-not-allowed opacity-60",
+                        )}
+                        onClick={() => setGraphVersion("future")}
+                        disabled={!futureGraphReady}
+                        title={futureGraphReady ? "View highlighted changes" : "Future view unlocks once Transition data loads"}
+                      >
+                        Future
+                      </button>
+                    </div>
+                    {nextReviewDomain ? (
+                      <button
+                        type="button"
+                        onClick={() => navigateToDomain(nextReviewDomain)}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-900"
+                      >
+                        Review {nextReviewDomain}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={handleSaveReview}
+                      className="rounded-full border border-slate-900 bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800"
+                    >
+                      Save Review
+                    </button>
                   </div>
                 </div>
-                <div className="flex flex-1 flex-col p-4 min-h-0">
-                  <div className="flex-1 min-h-[560px] h-full">
-                    {graphLoading ? (
-                      <div className="flex h-full items-center justify-center rounded-[32px] border border-slate-200 bg-white text-sm text-slate-500">Loading digital twin map...</div>
-                    ) : hasGraph ? (
+                {!futureGraphReady ? (
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-400">
+                    Load Transition data to enable Future view
+                  </p>
+                ) : (
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-400">Future view highlights deltas</p>
+                )}
+              </div>
+              <div className="flex flex-1 flex-col gap-4 p-4 min-h-0">
+                {futureGraphReady && domainDiffEntries.length && !allDomainsReviewed ? (
+                  <DomainDiffPanel
+                    entries={domainDiffEntries}
+                    variant={graphVersion}
+                    className="flex-1"
+                    onMoveNode={handleDiffMove}
+                    confirmedDomains={confirmedDomains}
+                    onConfirmDomain={handleConfirmDomain}
+                    onNavigatorReady={handleDomainNavigatorReady}
+                  />
+                ) : futureGraphReady && allDomainsReviewed ? (
+                  <div className="flex h-full flex-col gap-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Future architecture ready</p>
+                        <p className="text-xs text-slate-500">Explore the harmonized graph below, then build a sequence when you&apos;re confident.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setGraphVersion("current")}
+                          className={clsx(
+                            "rounded-full border px-3 py-1 text-xs font-semibold",
+                            graphVersion === "current" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700",
+                          )}
+                        >
+                          Current
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGraphVersion("future")}
+                          className={clsx(
+                            "rounded-full border px-3 py-1 text-xs font-semibold",
+                            graphVersion === "future" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700",
+                          )}
+                        >
+                          Future
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOptionMenuAction("sequence")}
+                          className="rounded-full border border-emerald-600 bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500"
+                        >
+                          Build a Sequence
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-h-[400px] overflow-hidden rounded-[32px] border border-slate-200 bg-white">
                       <GraphCanvas
                         nodes={livingMapData.nodes}
                         edges={livingMapData.edges}
                         focus={graphFocus}
-                        focusLabel={focusLabel}
                         focusSummary={focusSummary}
                         viewMode={graphViewMode}
                         stage={revealStage}
@@ -837,181 +1233,47 @@ export function DigitalEnterpriseClient({ projectId, onStatsUpdate, learningSnap
                         projectId={projectId}
                         height="100%"
                         domainColumns={responsiveDomainColumns}
-                        fitViewKey={responsiveDomainColumns}
+                        fitViewKey={`${graphVersion}-${responsiveDomainColumns}-${Math.round(stageSize.width ?? 0)}`}
                         sequence={sequence}
                         scenarioPhase={activePhase}
                         showCanvasControls={false}
                         showIntegrationOverlay={flowStep === "integration"}
+                        diffMode={graphVersion}
+                        diffAnnotations={
+                          graphVersion === "future"
+                            ? {
+                                added: effectiveDiffs.added,
+                                removed: effectiveDiffs.removed,
+                                changed: effectiveDiffs.changed,
+                              }
+                            : undefined
+                        }
                       />
-                    ) : (
-                      <div className="flex h-full items-center justify-center rounded-[32px] border border-slate-200 bg-white text-sm text-slate-500">
-                        No harmonized systems yet. Import data to populate the graph.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Stage>
-            </div>
-          </SceneTemplate>
-        </div>
-        <SequencePromptOverlay {...sequencePromptProps} />
-      </Fragment>
-    );
-    return denoiseView;
-  }
-  return (
-    <Fragment>
-      <div className={isEmbed ? "px-4 py-6" : "px-6 pt-2 pb-6"}>
-        {statsError && (
-          <div className="mb-4">
-            <ErrorBanner message={statsError} onRetry={loadStats} />
-          </div>
-      )}
-      <section className="space-y-4">
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">Digital Twin graph</p>
-              <p className="text-xs text-slate-500">Fade-in reveals and progressive focus transitions.</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-600 shadow-sm">
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-slate-500">View Mode</p>
-              <p className="font-semibold text-slate-900">{graphViewMode}</p>
-            </div>
-          </div>
-
-          {graphError && (
-            <Card className="border-rose-200 bg-rose-50">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-rose-700">{graphError}</p>
-                <button
-                  type="button"
-                  className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
-                  onClick={loadGraph}
-                >
-                  Retry
-                </button>
-              </div>
-            </Card>
-          )}
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-2 shadow-lg min-h-[720px] mt-6">
-            {graphLoading && <div className="py-36 text-center text-sm text-slate-500">Loading digital twin map...</div>}
-            {!graphLoading && hasGraph && (
-              <GraphCanvas
-                nodes={livingMapData.nodes}
-                edges={livingMapData.edges}
-                focus={graphFocus}
-                focusLabel={focusLabel}
-                focusSummary={focusSummary}
-                viewMode={graphViewMode}
-                stage={revealStage}
-                highlightNodeIds={highlightNodeIds}
-                selectedNodeId={selectedSystemId}
-                onNodeSelect={handleGraphNodeSelect}
-                onViewModeChange={handleGraphViewModeChange}
-                onStageChange={handleRevealStageChange}
-                projectId={projectId}
-                height={720}
-                domainColumns={responsiveDomainColumns}
-                fitViewKey={responsiveDomainColumns}
-                sequence={sequence}
-                scenarioPhase={activePhase}
-                showCanvasControls={false}
-                showIntegrationOverlay={flowStep === "integration"}
-              />
-            )}
-            {!graphLoading && !hasGraph && (
-              <div className="py-20 text-center text-sm text-slate-500">No harmonized systems yet. Import data or run onboarding to populate the graph.</div>
-            )}
-          </div>
-
-          {flowStep === "insight" && insightMessage && (
-            <div className="space-y-3" data-testid="digital-twin-action-invitation">
-              <p className="text-sm font-semibold text-slate-900">Action invitation</p>
-              <div className="grid gap-3 md:grid-cols-3">
-                {ACTIONS.map((action) => (
-                  <Card key={action.key} className="flex flex-col justify-between border-slate-200">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{action.title}</p>
-                      <p className="mt-1 text-xs text-slate-600">{action.summary}</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        logTelemetry("digital_twin.action_selected", { action: action.key, role });
-                        window.location.href = action.href(projectId);
-                      }}
-                      className="mt-4 inline-flex items-center justify-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-                    >
-                      {action.cta}
-                    </button>
-                  </Card>
-                ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-1 items-center justify-center rounded-[32px] border border-dashed border-slate-300 bg-white/80 p-6 text-center text-sm text-slate-500">
+                    <div className="space-y-2">
+                      <p className="text-base font-semibold text-slate-900">Awaiting Future graph</p>
+                      <p>Import Transition/Harmonize outputs or run sequencing to compare Current vs Future systems.</p>
+                      {!futureGraphReady ? (
+                        <p className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">Future view activates automatically once data arrives.</p>
+                      ) : (
+                        <p className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">No deltas detected yet.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="space-y-3 border-slate-200 bg-white shadow-sm">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-500">Recognition</p>
-            <p className="text-sm text-slate-800">
-              &ldquo;Here&apos;s the full picture — every system and integration you&apos;ve shared, harmonized across your enterprise.&rdquo;
-            </p>
-            {hasStats && (
-              <div className="grid grid-cols-2 gap-2 text-[0.7rem] text-slate-600">
-                <div>
-                  <p className="text-slate-500">Systems</p>
-                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.systemsFuture)}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500">Integrations</p>
-                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.integrationsFuture)}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500">Domains</p>
-                  <p className="text-slate-900 font-semibold text-base">{formatNumber(stats?.domainsDetected)}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500">View mode</p>
-                  <p className="font-semibold text-slate-900 capitalize">{graphViewMode}</p>
-                </div>
-              </div>
-            )}
-          </Card>
-
-          <Card className="space-y-4 border-emerald-200 bg-emerald-50">
-            <div>
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-emerald-600">Guided focus</p>
-              <p className="text-sm text-emerald-900">{promptsByRole[flowStep]}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {FOCUS_LENSES.map((lens) => (
-                <button
-                  key={lens.type}
-                  type="button"
-                  className={`rounded-full px-3 py-1 text-[0.65rem] font-semibold ${
-                    focusType === lens.type ? "bg-emerald-600 text-white shadow" : "bg-white text-emerald-800"
-                  }`}
-                  onClick={() => {
-                    setFocusType(lens.type);
-                    logTelemetry("digital_twin.focus_mode_changed", { mode: lens.type });
-                  }}
-                >
-                  {lens.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-emerald-800">{focusSummary}</p>
-            {renderFlowButtons()}
-          </Card>
-        </div>
-      </section>
+            </Stage>
+          </div>
+        </SceneTemplate>
       </div>
       <SequencePromptOverlay {...sequencePromptProps} />
     </Fragment>
   );
+
+  return denoiseView;
 }
 
 export function DigitalTwinTelemetryCard({ stats }: { stats: DigitalEnterpriseStats | null }) {
@@ -1086,12 +1348,14 @@ function DigitalRightRail({
   inspectorName,
   inspectorDomain,
   inspectorTags,
+  inspectorModules,
   onOptionAction,
 }: {
   aleConnected: boolean;
   inspectorName: string | null;
   inspectorDomain: string | null;
   inspectorTags: string[];
+  inspectorModules: string[];
   onOptionAction: (id: string) => void;
 }) {
   return (
@@ -1102,7 +1366,204 @@ function DigitalRightRail({
         <p className="text-sm font-semibold text-slate-900">{aleConnected ? "Connected" : "Initializing..."}</p>
         <p className="text-xs text-slate-500">{aleConnected ? "Live reasoning available" : "Awaiting telemetry"}</p>
       </Card>
-      <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={inspectorTags} />
+      <NodeInspector nodeName={inspectorName} domain={inspectorDomain} tags={inspectorTags} subcomponents={inspectorModules} />
     </div>
   );
+}
+
+function DomainDiffPanel({
+  entries,
+  variant,
+  className,
+  onMoveNode,
+  confirmedDomains,
+  onConfirmDomain,
+  onNavigatorReady,
+}: {
+  entries: DomainDiffEntry[];
+  variant: "current" | "future";
+  className?: string;
+  onMoveNode?: (nodeId: string, direction: NodeMoveDirection) => void;
+  confirmedDomains: Set<string>;
+  onConfirmDomain?: (domain: string) => void;
+  onNavigatorReady?: (handler: (domain: string) => void) => void;
+}) {
+  if (!entries.length) return null;
+  const showColors = variant === "future";
+  const [activeDomain, setActiveDomain] = useState(entries[0]?.domain ?? "");
+  const makeAnchorId = useCallback((domain: string) => `domain-${domain.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, []);
+  const handleDomainSelect = useCallback(
+    (domain: string) => {
+      setActiveDomain(domain);
+      const anchor = document.getElementById(makeAnchorId(domain));
+      if (anchor) {
+        anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    },
+    [makeAnchorId],
+  );
+  useEffect(() => {
+    if (!entries.length) return;
+    setActiveDomain((prev) => (entries.some((entry) => entry.domain === prev) ? prev : entries[0]?.domain ?? ""));
+    onNavigatorReady?.(handleDomainSelect);
+  }, [entries, handleDomainSelect, onNavigatorReady]);
+  const visibleEntries = entries.filter((entry) => !confirmedDomains.has(entry.domain));
+  return (
+    <Card className={clsx("flex h-full flex-col space-y-3 border border-slate-200 bg-white/95", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-slate-900">Current vs Future overview</p>
+          <p className="text-xs text-slate-500">Application · Integrations</p>
+        </div>
+        {showColors ? (
+          <div className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-slate-400">
+            <span className="text-emerald-600">■ Added</span>
+            <span className="text-amber-600">■ Changed</span>
+            <span className="text-rose-600">■ Removed</span>
+          </div>
+        ) : null}
+      </div>
+      <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+        {visibleEntries.length === 0 && (
+          <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/60 p-6 text-center text-sm text-emerald-800">
+            All domains reviewed! Continue to Sequencer to apply the plan.
+          </div>
+        )}
+        {visibleEntries.map((entry) => (
+          <div key={entry.domain} id={makeAnchorId(entry.domain)} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-900">
+              <span>{entry.domain}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">{entry.totalChanges} changes</span>
+                <button
+                  type="button"
+                  onClick={() => onConfirmDomain?.(entry.domain)}
+                  className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-emerald-700 hover:border-emerald-400"
+                >
+                  Mark Done
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 grid gap-3 md:grid-cols-2">
+              <DiffColumn heading="Current" items={entry.current} activeVersion="current" showColors={showColors} onMove={onMoveNode} />
+              <DiffColumn heading="Future" items={entry.future} activeVersion="future" showColors={showColors} onMove={onMoveNode} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function DiffColumn({
+  heading,
+  items,
+  activeVersion,
+  showColors,
+  onMove,
+}: {
+  heading: string;
+  items: Array<DomainDiffItem>;
+  activeVersion: "current" | "future";
+  showColors: boolean;
+  onMove?: (nodeId: string, direction: NodeMoveDirection) => void;
+}) {
+  const moveDirection: NodeMoveDirection = activeVersion === "current" ? "toFuture" : "toCurrent";
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm shadow-sm">
+      <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-400">{heading}</p>
+      {items.length ? (
+        <ul className="mt-2 space-y-2">
+          {items.map((item) => {
+            const accentColor = getDomainAccent(item.node.domain);
+            const dotColor = showColors ? (activeVersion === "future" ? getFutureTone(item.state) : getCurrentTone(item.state)) : "bg-slate-300";
+            const textTone = showColors ? getLabelTone(activeVersion, item.state) : "text-slate-900";
+            const integrationTone = showColors ? getIntegrationTone(activeVersion, item.state) : "text-slate-500";
+            return (
+              <li key={`${heading}-${item.node.id}`} className="space-y-1 rounded-2xl border border-slate-100 bg-white/70 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span
+                    className={clsx(
+                      "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold",
+                      textTone,
+                    )}
+                    style={{ borderColor: accentColor }}
+                  >
+                    <span className={clsx("h-2 w-2 rounded-full", dotColor)} aria-hidden />
+                    <span className="text-[13px]">{item.node.label ?? item.node.id}</span>
+                  </span>
+                  <span className={`text-xs font-semibold whitespace-nowrap ${integrationTone}`}>Integrations · {item.node.integrationCount ?? 0}</span>
+                </div>
+                {item.integrationSummary ? (
+                  <div className="text-[0.65rem] text-slate-500">
+                    <p>
+                      Upstream {item.integrationSummary.upstream} · Downstream {item.integrationSummary.downstream}
+                    </p>
+                    {item.integrationSummary.peers.length ? (
+                      <p className="text-[0.6rem] text-slate-400">Peers: {item.integrationSummary.peers.join(", ")}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2 text-[0.65rem] uppercase tracking-[0.18em] text-slate-400">
+                  {item.pending ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-700">
+                      Pending · {item.pending === "toFuture" ? "Future" : "Current"}
+                    </span>
+                  ) : null}
+                  {onMove ? (
+                    <button
+                      type="button"
+                      onClick={() => onMove(item.node.id, moveDirection)}
+                      className="rounded-full border border-slate-200 px-3 py-0.5 text-[0.6rem] font-semibold text-slate-700 hover:border-slate-900"
+                    >
+                      {moveDirection === "toFuture" ? "Send to Future" : "Return to Current"}
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="mt-2 text-xs text-slate-500">No changes.</p>
+      )}
+    </div>
+  );
+}
+
+function getCurrentTone(state: "added" | "removed" | "changed" | "unchanged") {
+  if (state === "removed") return "bg-rose-400";
+  if (state === "changed") return "bg-amber-400";
+  return "bg-slate-400";
+}
+
+function getFutureTone(state: "added" | "removed" | "changed" | "unchanged") {
+  if (state === "added") return "bg-emerald-500";
+  if (state === "changed") return "bg-amber-500";
+  if (state === "removed") return "bg-rose-500";
+  return "bg-slate-300";
+}
+
+function getLabelTone(version: "current" | "future", state: "added" | "removed" | "changed" | "unchanged") {
+  if (version === "current") {
+    if (state === "removed") return "text-rose-700 line-through";
+    if (state === "changed") return "text-amber-700";
+    return "text-slate-900";
+  }
+  if (state === "added") return "text-emerald-700";
+  if (state === "changed") return "text-amber-700";
+  if (state === "removed") return "text-rose-700";
+  return "text-slate-900";
+}
+
+function getIntegrationTone(version: "current" | "future", state: "added" | "removed" | "changed" | "unchanged") {
+  if (version === "current") {
+    if (state === "removed") return "text-rose-700";
+    if (state === "changed") return "text-amber-700";
+    return "text-slate-500";
+  }
+  if (state === "added") return "text-emerald-700";
+  if (state === "changed") return "text-amber-700";
+  if (state === "removed") return "text-rose-700";
+  return "text-slate-500";
 }

@@ -11,6 +11,11 @@ export type GraphSequencerItem = {
   dependencies?: string[];
   cost: number;
   impact: number;
+  systemsTouchedCount?: number;
+  integrationsTouchedCount?: number;
+  conflictCount?: number;
+  timeWindowLabel?: string;
+  regions?: string[];
 };
 
 interface GraphSequencerPanelProps {
@@ -42,8 +47,8 @@ export function GraphSequencerPanel({
     <section className="rounded-3xl border border-neutral-200 bg-neutral-50/95 p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-neutral-500">Sequencer</p>
-          <p className="text-sm text-neutral-600">Drag to reorder modernization phases.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-neutral-500">Stage jump list</p>
+          <p className="text-sm text-neutral-600">Drag to reorder modernization waves and jump across the map.</p>
         </div>
         <button
           type="button"
@@ -87,8 +92,16 @@ export function GraphSequencerPanel({
               #{index + 1} · {step.label}
             </p>
             <p className="text-xs text-neutral-500">
-              {step.phase.toUpperCase()} · {step.region} · Cost ${step.cost.toFixed(1)}M · Impact {(step.impact * 100).toFixed(0)}%
+              {step.phase.toUpperCase()} · Cost ${step.cost.toFixed(1)}M · Impact {(step.impact * 100).toFixed(0)}%
             </p>
+            {step.timeWindowLabel ? <p className="text-[0.65rem] text-neutral-500">{step.timeWindowLabel}</p> : null}
+            {typeof step.systemsTouchedCount === "number" || typeof step.integrationsTouchedCount === "number" || typeof step.conflictCount === "number" ? (
+              <div className="mt-1 flex flex-wrap gap-2 text-[0.65rem] text-neutral-600">
+                {typeof step.systemsTouchedCount === "number" ? <span>{step.systemsTouchedCount} systems</span> : null}
+                {typeof step.integrationsTouchedCount === "number" ? <span>{step.integrationsTouchedCount} integrations</span> : null}
+                {step.conflictCount ? <span className="text-amber-600">{step.conflictCount} conflicts</span> : null}
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>

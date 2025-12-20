@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { computeTccBreakdown, forecastByDomain } from "@/domain/services/roi";
+import { buildFinancialForecast, enrichForecast } from "@/domain/services/financials";
 import { recordTelemetry } from "@/lib/telemetry/server";
+import { listRoiAssumptions, listRoiTargets } from "@/lib/roi/storage";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -112,6 +114,7 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const projectParam = url.searchParams.get("project") ?? undefined;
+    const sequenceParam = url.searchParams.get("sequence") ?? undefined;
     const tests = await loadTestDatasets();
 
     const useTest =
@@ -119,7 +122,20 @@ export async function GET(req: NextRequest) {
         ? buildForecastFromTest(tests[projectParam] as TestDataset)
         : null;
 
-    const forecast = useTest ?? (await forecastByDomain(5));
+    const [targets, assumptions] = await Promise.all([
+      listRoiTargets(projectParam),
+      listRoiAssumptions(projectParam),
+    ]);
+    const targetsForSequence = sequenceParam
+      ? targets.filter((entry) => entry.sequenceId === sequenceParam)
+      : targets;
+    const assumptionsForSequence = sequenceParam
+      ? assumptions.filter((entry) => entry.sequenceId === sequenceParam)
+      : assumptions;
+    const latestTarget = targetsForSequence.at(-1) ?? null;
+    const latestAssumptions = assumptionsForSequence.at(-1) ?? null;
+
+    const forecast = useTest ? enrichForecast(useTest) : await buildFinancialForecast(projectParam ?? undefined);
 
     // Emit telemetry
     await recordTelemetry({
@@ -165,7 +181,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json(forecast);
+    return NextResponse.json({
+      ...forecast,
+      targets: latestTarget,
+      assumptions: latestAssumptions,
+    });
   } catch (err: any) {
     console.error("[ROI-FORECAST] failed", err);
     return NextResponse.json(

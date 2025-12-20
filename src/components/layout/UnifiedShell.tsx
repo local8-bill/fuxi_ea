@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import { createContext, useContext, useMemo, useState, useCallback, useEffect, type ReactNode } from "react";
 import { BarChart2, ChevronLeft, ChevronRight, Home, Layers, Menu, Workflow } from "lucide-react";
 
@@ -36,6 +37,7 @@ export function UnifiedShell({ children }: UnifiedShellProps) {
   const [rightRail, setRightRail] = useState<ReactNode | null>(null);
   const [leftRailOpen, setLeftRailOpen] = useState(true);
   const [rightRailOpen, setRightRailOpen] = useState(true);
+  const [navCollapsed, setNavCollapsed] = useState(false);
 
   const handleSetNavModel = useCallback((model: UnifiedNavModel | null) => {
     setNavModel(model);
@@ -71,10 +73,15 @@ export function UnifiedShell({ children }: UnifiedShellProps) {
 
   return (
     <UnifiedShellContext.Provider value={contextValue}>
-      <div className="uxshell-layout">
+      <div className={clsx("uxshell-layout", navCollapsed && "uxshell-layout--nav-collapsed")}>
         <header className="uxshell-topbar">
           <div className="flex items-center gap-3">
-            <button type="button" className="rounded p-1 text-slate-700 transition hover:bg-slate-100" aria-label="Toggle navigation">
+            <button
+              type="button"
+              className="rounded p-1 text-slate-700 transition hover:bg-slate-100"
+              aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+              onClick={() => setNavCollapsed((prev) => !prev)}
+            >
               <Menu size={16} strokeWidth={1.6} />
             </button>
             <span className="text-sm font-semibold tracking-tight text-slate-800">Fuxi · Enterprise Engine</span>
@@ -88,9 +95,11 @@ export function UnifiedShell({ children }: UnifiedShellProps) {
         </header>
 
         <div className="uxshell-body">
-          <aside className="uxshell-nav-column">
-            <NavColumn model={navModel} />
-          </aside>
+          {!navCollapsed ? (
+            <aside className="uxshell-nav-column">
+              <NavColumn model={navModel} />
+            </aside>
+          ) : null}
           <div className="uxshell-stage-wrapper">
             {hasLeftRail ? (
               <div className="uxshell-rail-stack uxshell-rail-stack--left">

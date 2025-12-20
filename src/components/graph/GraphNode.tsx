@@ -31,6 +31,8 @@ export type GraphNodeData = {
   phaseLabel?: string | null;
   stageLabel?: string | null;
   icon?: string;
+  diffState?: "added" | "removed" | "changed" | null;
+  subcomponents?: string[];
 };
 
 function formatMetric(viewMode: GraphViewMode, data?: GraphNodeData["metrics"], domain?: string) {
@@ -70,7 +72,10 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
       <div
         data-graph-node="domain"
         data-font-version="v2"
-        className={clsx("relative flex h-full w-full flex-col rounded-3xl border bg-white shadow-sm transition", data.dimmed && "opacity-60")}
+        className={clsx(
+          "relative flex h-full w-full flex-col rounded-3xl border bg-emerald-50/70 shadow-sm transition",
+          data.dimmed && "opacity-60",
+        )}
         style={{ borderColor: accent }}
       >
         <div className="flex items-center justify-between px-5 pt-5">
@@ -79,7 +84,7 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
             {data.integrationTotal ?? 0}
           </span>
         </div>
-        <div className="px-5 pb-5 pt-2">
+        <div className="flex flex-1 flex-col px-5 pb-5 pt-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xl font-semibold text-slate-900">{data.label}</p>
@@ -122,12 +127,25 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
     integrationSummaryParts.push(`TCC ${tccDelta}`);
   }
   const integrationSummary = integrationSummaryParts.join("   |   ");
+  const diffState = data.diffState ?? null;
+  const subcomponentPreview = (data.subcomponents ?? []).slice(0, 3);
+  const subcomponentOverflow =
+    (data.subcomponents?.length ?? 0) - subcomponentPreview.length;
+  const diffClasses =
+    diffState === "added"
+      ? "border-emerald-300 bg-emerald-50"
+      : diffState === "removed"
+        ? "border-rose-300 bg-rose-50"
+        : diffState === "changed"
+          ? "border-amber-300 bg-amber-50"
+          : "";
   return (
     <div
       data-graph-node="system"
       data-font-version="v2"
       className={clsx(
-        "pointer-events-auto overflow-hidden rounded-lg border bg-white text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-emerald-500 hover:bg-emerald-50",
+        "pointer-events-auto overflow-hidden rounded-lg border bg-white text-left shadow-sm transition duration-200",
+        diffClasses,
         overlayActive && (data.metrics?.integrations ?? 0) > 0 && "ring-1 ring-emerald-200/80",
         data.dimmed && "opacity-40",
       )}
@@ -142,7 +160,32 @@ export function GraphNode({ data, selected }: NodeProps<GraphNodeData>) {
           </div>
           {metric ? <p className="text-sm font-semibold text-neutral-600">{metric}</p> : null}
         </div>
-        {integrationSummary ? <p className="mt-2 text-xs text-slate-500">{integrationSummary}</p> : null}
+        {diffState ? (
+          <p className="mt-1 inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-slate-600">
+            {diffState === "added" ? "Added" : diffState === "removed" ? "Removed" : "Changed"}
+          </p>
+        ) : null}
+       {integrationSummary ? <p className="mt-2 text-xs text-slate-500">{integrationSummary}</p> : null}
+        {subcomponentPreview.length ? (
+          <div className="mt-3">
+            <p className="text-[0.55rem] uppercase tracking-[0.25em] text-neutral-400">Modules</p>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {subcomponentPreview.map((module, idx) => (
+                <span
+                  key={`${data.label}-module-${idx}`}
+                  className="rounded-full bg-neutral-100 px-2 py-0.5 text-[0.6rem] font-semibold text-neutral-700"
+                >
+                  {module}
+                </span>
+              ))}
+              {subcomponentOverflow > 0 ? (
+                <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[0.6rem] font-semibold text-neutral-600">
+                  +{subcomponentOverflow} more
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         {data.badges?.length ? (
           <div className="mt-2 flex flex-wrap gap-1">
             {data.badges.map((badge, idx) => (

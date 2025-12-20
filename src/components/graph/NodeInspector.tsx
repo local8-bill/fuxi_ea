@@ -37,9 +37,10 @@ export type NodeInspectorProps = {
   domain?: string | null;
   tags?: string[] | null;
   integrations?: IntegrationSummary[] | null;
+  subcomponents?: string[] | null;
 };
 
-export function NodeInspector({ nodeName, domain, tags, integrations }: NodeInspectorProps) {
+export function NodeInspector({ nodeName, domain, tags, integrations, subcomponents }: NodeInspectorProps) {
   const primaryName = nodeName ?? "No node selected";
   const tagEntries = (tags ?? []).map((tag) => ({ tag, corpus: corpusMap.get(tag) }));
   const highestRisk = tagEntries
@@ -92,6 +93,19 @@ export function NodeInspector({ nodeName, domain, tags, integrations }: NodeInsp
           <p className="mt-2 text-sm text-slate-500">No learning events yet.</p>
         )}
       </div>
+
+      {subcomponents?.length ? (
+        <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-500">Architecture modules</p>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {subcomponents.map((module, idx) => (
+              <span key={`${primaryName}-module-${idx}`} className="rounded-full bg-neutral-100 px-2 py-0.5 text-[0.65rem] font-medium text-neutral-700">
+                {module}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {integrations?.length ? (
         <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-3">

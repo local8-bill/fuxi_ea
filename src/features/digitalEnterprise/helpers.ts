@@ -6,6 +6,7 @@ export type SnapshotNode = {
   name?: string;
   domain?: string | null;
   state?: string;
+  subcomponents?: string[];
 };
 
 export type SnapshotEdge = {
@@ -53,6 +54,11 @@ export function buildLivingMapData(view: GraphSnapshotPayload): LivingMapData {
   const livingNodes: LivingMapData["nodes"] = nodes.map((node) => {
     const id = String(node?.id ?? "");
     const label = String(node?.label ?? node?.name ?? "Unknown");
+    const subcomponents = Array.isArray(node?.subcomponents)
+      ? node.subcomponents
+          .map((value: unknown) => (typeof value === "string" ? value.trim() : String(value ?? "").trim()))
+          .filter((value: string) => value.length > 0)
+      : undefined;
     return {
       id,
       label,
@@ -62,6 +68,7 @@ export function buildLivingMapData(view: GraphSnapshotPayload): LivingMapData {
       health: stableScore(id, 55, 30),
       aiReadiness: stableScore(`${id}-ai`, 45, 45),
       roiScore: stableScore(`${id}-roi`, 35, 50),
+      subcomponents,
     };
   });
 

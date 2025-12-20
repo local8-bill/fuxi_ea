@@ -25,7 +25,6 @@ interface GraphCanvasProps {
   nodes: LivingNode[];
   edges: LivingEdge[];
   focus: GraphFocus;
-  focusLabel?: string | null;
   focusSummary: string;
   viewMode: GraphViewMode;
   stage: GraphRevealStage;
@@ -55,6 +54,12 @@ interface GraphCanvasProps {
   expandedDomains?: Set<string> | string[] | null;
   domainIconMap?: Record<string, string>;
   fitViewKey?: string | number;
+  diffMode?: "current" | "future";
+  diffAnnotations?: {
+    added?: Set<string> | string[] | null;
+    removed?: Set<string> | string[] | null;
+    changed?: Set<string> | string[] | null;
+  };
 }
 
 const DEFAULT_DOMAIN_WIDTH = 600;
@@ -110,6 +115,10 @@ function buildElements(
     systemDepthLimit?: number;
     expandedDomains?: Set<string> | null;
     domainIconMap?: Record<string, string>;
+    diffMode?: "current" | "future";
+    diffAdded?: Set<string> | null;
+    diffRemoved?: Set<string> | null;
+    diffChanged?: Set<string> | null;
   } = {},
 ): { nodes: Node<GraphNodeData>[]; edges: Edge<GraphEdgeData>[] } {
   const {
@@ -126,6 +135,10 @@ function buildElements(
     systemDepthLimit = DEFAULT_SYSTEM_DEPTH_LIMIT,
     expandedDomains = null,
     domainIconMap,
+    diffMode = "current",
+    diffAdded = null,
+    diffRemoved = null,
+    diffChanged = null,
   } = extras;
   const sequenceLookup = new Map<
     string,
@@ -219,6 +232,12 @@ function buildElements(
       if (dependencyCount) {
         badges.push({ label: `${dependencyCount} deps`, tone: "muted" });
       }
+      let diffState: GraphNodeData["diffState"] = null;
+      if (diffMode === "future") {
+        if (diffAdded?.has(node.id)) diffState = "added";
+        else if (diffRemoved?.has(node.id)) diffState = "removed";
+        else if (diffChanged?.has(node.id)) diffState = "changed";
+      }
       nodes.push({
         id: node.id,
         type: "fuxiNode",
@@ -250,6 +269,8 @@ function buildElements(
           },
           phaseLabel: sequenceInfo?.item.phase ?? null,
           stageLabel: node.disposition ?? null,
+          diffState,
+          subcomponents: Array.isArray(node.subcomponents) ? node.subcomponents : undefined,
         },
         style: {
           width: itemWidth,
@@ -278,7 +299,6 @@ export function GraphCanvas({
   nodes: livingNodes,
   edges: livingEdges,
   focus,
-  focusLabel,
   focusSummary,
   viewMode,
   stage,
@@ -308,8 +328,13 @@ export function GraphCanvas({
   expandedDomains,
   domainIconMap,
   fitViewKey,
+  diffMode = "current",
+  diffAnnotations,
 }: GraphCanvasProps) {
   const highlightSet = useMemo(() => convertHighlight(highlightNodeIds), [highlightNodeIds]);
+  const diffAdded = useMemo(() => convertHighlight(diffAnnotations?.added ?? null), [diffAnnotations?.added]);
+  const diffRemoved = useMemo(() => convertHighlight(diffAnnotations?.removed ?? null), [diffAnnotations?.removed]);
+  const diffChanged = useMemo(() => convertHighlight(diffAnnotations?.changed ?? null), [diffAnnotations?.changed]);
   const mergedHighlightSet = useMemo(() => {
     if (!highlightSet || highlightSet.size === 0) return null;
     return new Set(highlightSet);
@@ -343,6 +368,10 @@ export function GraphCanvas({
           systemDepthLimit,
           expandedDomains: expandedDomainSet,
           domainIconMap,
+          diffMode,
+          diffAdded,
+          diffRemoved,
+          diffChanged,
         },
       ),
     [
@@ -368,6 +397,10 @@ export function GraphCanvas({
       systemDepthLimit,
       expandedDomainSet,
       domainIconMap,
+      diffMode,
+      diffAdded,
+      diffRemoved,
+      diffChanged,
     ],
   );
   const { trackInteraction } = useGraphTelemetry(projectId);
@@ -384,9 +417,6 @@ export function GraphCanvas({
 
   return (
     <div className="relative h-full rounded-[32px] border border-slate-200 bg-white shadow-lg shadow-slate-900/5" style={{ height }}>
-      {focusLabel ? (
-        <div className="pointer-events-none absolute left-6 top-4 rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">{focusLabel}</div>
-      ) : null}
       {showIntegrationOverlay ? (
         <div className="pointer-events-none absolute right-4 top-4 flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/90 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-emerald-800 shadow-sm">
           <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />

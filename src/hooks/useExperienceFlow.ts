@@ -6,6 +6,8 @@ import { persist, createJSONStorage } from "zustand/middleware";
 export type ExperienceScene =
   | "command"
   | "onboarding"
+  | "harmonize"
+  | "transition"
   | "digital"
   | "roi"
   | "sequencer"

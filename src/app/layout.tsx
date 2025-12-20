@@ -6,8 +6,8 @@ import { UnifiedShell } from "@/components/layout/UnifiedShell";
 import { ModeBridge } from "@/components/system/ModeBridge";
 
 export const metadata = {
-  title: "Fuxi • Capability Scoring",
-  description: "Project start + scoring",
+  title: "Fuxi · Enterprise Engine",
+  description: "Unified transformation workspace",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
